@@ -8,7 +8,7 @@ This article is openly licensed via [CC BY-NC-ND 4.0](https://creativecommons.or
 
 ## Build
 
-This project is C86 compatable, no other dependences, even make systems are not necessary, only need C compiler, currently tested on msvc and mingw. First, download my another project [Banana Make](https://github.com/shajunxing/banana-make), this is only one single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`. Executables are in `bin` folder, includeing an REPL environment, a fun calculator, lexer and parser test tools.
+This project is C89 compatable, no other dependences, even make systems are not necessary, only need C compiler, currently tested on msvc and mingw. First, download my another project [Banana Make](https://github.com/shajunxing/banana-make), this is only one single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`. Executables are in `bin` folder, includeing an REPL environment, a fun calculator, lexer and parser test tools.
 
 ## Syntax
 
