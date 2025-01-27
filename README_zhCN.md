@@ -4,6 +4,8 @@
 
 [英文版](README.md) | [中文版](README_zhCN.md)
 
+![REPL截图](screenshot.png "REPL截图")
+
 ## 构建
 
 本项目兼容 C86，没有其他依赖，甚至不需要 make 系统，只需要 C 编译器，目前在 msvc 和 mingw 上测试过。首先，下载我的另一个项目 [Banana Make](https://github.com/shajunxing/banana-make)，这是一个单独的文件 `make.h`，然后打开 `make.c`，修改 `#include` 为正确的路径，然后使用 msvc 输入 `cl make.c && make.exe release`，或者使用 mingw 输入 `gcc -o make.exe make.c & ./make.exe release`。可执行文件位于 `bin` 文件夹中，包括一个 REPL 环境、一个有趣的计算器、词法分析器和解析器测试工具。
