@@ -53,8 +53,14 @@ static void _parse_command(struct js *pjs, char *line) {
 
 int main() {
     struct js *pjs = js_new();
-    // global functions
-    js_variable_declare_sz(pjs, "print", js_cfunction_new(pjs, js_print_values));
+    // predefined functions
+    struct js_value *print_func = js_cfunction_new(pjs, js_print_values);
+    struct js_value *console_obj = js_object_new(pjs);
+    js_variable_declare_sz(pjs, "print", print_func);
+    js_variable_declare_sz(pjs, "console", console_obj);
+    js_object_put_sz(pjs, console_obj, "log", print_func);
+    js_variable_declare_sz(pjs, "gc", js_cfunction_new(pjs, js_collect_garbage));
+    js_variable_declare_sz(pjs, "dump", js_cfunction_new(pjs, js_dump_stack));
     printf("Banana JS REPL environment. Copyright (C) 2024 ShaJunXing <shajunxing@hotmail.com>.\n");
     printf("Type '/help' for more information.\n\n");
     for (;;) {

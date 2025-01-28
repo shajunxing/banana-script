@@ -412,7 +412,8 @@ shared void link_delete(struct link *link);
     X(ts_return)                                \
     X(ts_in)                                    \
     X(ts_of)                                    \
-    X(ts_typeof)
+    X(ts_typeof)                                \
+    X(ts_delete)
 
 #define X(name) name,
 enum js_token_state { js_token_state_list };
@@ -578,6 +579,7 @@ shared void js_variable_declare(struct js *pjs, char *name, size_t name_len, str
         char *_name = (name);                                  \
         js_variable_declare((pjs), _name, strlen(_name), val); \
     } while (0)
+shared void js_variable_erase(struct js *pjs, char *name, size_t name_len);
 shared void js_variable_assign(struct js *pjs, char *name, size_t name_len, struct js_value *val);
 #define js_variable_assign_sz(pjs, name, val)                    \
     do {                                                         \

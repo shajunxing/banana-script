@@ -70,10 +70,14 @@ static inline bool _accept(struct js *pjs, enum js_token_state stat) {
         }                              \
     } while (0)
 
-struct js_value *js_parse_value(struct js *pjs) {
+static inline bool _require_exec(struct js *pjs) {
     bool exec = pjs->parse_exec && !pjs->mark_break && !pjs->mark_continue && !pjs->mark_return;
     log("%s", exec ? "Parse and execute" : "Parse only");
-    if (exec) {
+    return exec;
+}
+
+struct js_value *js_parse_value(struct js *pjs) {
+    if (_require_exec(pjs)) {
         struct js_value *ret;
         switch (_get_token_state(pjs)) {
         case ts_null:
@@ -143,9 +147,7 @@ struct js_value *js_parse_value(struct js *pjs) {
 }
 
 struct js_value *js_parse_array(struct js *pjs) {
-    bool exec = pjs->parse_exec && !pjs->mark_break && !pjs->mark_continue && !pjs->mark_return;
-    log("%s", exec ? "Parse and execute" : "Parse only");
-    if (exec) {
+    if (_require_exec(pjs)) {
         struct js_value *ret = js_array_new(pjs);
         struct js_value *spread;
         size_t i;
@@ -193,9 +195,7 @@ struct js_value *js_parse_array(struct js *pjs) {
 }
 
 struct js_value *js_parse_object(struct js *pjs) {
-    bool exec = pjs->parse_exec && !pjs->mark_break && !pjs->mark_continue && !pjs->mark_return;
-    log("%s", exec ? "Parse and execute" : "Parse only");
-    if (exec) {
+    if (_require_exec(pjs)) {
         struct js_value *ret = js_object_new(pjs);
         char *k;
         size_t klen;
@@ -249,9 +249,7 @@ struct js_value *js_parse_object(struct js *pjs) {
 
 // ternary expression as root
 struct js_value *js_parse_expression(struct js *pjs) {
-    bool exec = pjs->parse_exec && !pjs->mark_break && !pjs->mark_continue && !pjs->mark_return;
-    log("%s", exec ? "Parse and execute" : "Parse only");
-    if (exec) {
+    if (_require_exec(pjs)) {
         struct js_value *ret = js_parse_logical_expression(pjs);
         if (_accept(pjs, ts_question)) {
             if (ret->type != vt_boolean) {
@@ -284,9 +282,7 @@ struct js_value *js_parse_expression(struct js *pjs) {
 }
 
 struct js_value *js_parse_logical_expression(struct js *pjs) {
-    bool exec = pjs->parse_exec && !pjs->mark_break && !pjs->mark_continue && !pjs->mark_return;
-    log("%s", exec ? "Parse and execute" : "Parse only");
-    if (exec) {
+    if (_require_exec(pjs)) {
         struct js_value *ret = js_parse_relational_expression(pjs);
         enum js_token_state stat;
         struct js_value *val_r;
@@ -318,9 +314,7 @@ struct js_value *js_parse_logical_expression(struct js *pjs) {
 }
 
 struct js_value *js_parse_relational_expression(struct js *pjs) {
-    bool exec = pjs->parse_exec && !pjs->mark_break && !pjs->mark_continue && !pjs->mark_return;
-    log("%s", exec ? "Parse and execute" : "Parse only");
-    if (exec) {
+    if (_require_exec(pjs)) {
         struct js_value *ret = js_parse_additive_expression(pjs);
         enum js_token_state stat;
         struct js_value *val_r;
@@ -401,9 +395,7 @@ struct js_value *js_parse_relational_expression(struct js *pjs) {
 }
 
 struct js_value *js_parse_additive_expression(struct js *pjs) {
-    bool exec = pjs->parse_exec && !pjs->mark_break && !pjs->mark_continue && !pjs->mark_return;
-    log("%s", exec ? "Parse and execute" : "Parse only");
-    if (exec) {
+    if (_require_exec(pjs)) {
         struct js_value *ret = js_parse_multiplicative_expression(pjs);
         enum js_token_state stat;
         struct js_value *val_r;
@@ -448,9 +440,7 @@ struct js_value *js_parse_additive_expression(struct js *pjs) {
 }
 
 struct js_value *js_parse_multiplicative_expression(struct js *pjs) {
-    bool exec = pjs->parse_exec && !pjs->mark_break && !pjs->mark_continue && !pjs->mark_return;
-    log("%s", exec ? "Parse and execute" : "Parse only");
-    if (exec) {
+    if (_require_exec(pjs)) {
         struct js_value *ret = js_parse_prefix_expression(pjs);
         enum js_token_state stat;
         struct js_value *val_r;
@@ -484,9 +474,7 @@ struct js_value *js_parse_multiplicative_expression(struct js *pjs) {
 }
 
 struct js_value *js_parse_prefix_expression(struct js *pjs) {
-    bool exec = pjs->parse_exec && !pjs->mark_break && !pjs->mark_continue && !pjs->mark_return;
-    log("%s", exec ? "Parse and execute" : "Parse only");
-    if (exec) {
+    if (_require_exec(pjs)) {
         struct js_value *ret;
         double sign = 0;
         if (_accept(pjs, ts_typeof)) {
@@ -578,9 +566,7 @@ static inline struct js_value *_accessor_get(struct js *pjs, struct js_value_acc
 }
 
 struct js_value *js_parse_access_call_expression(struct js *pjs) {
-    bool exec = pjs->parse_exec && !pjs->mark_break && !pjs->mark_continue && !pjs->mark_return;
-    log("%s", exec ? "Parse and execute" : "Parse only");
-    if (exec) {
+    if (_require_exec(pjs)) {
         return _accessor_get(pjs, js_parse_accessor(pjs));
     } else {
         js_parse_accessor(pjs);
@@ -589,9 +575,7 @@ struct js_value *js_parse_access_call_expression(struct js *pjs) {
 }
 
 struct js_value_accessor js_parse_accessor(struct js *pjs) {
-    bool exec = pjs->parse_exec && !pjs->mark_break && !pjs->mark_continue && !pjs->mark_return;
-    log("%s", exec ? "Parse and execute" : "Parse only");
-    if (exec) {
+    if (_require_exec(pjs)) {
         struct js_value_accessor acc;
         struct js_value *idx = NULL;
         size_t tok_idx_backup;
@@ -743,9 +727,7 @@ struct js_value_accessor js_parse_accessor(struct js *pjs) {
 }
 
 void js_parse_assignment_expression(struct js *pjs) {
-    bool exec = pjs->parse_exec && !pjs->mark_break && !pjs->mark_continue && !pjs->mark_return;
-    log("%s", exec ? "Parse and execute" : "Parse only");
-    if (exec) {
+    if (_require_exec(pjs)) {
         struct js_value_accessor acc = js_parse_accessor(pjs);
         enum js_token_state stat;
         struct js_value *val, *varval;
@@ -812,9 +794,7 @@ void js_parse_assignment_expression(struct js *pjs) {
 }
 
 void js_parse_declaration_expression(struct js *pjs) {
-    bool exec = pjs->parse_exec && !pjs->mark_break && !pjs->mark_continue && !pjs->mark_return;
-    log("%s", exec ? "Parse and execute" : "Parse only");
-    if (exec) {
+    if (_require_exec(pjs)) {
         char *ident_h;
         size_t ident_len;
         _expect(pjs, ts_let, "Expect let");
@@ -862,9 +842,7 @@ void js_parse_statement(struct js *pjs) {
     enum { classic_for,
            for_in,
            for_of } for_type;
-    bool exec = pjs->parse_exec && !pjs->mark_break && !pjs->mark_continue && !pjs->mark_return;
-    log("%s", exec ? "Parse and execute" : "Parse only");
-    if (exec) {
+    if (_require_exec(pjs)) {
         struct js_value *cond = NULL, *val;
         size_t tok_idx_backup, tok_idx_backup_2, tok_idx_backup_3;
         struct js_value_accessor acc;
@@ -1079,6 +1057,14 @@ void js_parse_statement(struct js *pjs) {
                 _expect(pjs, ts_semicolon, "Expect ;");
             }
             pjs->mark_return = true;
+        } else if (_accept(pjs, ts_delete)) {
+            if (_get_token_state(pjs) == ts_identifier) {
+                js_variable_erase(pjs, _get_token_head(pjs), _get_token_length(pjs));
+            } else {
+                js_throw(pjs, "Expect identifier");
+            }
+            _next_token(pjs);
+            _expect(pjs, ts_semicolon, "Expect ;");
         } else if (_get_token_state(pjs) == ts_let) {
             js_parse_declaration_expression(pjs);
             _expect(pjs, ts_semicolon, "Expect ;");
@@ -1175,6 +1161,9 @@ void js_parse_statement(struct js *pjs) {
                 js_parse_expression(pjs);
                 _expect(pjs, ts_semicolon, "Expect ;");
             }
+        } else if (_accept(pjs, ts_delete)) {
+            _expect(pjs, ts_identifier, "Expect identifier");
+            _expect(pjs, ts_semicolon, "Expect ;");
         } else if (_get_token_state(pjs) == ts_let) {
             js_parse_declaration_expression(pjs);
             _expect(pjs, ts_semicolon, "Expect ;");
@@ -1186,9 +1175,7 @@ void js_parse_statement(struct js *pjs) {
 }
 
 void js_parse_function(struct js *pjs) {
-    bool exec = pjs->parse_exec && !pjs->mark_break && !pjs->mark_continue && !pjs->mark_return;
-    log("%s", exec ? "Parse and execute" : "Parse only");
-    if (exec) {
+    if (_require_exec(pjs)) {
         char *ident_h;
         size_t ident_len;
         size_t i = 0, j;

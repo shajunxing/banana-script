@@ -377,6 +377,17 @@ void js_variable_declare(struct js *pjs, char *name, size_t name_len, struct js_
     map_put(variables, name, name_len, val);
 }
 
+void js_variable_erase(struct js *pjs, char *name, size_t name_len) {
+    struct map *variables = js_stack_peek(pjs)->variables;
+    // log("%.*s", (int)name_len, name);
+    // js_dump_stack(pjs);
+    if (map_get(variables, name, name_len)) {
+        map_put(variables, name, name_len, NULL);
+        return;
+    }
+    js_throw(pjs, "Variable not found");
+}
+
 void js_variable_assign(struct js *pjs, char *name, size_t name_len, struct js_value *val) {
     int level; //  DONT use size_t because if level = 0,  level-- will become large positive number
     // log("%.*s", (int)name_len, name);

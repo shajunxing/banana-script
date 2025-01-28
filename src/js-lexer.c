@@ -540,6 +540,7 @@ matched:
                     kw_entry(in),
                     kw_entry(of),
                     kw_entry(typeof),
+                    kw_entry(delete),
                 };
                 int i;
                 for (i = 0; i < countof(keywords); i++) {
