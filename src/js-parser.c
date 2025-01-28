@@ -52,13 +52,6 @@ static inline void _stack_forward(struct js *pjs) {
     js_stack_forward(pjs, pjs->tok_cache[pjs->tok_cache_idx].h, pjs->tok_cache[pjs->tok_cache_idx].t);
 }
 
-void js_parser_print_error(struct js *pjs) {
-    // Here, cache index may exceeds cache boundary, so DONT use token head and length
-    // printf("%d %p\n", (int)_get_token_length(pjs), _get_token_head(pjs));
-    printf("%s:%ld %ld:%s: %s\n", pjs->err_file, pjs->err_line,
-           _get_token_line(pjs), js_token_state_name(_get_token_state(pjs)), pjs->err_msg);
-}
-
 static inline bool _accept(struct js *pjs, enum js_token_state stat) {
     if (_get_token_state(pjs) == stat) {
         _next_token(pjs);
@@ -691,7 +684,7 @@ struct js_value_accessor js_parse_accessor(struct js *pjs) {
                 } else if (acc.v->type == vt_cfunction) {
                     acc.v->value.cfunction(pjs);
                 } else {
-                    js_throw(pjs, "Must be function or cfunction");
+                    js_throw(pjs, "Must be function");
                 }
                 // js_dump_stack(pjs);
                 acc.type = at_value;
@@ -1278,4 +1271,11 @@ void js_parse_function(struct js *pjs) {
         }
         _next_token(pjs);
     }
+}
+
+void js_parser_print_error(struct js *pjs) {
+    // Here, cache index may exceeds cache boundary, so DONT use token head and length
+    // printf("%d %p\n", (int)_get_token_length(pjs), _get_token_head(pjs));
+    printf("%s:%ld %ld:%s: %s\n", pjs->err_file, pjs->err_line,
+           _get_token_line(pjs), js_token_state_name(_get_token_state(pjs)), pjs->err_msg);
 }

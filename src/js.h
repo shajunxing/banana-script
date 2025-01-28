@@ -616,7 +616,6 @@ struct js_value_accessor {
     size_t n; // identifier len, or array index, or object key len
 };
 
-shared void js_parser_print_error(struct js *pjs);
 shared struct js_value *js_parse_value(struct js *pjs);
 shared struct js_value *js_parse_array(struct js *pjs);
 shared struct js_value *js_parse_object(struct js *pjs);
@@ -633,6 +632,7 @@ shared void js_parse_declaration_expression(struct js *pjs);
 shared void js_parse_script(struct js *pjs);
 shared void js_parse_statement(struct js *pjs);
 shared void js_parse_function(struct js *pjs);
+shared void js_parser_print_error(struct js *pjs);
 
 // js-functions.c
 
