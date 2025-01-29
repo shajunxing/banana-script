@@ -15,7 +15,7 @@ void parse(char *src, size_t len, bool exec) {
     // predefined functions
     js_variable_declare_sz(pjs, "gc", js_cfunction_new(pjs, js_collect_garbage));
     js_variable_declare_sz(pjs, "dump", js_cfunction_new(pjs, js_dump_stack));
-    js_variable_declare_sz(pjs, "print", js_cfunction_new(pjs, js_print_values));
+    js_variable_declare_sz(pjs, "print", js_cfunction_new(pjs, js_function_print));
     if (js_try(pjs)) {
         js_load_string(pjs, src, len);
     } else {

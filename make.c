@@ -13,8 +13,9 @@ You should have received a copy of the GNU General Public License along with thi
 #define prefix "js"
 #define bin_dir "bin" pathsep
 #define build_dir "build" pathsep
-#define examples_dir "examples" pathsep
 #define src_dir "src" pathsep
+#define examples_dir "examples" pathsep
+#define private_dir "private" pathsep
 #define header_file src_dir prefix ".h"
 #define dll_file_name prefix dllext
 #define dll_file_path bin_dir dll_file_name
@@ -84,6 +85,7 @@ void build() {
     }
     free(obj_files);
     listdir(examples_dir, build_example); // examples
+    listdir(private_dir, build_example);
 }
 
 void build_debug() {

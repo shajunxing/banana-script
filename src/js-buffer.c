@@ -42,7 +42,6 @@ char *read_line(FILE *fp, size_t *plen) {
     size_t len = 0;
     size_t cap = 0;
     int ch;
-    string_buffer_new(str, len, cap);
     for (;;) {
         ch = fgetc(fp);
         if (ch == EOF || ch == '\n') {
@@ -84,7 +83,7 @@ const char *ascii_abbreviation(int ch) {
 static const size_t _segs_per_line = 2;
 static const size_t _bytes_per_seg = 8;
 
-static inline unsigned char _printable(unsigned char ch) {
+static unsigned char _printable(unsigned char ch) {
     return ch >= 0x20 && ch <= 0x7e ? ch : ' ';
 }
 
@@ -134,8 +133,6 @@ struct string *string_new(const char *p, size_t len) {
         buffer_alloc(char, str->p, str->cap, len + 1);
         memcpy(str->p, p, len);
         str->len = len;
-    } else {
-        buffer_alloc(char, str->p, str->cap, 1);
     }
     return str;
 }
@@ -151,7 +148,7 @@ void string_clear(struct string *str) {
 
 void string_append(struct string *str, const char *p, size_t len) {
     size_t newlen = str->len + len;
-    buffer_realloc(char, str->p, str->cap, newlen + 1);
+    buffer_alloc(char, str->p, str->cap, newlen + 1);
     memcpy(str->p + str->len, p, len);
     str->len = newlen;
 }
@@ -161,10 +158,9 @@ int string_compare(struct string *str_l, struct string *str_r) {
     return strncmp(str_l->p, str_r->p, str_l->len > str_r->len ? str_l->len : str_r->len);
 }
 
-struct list *list_new(size_t reqcap) {
+struct list *list_new() {
     struct list *list = (struct list *)calloc(1, sizeof(struct list));
     assert(list != NULL);
-    buffer_alloc(void *, list->p, list->cap, reqcap);
     return list;
 }
 
@@ -179,7 +175,7 @@ void list_clear(struct list *list) {
 
 void list_push(struct list *list, void *val) {
     size_t newlen = list->len + 1;
-    buffer_realloc(void *, list->p, list->cap, newlen);
+    buffer_alloc(void *, list->p, list->cap, newlen);
     list->p[list->len] = val;
     list->len = newlen;
 }
@@ -202,7 +198,7 @@ void list_put(struct list *list, size_t idx, void *val) {
     } else {
         size_t newlen = idx + 1;
         if (newlen > list->len) {
-            buffer_realloc(void *, list->p, list->cap, newlen);
+            buffer_alloc(void *, list->p, list->cap, newlen);
             list->len = newlen;
         }
         list->p[idx] = val;
@@ -217,14 +213,13 @@ void *list_get(struct list *list, size_t idx) {
     }
 }
 
-struct map *map_new(size_t reqcap) {
+struct map *map_new() {
     struct map *map = (struct map *)calloc(1, sizeof(struct map));
     assert(map != NULL);
-    buffer_alloc(struct mapnode, map->p, map->cap, reqcap);
     return map;
 }
 
-static inline void _map_p_clear(struct mapnode *p, size_t cap) {
+static void _map_p_clear(struct mapnode *p, size_t cap) {
     int i;
     for (i = 0; i < cap; i++) {
         struct mapnode *node = p + i;
@@ -247,7 +242,7 @@ void map_clear(struct map *map) {
     map->len = 0;
 }
 
-static inline size_t _fh(const char *s, size_t slen, size_t mask) {
+static size_t _fh(const char *s, size_t slen, size_t mask) {
     size_t hash = 0;
     size_t i;
     for (i = 0; i < slen; i++) {
@@ -256,13 +251,13 @@ static inline size_t _fh(const char *s, size_t slen, size_t mask) {
     return hash;
 }
 
-static inline size_t _nh(size_t hash, size_t mask) {
+static size_t _nh(size_t hash, size_t mask) {
     // hash = hash * 5 + 1 can perfectly cover 0-2 pow
     // https://tieba.baidu.com/p/8968552557
     return (hash + (hash << 4) + 1) & mask;
 }
 
-static inline void _put_after_expanded(struct mapnode *p, size_t cap, const char *key, size_t klen, void *val) {
+static void _put_after_expanded(struct mapnode *p, size_t cap, const char *key, size_t klen, void *val) {
     size_t mask = cap - 1;
     size_t hash;
     size_t rep;
@@ -279,9 +274,13 @@ static inline void _put_after_expanded(struct mapnode *p, size_t cap, const char
 }
 
 void map_put(struct map *map, const char *key, size_t klen, void *val) {
-    size_t mask = map->cap - 1;
+    size_t mask;
     size_t hash;
     size_t rep;
+    if (!map->p) { // first allocate
+        buffer_alloc(struct mapnode, map->p, map->cap, 2);
+    }
+    mask = map->cap - 1;
     for (rep = 0, hash = _fh(key, klen, mask); rep < map->cap; rep++, hash = _nh(hash, mask)) {
         struct mapnode *node = map->p + hash;
         // log("rep=%d hash=%d", rep, hash);

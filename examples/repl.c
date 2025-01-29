@@ -15,7 +15,7 @@ static void _parse_command(struct js *pjs, char *line) {
     if (_match_cmd(line, "/help") || _match_cmd(line, "/h") || _match_cmd(line, "/?")) {
         printf("You can execute javascript statements or run following commands:\n");
         printf("/source /u              display cached source code\n");
-        printf("/write /w <filename>    write cached source to file\n");
+        printf("/write /w <filename>    write cached source to disk file\n");
         printf("/dump /d                display memory dump of source, tokens, values and stack\n");
         printf("/gc                     run garbage collector\n");
         printf("/help /h /?             show help\n");
@@ -54,13 +54,15 @@ static void _parse_command(struct js *pjs, char *line) {
 int main() {
     struct js *pjs = js_new();
     // predefined functions
-    struct js_value *print_func = js_cfunction_new(pjs, js_print_values);
+    struct js_value *print_func = js_cfunction_new(pjs, js_function_print);
     struct js_value *console_obj = js_object_new(pjs);
     js_variable_declare_sz(pjs, "print", print_func);
     js_variable_declare_sz(pjs, "console", console_obj);
     js_object_put_sz(pjs, console_obj, "log", print_func);
     js_variable_declare_sz(pjs, "gc", js_cfunction_new(pjs, js_collect_garbage));
     js_variable_declare_sz(pjs, "dump", js_cfunction_new(pjs, js_dump_stack));
+    js_variable_declare_sz(pjs, "stat", js_cfunction_new(pjs, js_print_statistics));
+    js_variable_declare_sz(pjs, "clock", js_cfunction_new(pjs, js_function_clock));
     printf("Banana JS REPL environment. Copyright (C) 2024 ShaJunXing <shajunxing@hotmail.com>.\n");
     printf("Type '/help' for more information.\n\n");
     for (;;) {

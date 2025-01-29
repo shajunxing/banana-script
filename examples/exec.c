@@ -19,12 +19,15 @@ int main(int argc, char *argv[]) {
             int stage = 0;
             if (js_try(pjs)) {
                 // predefined functions
-                struct js_value *print_func = js_cfunction_new(pjs, js_print_values);
+                struct js_value *print_func = js_cfunction_new(pjs, js_function_print);
                 struct js_value *console_obj = js_object_new(pjs);
                 js_variable_declare_sz(pjs, "print", print_func);
                 js_variable_declare_sz(pjs, "console", console_obj);
                 js_object_put_sz(pjs, console_obj, "log", print_func);
                 js_variable_declare_sz(pjs, "gc", js_cfunction_new(pjs, js_collect_garbage));
+                js_variable_declare_sz(pjs, "dump", js_cfunction_new(pjs, js_dump_stack));
+                js_variable_declare_sz(pjs, "stat", js_cfunction_new(pjs, js_print_statistics));
+                js_variable_declare_sz(pjs, "clock", js_cfunction_new(pjs, js_function_clock));
                 js_load_string(pjs, src, len);
                 stage = 1;
                 pjs->parse_exec = true;

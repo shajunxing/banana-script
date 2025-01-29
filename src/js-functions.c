@@ -9,12 +9,17 @@ You should have received a copy of the GNU General Public License along with thi
 */
 
 #include "js.h"
+#include <time.h>
 
-void js_print_values(struct js *pjs) {
+void js_function_print(struct js *pjs) {
     size_t i;
     for (i = 0; i < js_parameter_length(pjs); i++) {
         js_value_dump(js_parameter_get(pjs, i));
         printf(" ");
     }
     printf("\n");
+}
+
+void js_function_clock(struct js *pjs) {
+    pjs->result = js_number_new(pjs, clock() * 1.0 / CLOCKS_PER_SEC);
 }

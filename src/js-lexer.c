@@ -23,23 +23,23 @@ const char *js_token_state_name(enum js_token_state stat) {
     }
 }
 
-static inline char *_token_head(struct js *pjs) {
+static char *_token_head(struct js *pjs) {
     return pjs->src + pjs->tok.h;
 }
 
-static inline size_t _token_length(struct js *pjs) {
+static size_t _token_length(struct js *pjs) {
     return pjs->tok.t - pjs->tok.h;
 }
 
-static inline bool _is_identifier_first_character(char ch) {
+static bool _is_identifier_first_character(char ch) {
     return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch == '_');
 }
 
-static inline bool _is_identifier_rest_characters(char ch) {
+static bool _is_identifier_rest_characters(char ch) {
     return _is_identifier_first_character(ch) || (ch >= '0' && ch <= '9');
 }
 
-static inline void _reset_token_number(struct js *pjs) {
+static void _reset_token_number(struct js *pjs) {
     pjs->tok_num_sign = 1;
     pjs->tok_num_inte = 0;
     pjs->tok_num_frac = 0;
@@ -49,29 +49,60 @@ static inline void _reset_token_number(struct js *pjs) {
     // log("_reset_token_number");
 }
 
-static inline double _char_to_digit(char ch) {
+static double _char_to_digit(char ch) {
     return ch - '0';
 }
 
-static inline void _accumulate_token_number_integer(struct js *pjs, char ch) {
+static void _accumulate_token_number_integer(struct js *pjs, char ch) {
     pjs->tok_num_inte = pjs->tok_num_inte * 10 + _char_to_digit(ch);
     // log("%lg", pjs->tok_num_inte);
 }
 
-static inline void _accumulate_token_number_fraction(struct js *pjs, char ch) {
+static void _accumulate_token_number_fraction(struct js *pjs, char ch) {
     pjs->tok_num_frac = pjs->tok_num_frac + _char_to_digit(ch) * pjs->tok_num_frac_depth;
     pjs->tok_num_frac_depth *= 0.1;
 }
 
-static inline void _accumulate_token_number_exponent(struct js *pjs, char ch) {
+static void _accumulate_token_number_exponent(struct js *pjs, char ch) {
     pjs->tok_num_exp = pjs->tok_num_exp * 10 + _char_to_digit(ch);
 }
 
-static inline void _calculate_token_number(struct js *pjs) {
+static void _calculate_token_number(struct js *pjs) {
     // must include math.h, or pow() result is 0
     double num = pjs->tok_num_sign * (pjs->tok_num_inte + pjs->tok_num_frac) * pow(10.0, pjs->tok_num_exp_sign * pjs->tok_num_exp);
     // log("%d %g %g %d %g = %g", pjs->tok_num_sign, pjs->tok_num_inte, pjs->tok_num_frac, pjs->tok_num_exp_sign, pjs->tok_num_exp, num);
     pjs->tok.num = num;
+}
+
+static enum js_token_state _match_keyword_fast(const char *id, size_t idlen) {
+    static const int keywords[] = {12, 'b', 25, 'c', 39, 'd', 62, 'e', 83, 'f', 94, 'i', 137, 'l', 146, 'n', 154, 'o', 165, 'r', 170, 't', 187, 'w', 214, 1, 'r', 28, 1, 'e', 31, 1, 'a', 34, 1, 'k', 37, 0, ts_break, 1, 'o', 42, 1, 'n', 45, 1, 't', 48, 1, 'i', 51, 1, 'n', 54, 1, 'u', 57, 1, 'e', 60, 0, ts_continue, 2, 'e', 67, 'o', 81, 1, 'l', 70, 1, 'e', 73, 1, 't', 76, 1, 'e', 79, 0, ts_delete, 0, ts_do, 1, 'l', 86, 1, 's', 89, 1, 'e', 92, 0, ts_else, 3, 'a', 101, 'u', 112, 'o', 132, 1, 'l', 104, 1, 's', 107, 1, 'e', 110, 0, ts_false, 1, 'n', 115, 1, 'c', 118, 1, 't', 121, 1, 'i', 124, 1, 'o', 127, 1, 'n', 130, 0, ts_function, 1, 'r', 135, 0, ts_for, 2, 'f', 142, 'n', 144, 0, ts_if, 0, ts_in, 1, 'e', 149, 1, 't', 152, 0, ts_let, 1, 'u', 157, 1, 'l', 160, 1, 'l', 163, 0, ts_null, 1, 'f', 168, 0, ts_of, 1, 'e', 173, 1, 't', 176, 1, 'u', 179, 1, 'r', 182, 1, 'n', 185, 0, ts_return, 2, 'y', 192, 'r', 206, 1, 'p', 195, 1, 'e', 198, 1, 'o', 201, 1, 'f', 204, 0, ts_typeof, 1, 'u', 209, 1, 'e', 212, 0, ts_true, 1, 'h', 217, 1, 'i', 220, 1, 'l', 223, 1, 'e', 226, 0, ts_while};
+    size_t i;
+    size_t k = 0;
+    for (i = 0; i < idlen; i++) {
+        char c = id[i];
+        bool matched = false;
+        int j;
+        int jmax = keywords[k];
+        for (j = 0; j < jmax; j++) {
+            k++;
+            if (c == keywords[k]) {
+                k++;
+                k = keywords[k];
+                matched = true;
+                break;
+            }
+            k++;
+        }
+        if (!matched) {
+            return ts_identifier;
+        }
+    }
+    if (keywords[k] == 0) {
+        k++;
+        return keywords[k];
+    } else {
+        return ts_identifier;
+    }
 }
 
 void js_lexer_next_token(struct js *pjs) {
@@ -517,39 +548,7 @@ matched:
         char *tok_hdr = _token_head(pjs);
         size_t tok_len = _token_length(pjs);
         if (pjs->tok.stat == ts_identifier) {
-#define kw_entry(kw) \
-    { #kw, sizeof(#kw) - 1, ts_##kw }
-            static const struct {
-                const char *name;
-                size_t len;
-                enum js_token_state token;
-                } keywords[] = {
-                    kw_entry(null),
-                    kw_entry(true),
-                    kw_entry(false),
-                    kw_entry(let),
-                    kw_entry(if),
-                    kw_entry(else),
-                    kw_entry(while),
-                    kw_entry(do),
-                    kw_entry(for),
-                    kw_entry(break),
-                    kw_entry(continue),
-                    kw_entry(function),
-                    kw_entry(return),
-                    kw_entry(in),
-                    kw_entry(of),
-                    kw_entry(typeof),
-                    kw_entry(delete),
-                };
-                int i;
-                for (i = 0; i < countof(keywords); i++) {
-                    // match keyword len, DONT use token len, for example, "fals"
-                    if (strncmp(tok_hdr, keywords[i].name, max(tok_len, keywords[i].len)) == 0) {
-                        pjs->tok.stat = keywords[i].token;
-                        break;
-                    }
-                }
+            pjs->tok.stat = _match_keyword_fast(tok_hdr, tok_len);
         }
         // DONT declare a variable = js_token_state_name(pjs->tok.stat), or in release mode will cause "warning: unused variable" because log() is not exist
         switch (pjs->tok.stat) {

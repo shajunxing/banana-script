@@ -119,40 +119,43 @@ shared const char *ascii_abbreviation(int ch);
 shared void print_hex(void *p, size_t len);
 
 // buffer's capacity is always pow of 2
-#define buffer_alloc(type, p, cap, reqcap)                    \
-    do {                                                      \
-        size_t _reqcap = (reqcap);                            \
-        size_t _newcap = 1;                                   \
-        for (_newcap = 1; _newcap < _reqcap; _newcap <<= 1) { \
-            assert(_newcap > 0);                              \
-        }                                                     \
-        (p) = (type *)calloc(_newcap, sizeof(type));          \
-        assert((p) != NULL);                                  \
-        (cap) = _newcap;                                      \
+#define buffer_alloc(type, p, cap, reqcap)                                             \
+    do {                                                                               \
+        size_t _reqcap = (reqcap);                                                     \
+        if (_reqcap > (cap)) {                                                         \
+            size_t _newcap = 1;                                                        \
+            for (_newcap = (cap) == 0 ? 1 : (cap); _reqcap > _newcap; _newcap <<= 1) { \
+                assert(_newcap > 0);                                                   \
+            }                                                                          \
+            if (p) {                                                                   \
+                (p) = (type *)realloc((p), _newcap * sizeof(type));                    \
+                assert((p) != NULL);                                                   \
+                memset((p) + (cap), 0, (_newcap - (cap)) * sizeof(type));              \
+            } else {                                                                   \
+                (p) = (type *)calloc(_newcap, sizeof(type));                           \
+                assert((p) != NULL);                                                   \
+            }                                                                          \
+            (cap) = _newcap;                                                           \
+        }                                                                              \
     } while (0)
 
-#define buffer_realloc(type, p, cap, reqcap)                          \
-    do {                                                              \
-        size_t _reqcap = (reqcap);                                    \
-        if ((cap) < _reqcap) {                                        \
-            size_t _newcap;                                           \
-            for (_newcap = (cap); _newcap < _reqcap; _newcap <<= 1) { \
-                assert(_newcap > 0);                                  \
-            }                                                         \
-            (p) = (type *)realloc((p), _newcap * sizeof(type));       \
-            assert((p) != NULL);                                      \
-            memset((p) + (cap), 0, (_newcap - (cap)) * sizeof(type)); \
-            (cap) = _newcap;                                          \
-        }                                                             \
+// NULL pointer can be safely passed to free()
+// https://en.cppreference.com/w/c/memory/free
+#define buffer_free(p, len, cap) \
+    do {                         \
+        free(p);                 \
+        (p) = NULL;              \
+        (len) = 0;               \
+        (cap) = 0;               \
     } while (0)
 
 // DONT surround 'type' with parentheses, or will get "syntax error : ')'"
-#define buffer_push(type, p, len, cap, v)          \
-    do {                                           \
-        size_t _newlen = (len) + 1;                \
-        buffer_realloc(type, (p), (cap), _newlen); \
-        (p)[(len)] = v;                            \
-        (len) = _newlen;                           \
+#define buffer_push(type, p, len, cap, v)        \
+    do {                                         \
+        size_t _newlen = (len) + 1;              \
+        buffer_alloc(type, (p), (cap), _newlen); \
+        (p)[(len)] = v;                          \
+        (len) = _newlen;                         \
     } while (0)
 
 // use "clear" instead of "empty", to avoid conflit meaning "is empty", refer C++ string
@@ -172,14 +175,13 @@ shared void print_hex(void *p, size_t len);
         print_hex(_p, _cap * sizeof(type));        \
     } while (0)
 
-#define string_buffer_new(str, len, cap) buffer_alloc(char, (str), (cap), 1)
 #define string_buffer_clear(str, len, cap) buffer_clear(char, (str), (len), (cap))
-#define string_buffer_append(str, len, cap, s, l)        \
-    do {                                                 \
-        size_t _newlen = (len) + (l);                    \
-        buffer_realloc(char, (str), (cap), _newlen + 1); \
-        memcpy((str) + (len), (s), (l));                 \
-        (len) = _newlen;                                 \
+#define string_buffer_append(str, len, cap, s, l)      \
+    do {                                               \
+        size_t _newlen = (len) + (l);                  \
+        buffer_alloc(char, (str), (cap), _newlen + 1); \
+        memcpy((str) + (len), (s), (l));               \
+        (len) = _newlen;                               \
     } while (0)
 #define string_buffer_append_sz(str, len, cap, s)                  \
     do {                                                           \
@@ -231,7 +233,7 @@ struct list {
         struct list *_l = (l);                        \
         buffer_dump(void *, _l->p, _l->len, _l->cap); \
     } while (0)
-shared struct list *list_new(size_t reqcap);
+shared struct list *list_new();
 shared void list_delete(struct list *list);
 shared void list_clear(struct list *list);
 shared void list_push(struct list *list, void *val);
@@ -269,7 +271,7 @@ struct map {
         buffer_dump(struct mapnode, _m->p, _m->len, _m->cap); \
     } while (0)
 
-shared struct map *map_new(size_t reqcap);
+shared struct map *map_new();
 shared void map_delete(struct map *map);
 shared void map_clear(struct map *map);
 shared void map_put(struct map *map, const char *key, size_t klen, void *val);
@@ -560,6 +562,7 @@ shared void js_load_string(struct js *pjs, const char *p, size_t len);
         js_load_string((pjs), _p, strlen(_p)); \
     } while (0)
 shared void js_print_source(struct js *pjs);
+shared void js_print_statistics(struct js *pjs);
 shared void js_dump_source(struct js *pjs);
 shared void js_dump_tokens(struct js *pjs);
 shared void js_dump_values(struct js *pjs);
@@ -602,42 +605,13 @@ shared void js_lexer_print_error(struct js *pjs);
 
 // js-parser.c
 
-// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Property_accessors
-enum js_value_accessor_type {
-    at_value, // only value, no key or index information, can only get, no put
-    at_identifier,
-    at_array_member,
-    at_object_member,
-    at_optional_member
-};
-
-struct js_value_accessor {
-    enum js_value_accessor_type type;
-    struct js_value *v; // value or array or object
-    char *p; // identifier head, or object key head
-    size_t n; // identifier len, or array index, or object key len
-};
-
-shared struct js_value *js_parse_value(struct js *pjs);
-shared struct js_value *js_parse_array(struct js *pjs);
-shared struct js_value *js_parse_object(struct js *pjs);
 shared struct js_value *js_parse_expression(struct js *pjs);
-shared struct js_value *js_parse_logical_expression(struct js *pjs);
-shared struct js_value *js_parse_relational_expression(struct js *pjs);
-shared struct js_value *js_parse_additive_expression(struct js *pjs);
-shared struct js_value *js_parse_multiplicative_expression(struct js *pjs);
-shared struct js_value *js_parse_prefix_expression(struct js *pjs);
-shared struct js_value *js_parse_access_call_expression(struct js *pjs);
-shared struct js_value_accessor js_parse_accessor(struct js *pjs);
-shared void js_parse_assignment_expression(struct js *pjs);
-shared void js_parse_declaration_expression(struct js *pjs);
 shared void js_parse_script(struct js *pjs);
-shared void js_parse_statement(struct js *pjs);
-shared void js_parse_function(struct js *pjs);
 shared void js_parser_print_error(struct js *pjs);
 
 // js-functions.c
 
-shared void js_print_values(struct js *pjs);
+shared void js_function_print(struct js *pjs);
+shared void js_function_clock(struct js *pjs);
 
 #endif
