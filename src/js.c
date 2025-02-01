@@ -10,217 +10,122 @@ You should have received a copy of the GNU General Public License along with thi
 
 #include "js.h"
 
-static struct js_value *_value_new(struct js *pjs) {
-    struct js_value *ret = (struct js_value *)calloc(1, sizeof(struct js_value));
-    link_push(pjs->values, ret);
-    return ret;
-}
-
-static void _value_delete(struct js_value *val) {
-    switch (val->type) {
-    case vt_null:
-    case vt_boolean:
-        break;
-    case vt_number:
-        free(val);
-        break;
-    case vt_string:
-        string_delete(val->value.string);
-        free(val);
-        break;
-    case vt_array:
-        list_delete(val->value.array);
-        free(val);
-        break;
-    case vt_object:
-        map_delete(val->value.object);
-        free(val);
-        break;
-    case vt_function:
-        map_delete(val->value.function.closure);
-        free(val);
-        break;
-    case vt_cfunction:
-        free(val);
-        break;
-    default:
-        fatal("Unknown value type %d", val->type);
-    }
-}
-
-const char *js_value_type_name(struct js_value *val) {
-    static const char *const names[] = {"null", "boolean", "number", "string", "array", "object", "function", "function"};
-    assert(val != NULL);
-    return names[val->type];
-}
-
-struct js_value *js_null_new(struct js *pjs) {
-    return pjs->value_null;
-}
-
-struct js_value *js_boolean_new(struct js *pjs, bool b) {
-    return b ? pjs->value_true : pjs->value_false;
-}
-
-struct js_value *js_number_new(struct js *pjs, double n) {
-    struct js_value *ret = _value_new(pjs);
-    ret->type = vt_number;
-    ret->value.number = n;
-    return ret;
-}
-
-struct js_value *js_string_new(struct js *pjs, const char *str, size_t len) {
-    struct js_value *ret = _value_new(pjs);
-    ret->type = vt_string;
-    ret->value.string = string_new(str, len);
-    return ret;
-}
-
-struct js_value *js_array_new(struct js *pjs) {
-    struct js_value *ret = _value_new(pjs);
-    ret->type = vt_array;
-    ret->value.array = list_new();
-    return ret;
-}
-
-void js_array_push(struct js *pjs, struct js_value *arr, struct js_value *val) {
-    assert((arr->type == vt_array));
-    list_push(arr->value.array, val->type == vt_null ? NULL : val);
-}
-
-void js_array_put(struct js *pjs, struct js_value *arr, size_t idx, struct js_value *val) {
-    assert((arr->type == vt_array));
-    list_put(arr->value.array, idx, val->type == vt_null ? NULL : val); // prevent useless expand
-}
-
-struct js_value *js_array_get(struct js *pjs, struct js_value *arr, size_t idx) {
-    struct js_value *ret;
-    assert((arr->type == vt_array));
-    ret = (struct js_value *)list_get(arr->value.array, idx);
-    return ret ? ret : js_null_new(pjs); // replace NULL whth vt_null
-}
-
-struct js_value *js_object_new(struct js *pjs) {
-    struct js_value *ret = _value_new(pjs);
-    ret->type = vt_object;
-    ret->value.object = map_new();
-    return ret;
-}
-
-void js_object_put(struct js *pjs, struct js_value *obj, const char *key, size_t klen, struct js_value *val) {
-    assert((obj->type == vt_object));
-    map_put(obj->value.object, key, klen, val->type == vt_null ? NULL : val); // prevent useless expand
-}
-
-struct js_value *js_object_get(struct js *pjs, struct js_value *obj, const char *key, size_t klen) {
-    struct js_value *ret;
-    assert((obj->type == vt_object));
-    ret = (struct js_value *)map_get(obj->value.object, key, klen);
-    return ret ? ret : js_null_new(pjs); // replace NULL whth vt_null
-}
-
-struct js_value *js_function_new(struct js *pjs, size_t idx) {
-    struct js_value *ret = _value_new(pjs);
-    ret->type = vt_function;
-    ret->value.function.index = idx;
-    ret->value.function.closure = map_new();
-    return ret;
-}
-
-struct js_value *js_cfunction_new(struct js *pjs, void (*cfunc)(struct js *)) {
-    struct js_value *ret = _value_new(pjs);
-    ret->type = vt_cfunction;
-    ret->value.cfunction = cfunc;
-    return ret;
-}
-
-void js_value_dump(struct js_value *val) {
-    if (!val) {
-        printf("NULL"); // shouldn't happen
-        return;
-    }
-    switch (val->type) {
-    case vt_null:
-        printf("null");
-        break;
-    case vt_boolean:
-        printf(val->value.boolean ? "true" : "false");
-        break;
-    case vt_number:
-        printf("%lg", val->value.number);
-        break;
-    case vt_string:
-        printf("\"%.*s\"", (int)val->value.string->len, val->value.string->p);
-        break;
-    case vt_array:
-        printf("[");
-        list_for_each(val->value.array, i, v, {
-            printf("%llu:", i);
-            js_value_dump((struct js_value *)v);
-            printf(",");
-        });
-        printf("]");
-        break;
-    case vt_object:
-        printf("{");
-        map_for_each(val->value.object, k, v, {
-            printf("%s:", k->p);
-            js_value_dump((struct js_value *)v);
-            printf(",");
-        });
-        printf("}");
-        break;
-    case vt_function:
-        printf("<function{");
-        map_for_each(val->value.function.closure, k, v, {
-            printf("%s:", k->p);
-            js_value_dump((struct js_value *)v);
-            printf(",");
-        });
-        printf("}>");
-        break;
-    case vt_cfunction:
-        printf("<c>");
-        break;
-    default:
-        fatal("Unknown value type %d", val->type);
-    }
-}
-
 struct js *js_new() {
     struct js *pjs = (struct js *)calloc(1, sizeof(struct js));
     pjs->tok.stat = ts_searching;
     pjs->tok.line = 1;
-    buffer_alloc(struct js_token, pjs->tok_cache, pjs->tok_cache_cap, 0);
-    // DONT use js_xx_new() because it will add value into pjs->values;
-    pjs->value_null = (struct js_value *)calloc(1, sizeof(struct js_value));
-    pjs->value_null->type = vt_null;
-    pjs->value_true = (struct js_value *)calloc(1, sizeof(struct js_value));
-    pjs->value_true->type = vt_boolean;
-    pjs->value_true->value.boolean = true;
-    pjs->value_false = (struct js_value *)calloc(1, sizeof(struct js_value));
-    pjs->value_false->type = vt_boolean;
-    pjs->value_false->value.boolean = false;
-    pjs->values = link_new();
-    pjs->stack = list_new();
     // stack root
-    list_push(pjs->stack, js_stack_frame_new());
+    js_stack_forward(pjs, 0, 0);
     // DONT setjmp() here because after this function exit, longjmp() behavior is undefined
     // https://en.cppreference.com/w/c/program/longjmp
     return pjs;
 }
 
+void _free_managed(struct js_managed_head *mh) {
+    switch (mh->type) {
+    case vt_string:
+        free(((struct js_managed_string *)mh)->p);
+        free(mh);
+        break;
+    case vt_array:
+        free(((struct js_managed_array *)mh)->p);
+        free(mh);
+        break;
+    case vt_object: {
+        struct js_managed_object *mo = (struct js_managed_object *)mh;
+        js_value_map_free(&(mo->p), &(mo->len), &(mo->cap));
+        free(mh);
+        break;
+    }
+    case vt_function: {
+        struct js_managed_function *mf = (struct js_managed_function *)mh;
+        js_value_map_free(&(mf->closure.p), &(mf->closure.len), &(mf->closure.cap));
+        free(mh);
+        break;
+    }
+    default:
+        fatal("Illegal managed type \"%s\"", js_value_type_name(mh->type));
+        break;
+    }
+}
+
 void js_delete(struct js *pjs) {
+    int level;
     free(pjs->src);
     free(pjs->tok_cache);
-    free(pjs->value_null);
-    free(pjs->value_true);
-    free(pjs->value_false);
-    link_for_each(pjs->values, node, _value_delete((struct js_value *)node->v));
-    link_delete(pjs->values);
-    list_for_each(pjs->stack, i, v, js_stack_frame_delete((struct js_stack_frame *)v));
-    list_delete(pjs->stack);
+    link_for_each(&(pjs->heap), v, {
+        link_remove(&(pjs->heap), &(pjs->heap_len), v);
+        _free_managed((struct js_managed_head *)v);
+    });
+    for (level = 0; level < pjs->stack_len; level++) {
+        js_stack_frame_clear(pjs->stack + level);
+    }
+    free(pjs->stack);
     free(pjs);
+}
+
+static void _mark_in_use(struct js_value val) {
+    switch (val.type) {
+    case vt_string:
+        if (!val.value.string->h.in_use) {
+            val.value.string->h.in_use = true;
+        }
+        break;
+    case vt_array:
+        if (!val.value.array->h.in_use) {
+            val.value.array->h.in_use = true;
+            js_value_list_for_each(val.value.array->p, val.value.array->len, i, v, {
+                _mark_in_use(v);
+            });
+        }
+        break;
+    case vt_object:
+        if (!val.value.object->h.in_use) {
+            val.value.object->h.in_use = true;
+            js_value_map_for_each(val.value.object->p, val.value.object->cap, k, kl, v, {
+                // https://stackoverflow.com/questions/1486904/how-do-i-best-silence-a-warning-about-unused-variables
+                (void)k;
+                (void)kl;
+                _mark_in_use(v);
+            });
+        }
+        break;
+    case vt_function:
+        if (!val.value.function->h.in_use) {
+            val.value.function->h.in_use = true;
+            js_value_map_for_each(val.value.function->closure.p, val.value.function->closure.cap, k, kl, v, {
+                (void)k;
+                (void)kl;
+                _mark_in_use(v);
+            });
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+void js_collect_garbage(struct js *pjs) {
+    size_t level;
+    // mark
+    for (level = 0; level < pjs->stack_len; level++) {
+        struct js_stack_frame *frame = pjs->stack + level;
+        js_value_map_for_each(frame->vars, frame->vars_cap, k, kl, v, {
+            (void)k;
+            (void)kl;
+            _mark_in_use(v);
+        });
+    }
+    // sweep
+    link_for_each(&pjs->heap, v, {
+        struct js_managed_head *mh = (struct js_managed_head *)v;
+        if (mh->in_use) {
+            mh->in_use = false;
+        } else {
+            link_remove(&(pjs->heap), &(pjs->heap_len), v);
+            _free_managed(mh);
+        }
+    });
 }
 
 void js_load_string(struct js *pjs, const char *p, size_t len) {
@@ -242,13 +147,17 @@ void js_load_string(struct js *pjs, const char *p, size_t len) {
     }
 }
 
+void js_load_string_sz(struct js *pjs, const char *p) {
+    js_load_string(pjs, p, strlen(p));
+}
+
 void js_print_source(struct js *pjs) {
     printf("%.*s\n", (int)pjs->src_len, pjs->src);
 }
 
 void js_print_statistics(struct js *pjs) {
-    printf("values len=%llu\n", pjs->values->len);
-    printf("stack len=%llu\n", pjs->stack->len);
+    printf("heap len=%llu\n", pjs->heap_len);
+    printf("stack len=%llu\n", pjs->stack_len);
 }
 
 void js_dump_source(struct js *pjs) {
@@ -263,154 +172,172 @@ void js_dump_tokens(struct js *pjs) {
     }
 }
 
-void js_dump_values(struct js *pjs) {
-    printf("values len=%llu:\n", pjs->values->len);
-    link_for_each(pjs->values, node, {
+void js_dump_heap(struct js *pjs) {
+    printf("heap len=%llu:\n", pjs->heap_len);
+    link_for_each(&(pjs->heap), v, {
+        enum js_value_type type = ((struct js_managed_head *)v)->type;
         printf("    ");
-        js_value_dump((struct js_value *)node->v);
+        switch (type) {
+        case vt_string: {
+            struct js_managed_string *ms = (struct js_managed_string *)v;
+            printf("\"%.*s\"", (int)ms->len, ms->p);
+            break;
+        }
+        case vt_array: {
+            struct js_managed_array *ma = (struct js_managed_array *)v;
+            printf("[");
+            js_value_list_for_each(ma->p, ma->len, i, v, {
+                printf("%llu:", i);
+                js_value_dump(v);
+                printf(",");
+            });
+            printf("]");
+            break;
+        }
+        case vt_object: {
+            struct js_managed_object *mo = (struct js_managed_object *)v;
+            printf("{");
+            js_value_map_for_each(mo->p, mo->cap, k, kl, v, {
+                printf("%.*s:", (int)kl, k);
+                js_value_dump(v);
+                printf(",");
+            });
+            printf("}");
+            break;
+        }
+        case vt_function: {
+            struct js_managed_function *mf = (struct js_managed_function *)v;
+            printf("<function{");
+            js_value_map_for_each(mf->closure.p, mf->closure.cap, k, kl, v, {
+                printf("%.*s:", (int)kl, k);
+                js_value_dump(v);
+                printf(",");
+            });
+            printf("}>");
+            break;
+        }
+        default:
+            fatal("Unknown managed type \"%s\"", js_value_type_name(type));
+            break;
+        }
         printf("\n");
     });
 }
 
-void js_dump_stack(struct js *pjs) {
-    printf("stack len=%llu cap=%llu:\n", pjs->stack->len, pjs->stack->cap);
-    list_for_each(pjs->stack, level, frame, {
-        printf("    %llu %.*s:\n", level, (int)js_stack_frame_descr_len(frame), js_stack_frame_descr_head(pjs, frame));
-        printf("        parameters:\n");
-        list_for_each(((struct js_stack_frame *)frame)->parameters, index, val, {
-            printf("            %llu: ", index);
-            js_value_dump(val);
-            printf("\n");
-        });
-        printf("        variables:\n");
-        map_for_each(((struct js_stack_frame *)frame)->variables, name, val, {
-            printf("            %s = ", name->p);
-            js_value_dump(val);
-            printf("\n");
-        });
-    });
+static char *_frame_descr_head(struct js *pjs, struct js_stack_frame *frame) {
+    return pjs->src + frame->descr_h;
 }
 
-static void _mark_in_use(struct js_value *val) {
-    if (!val->in_use) {
-        val->in_use = true;
-        if (val->type == vt_array) {
-            list_for_each(val->value.array, i, v, _mark_in_use(v));
-        } else if (val->type == vt_object) {
-            map_for_each(val->value.object, k, v, _mark_in_use(v));
-        } else if (val->type == vt_function) {
-            map_for_each(val->value.function.closure, k, v, _mark_in_use(v));
-        }
+static size_t _frame_descr_len(struct js_stack_frame *frame) {
+    return frame->descr_t - frame->descr_h;
+}
+
+void js_dump_stack(struct js *pjs) {
+    size_t level;
+    printf("stack len=%llu cap=%llu:\n", pjs->stack_len, pjs->stack_cap);
+    for (level = 0; level < pjs->stack_len; level++) {
+        struct js_stack_frame *frame = pjs->stack + level;
+        printf("    %llu. descr=%.*s:\n", level, (int)_frame_descr_len(frame), _frame_descr_head(pjs, frame));
+        printf("        parameters len=%llu cap=%llu:\n", frame->params_len, frame->params_cap);
+        js_value_list_for_each(frame->params, frame->params_len, i, v, {
+            printf("            %llu: ", i);
+            js_value_dump(v);
+            printf("\n");
+        });
+        printf("        variables len=%llu cap=%llu:\n", frame->vars_len, frame->vars_cap);
+        js_value_map_for_each(frame->vars, frame->vars_cap, k, kl, v, {
+            printf("            %.*s = ", (int)kl, k);
+            js_value_dump(v);
+            printf("\n");
+        });
     }
 }
 
-void js_collect_garbage(struct js *pjs) {
-    // mark
-    list_for_each(pjs->stack, level, frame, {
-        map_for_each(((struct js_stack_frame *)frame)->variables, name, val, _mark_in_use(val));
-    });
-    // sweep
-    link_for_each(pjs->values, node, {
-        struct js_value *val = (struct js_value *)(node->v);
-        if (val->in_use) {
-            val->in_use = false;
-        } else {
-            _value_delete(val);
-            link_delete_node(pjs->values, node);
-        }
-    });
+void js_stack_frame_clear(struct js_stack_frame *frame) {
+    js_value_map_free(&(frame->vars), &(frame->vars_len), &(frame->vars_cap));
+    free(frame->params);
 }
 
-struct js_stack_frame *js_stack_frame_new() {
-    struct js_stack_frame *frame = (struct js_stack_frame *)calloc(1, sizeof(struct js_stack_frame));
-    frame->variables = map_new();
-    frame->parameters = list_new();
-    return frame;
-}
-
-void js_stack_frame_delete(struct js_stack_frame *frame) {
-    map_delete(frame->variables);
-    list_delete(frame->parameters);
-    free(frame);
-}
-
-void js_stack_push(struct js *pjs, struct js_stack_frame *frame) {
-    list_push(pjs->stack, frame);
-}
-
-struct js_stack_frame *js_stack_pop(struct js *pjs) {
-    assert(pjs->stack->len > 1);
-    return (struct js_stack_frame *)list_pop(pjs->stack);
-}
-
+// return pointer, DONT return a copy, because modify copy's such as 'len' 'cap' are useless
 struct js_stack_frame *js_stack_peek(struct js *pjs) {
-    return (struct js_stack_frame *)pjs->stack->p[pjs->stack->len - 1];
+    return pjs->stack + pjs->stack_len - 1;
 }
 
 void js_stack_forward(struct js *pjs, size_t tok_h, size_t tok_t) {
-    struct js_stack_frame *frame = js_stack_frame_new();
-    frame->descr_h = tok_h;
-    frame->descr_t = tok_t;
-    js_stack_push(pjs, frame);
+    struct js_stack_frame frame = {tok_h, tok_t, NULL, 0, 0, NULL, 0, 0};
+    buffer_push(struct js_stack_frame, pjs->stack, pjs->stack_len, pjs->stack_cap, frame);
     // js_dump_stack(pjs);
 }
 
 void js_stack_backward(struct js *pjs) {
-    js_stack_frame_delete(js_stack_pop(pjs));
+    assert(pjs->stack_len > 1);
+    js_stack_frame_clear(js_stack_peek(pjs));
+    pjs->stack_len--;
     // js_dump_stack(pjs);
 }
 
 void js_stack_backward_to(struct js *pjs, size_t level) {
     assert(level > 0);
-    while (pjs->stack->len > level) {
+    while (pjs->stack_len > level) {
         js_stack_backward(pjs);
     }
 }
 
-void js_variable_declare(struct js *pjs, char *name, size_t name_len, struct js_value *val) {
-    struct map *variables = js_stack_peek(pjs)->variables;
-    // log("%.*s", (int)name_len, name);
-    // js_dump_stack(pjs);
-    if (map_get(variables, name, name_len)) {
+void js_variable_declare(struct js *pjs, char *name, size_t name_len, struct js_value val) {
+    struct js_stack_frame *frame = js_stack_peek(pjs);
+    if (js_value_map_get(frame->vars, frame->vars_cap, name, name_len).type != 0) {
+        printf("Variable \"%.*s\" already exists\n", (int)name_len, name);
         js_throw(pjs, "Variable name already exists");
     }
-    map_put(variables, name, name_len, val);
+    js_value_map_put(&(frame->vars), &(frame->vars_len), &(frame->vars_cap), name, name_len, val);
+}
+
+void js_variable_declare_sz(struct js *pjs, char *name, struct js_value val) {
+    js_variable_declare(pjs, name, strlen(name), val);
 }
 
 void js_variable_erase(struct js *pjs, char *name, size_t name_len) {
-    struct map *variables = js_stack_peek(pjs)->variables;
-    // log("%.*s", (int)name_len, name);
-    // js_dump_stack(pjs);
-    if (map_get(variables, name, name_len)) {
-        map_put(variables, name, name_len, NULL);
+    struct js_stack_frame *frame = js_stack_peek(pjs);
+    if (js_value_map_get(frame->vars, frame->vars_cap, name, name_len).type != 0) {
+        js_value_map_put(&(frame->vars), &(frame->vars_len), &(frame->vars_cap), name, name_len, js_undefined());
         return;
     }
+    // js_value_map_dump(frame->vars, frame->vars_len, frame->vars_cap);
+    printf("Variable \"%.*s\" not found\n", (int)name_len, name);
     js_throw(pjs, "Variable not found");
 }
 
-void js_variable_assign(struct js *pjs, char *name, size_t name_len, struct js_value *val) {
+void js_variable_erase_sz(struct js *pjs, char *name) {
+    js_variable_erase(pjs, name, strlen(name));
+}
+
+void js_variable_assign(struct js *pjs, char *name, size_t name_len, struct js_value val) {
     int level; //  DONT use size_t because if level = 0,  level-- will become large positive number
     // log("%.*s", (int)name_len, name);
     // js_dump_stack(pjs);
-    for (level = (int)pjs->stack->len - 1; level >= 0; level--) {
-        struct js_stack_frame *frame = (struct js_stack_frame *)pjs->stack->p[level];
-        if (map_get(frame->variables, name, name_len)) {
-            map_put(frame->variables, name, name_len, val);
+    for (level = (int)pjs->stack_len - 1; level >= 0; level--) {
+        struct js_stack_frame *frame = pjs->stack + level;
+        if (js_value_map_get(frame->vars, frame->vars_cap, name, name_len).type != 0) {
+            js_value_map_put(&(frame->vars), &(frame->vars_len), &(frame->vars_cap), name, name_len, val);
             return;
         }
     }
     js_throw(pjs, "Variable not found");
 }
 
-struct js_value *js_variable_fetch(struct js *pjs, char *name, size_t name_len) {
+void js_variable_assign_sz(struct js *pjs, char *name, struct js_value val) {
+    js_variable_assign(pjs, name, strlen(name), val);
+}
+
+struct js_value js_variable_fetch(struct js *pjs, char *name, size_t name_len) {
     int level;
     // log("%.*s", (int)name_len, name);
     // js_dump_stack(pjs);
-    for (level = (int)pjs->stack->len - 1; level >= 0; level--) {
-        struct js_stack_frame *frame = (struct js_stack_frame *)pjs->stack->p[level];
-        struct js_value *ret = (struct js_value *)map_get(frame->variables, name, name_len);
+    for (level = (int)pjs->stack_len - 1; level >= 0; level--) {
+        struct js_stack_frame *frame = pjs->stack + level;
+        struct js_value ret = js_value_map_get(frame->vars, frame->vars_cap, name, name_len);
         // log("level=%d, frame=%p, ret=%p", level, frame, ret);
-        if (ret) {
+        if (ret.type != 0) {
             // log("Variable found");
             return ret;
         }
@@ -419,18 +346,25 @@ struct js_value *js_variable_fetch(struct js *pjs, char *name, size_t name_len) 
     js_throw(pjs, "Variable not found");
 }
 
-void js_parameter_push(struct js *pjs, struct js_value *param) {
-    struct list *parameters = js_stack_peek(pjs)->parameters;
-    list_push(parameters, param);
+struct js_value js_variable_fetch_sz(struct js *pjs, char *name) {
+    return js_variable_fetch(pjs, name, strlen(name));
 }
 
-struct js_value *js_parameter_get(struct js *pjs, size_t idx) {
-    struct js_value *ret;
-    struct list *parameters = js_stack_peek(pjs)->parameters;
-    ret = (struct js_value *)list_get(parameters, idx);
-    return ret ? ret : js_null_new(pjs);
+void js_parameter_push(struct js *pjs, struct js_value param) {
+    struct js_stack_frame *frame = js_stack_peek(pjs);
+    buffer_push(struct js_value, frame->params, frame->params_len, frame->params_cap, param);
+}
+
+struct js_value js_parameter_get(struct js *pjs, size_t idx) {
+    struct js_stack_frame *frame = js_stack_peek(pjs);
+    if (idx < frame->params_len) {
+        struct js_value ret = frame->params[idx];
+        return ret.type == 0 ? js_null() : ret;
+    } else {
+        return js_null();
+    };
 }
 
 size_t js_parameter_length(struct js *pjs) {
-    return js_stack_peek(pjs)->parameters->len;
+    return js_stack_peek(pjs)->params_len;
 }

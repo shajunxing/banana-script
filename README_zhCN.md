@@ -51,7 +51,7 @@
 
 ## 标准库以及与C语言的互操作性
 
-所有值都是 `struct js_value *` 类型，你可以通过 `js_xxx_new()` 函数创建，`xxx` 是值类型，你可以直接从这个结构体中读取 C 值，参见 `js.h` 中的定义。所有创建的值都由此引擎的核心上下文 `struct js *` 管理，遵循垃圾回收规则。不要自己 `free()` 它们，也不要直接修改原始类型 `null boolean number string`，如果你想得到一个不同的值，就创建一个新值。复合类型 `array object` 可以通过 `js_array_xxx() js_object_xxx()` 函数进行修改。
+所有值都是 `struct js_value` 类型，你可以通过 `js_xxx()` 函数创建，`xxx` 是值类型，你可以直接从这个结构体中读取 C 值，参见 `js.h` 中的定义。所有创建的值都由此引擎的核心上下文 `struct js *` 管理，遵循垃圾回收规则。不要直接修改它们，如果你想得到不同的值，就创建新值。复合类型 `array object` 可以通过 `js_array_xxx() js_object_xxx()` 函数进行操作。
 
-C 函数必须是 `void (*)(struct js *)` 格式，使用 `js_cfunction_new()` 来创建 C 函数值，是的，当然它们都是值，可以放在任何地方，例如，如果使用 `js_variable_declare()` 放在堆栈根上，它们就是全局的。在 C 函数中，传入的参数可以通过 `js_parameter_length() js_parameter_get()` 函数获取，返回值只需放入 `struct js *` 的 `result` 成员即可。
+C 函数必须是 `void (*)(struct js *)` 格式，使用 `js_cfunction()` 来创建 C 函数值，是的，当然它们都是值，可以放在任何地方，例如，如果使用 `js_variable_declare()` 放在堆栈根上，它们就是全局的。在 C 函数中，传入的参数可以通过 `js_parameter_length() js_parameter_get()` 函数获取，返回值只需放入 `struct js *` 的 `result` 即可。
 

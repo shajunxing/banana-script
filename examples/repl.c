@@ -40,7 +40,7 @@ static void _parse_command(struct js *pjs, char *line) {
     } else if (_match_cmd(line, "/dump") || _match_cmd(line, "/d")) {
         js_dump_source(pjs);
         js_dump_tokens(pjs);
-        js_dump_values(pjs);
+        js_dump_heap(pjs);
         js_dump_stack(pjs);
     } else if (_match_cmd(line, "/gc")) {
         js_collect_garbage(pjs);
@@ -54,15 +54,15 @@ static void _parse_command(struct js *pjs, char *line) {
 int main() {
     struct js *pjs = js_new();
     // predefined functions
-    struct js_value *print_func = js_cfunction_new(pjs, js_function_print);
-    struct js_value *console_obj = js_object_new(pjs);
+    struct js_value print_func = js_cfunction(pjs, js_function_print);
+    struct js_value console_obj = js_object(pjs);
     js_variable_declare_sz(pjs, "print", print_func);
     js_variable_declare_sz(pjs, "console", console_obj);
     js_object_put_sz(pjs, console_obj, "log", print_func);
-    js_variable_declare_sz(pjs, "gc", js_cfunction_new(pjs, js_collect_garbage));
-    js_variable_declare_sz(pjs, "dump", js_cfunction_new(pjs, js_dump_stack));
-    js_variable_declare_sz(pjs, "stat", js_cfunction_new(pjs, js_print_statistics));
-    js_variable_declare_sz(pjs, "clock", js_cfunction_new(pjs, js_function_clock));
+    js_variable_declare_sz(pjs, "gc", js_cfunction(pjs, js_collect_garbage));
+    js_variable_declare_sz(pjs, "dump", js_cfunction(pjs, js_dump_stack));
+    js_variable_declare_sz(pjs, "stat", js_cfunction(pjs, js_print_statistics));
+    js_variable_declare_sz(pjs, "clock", js_cfunction(pjs, js_function_clock));
     printf("Banana JS REPL environment. Copyright (C) 2024 ShaJunXing <shajunxing@hotmail.com>.\n");
     printf("Type '/help' for more information.\n\n");
     for (;;) {
@@ -74,9 +74,7 @@ int main() {
         char *line;
         printf("> ");
         line = read_line(stdin, NULL);
-        if (line == NULL) {
-            break;
-        } else if (strlen(line) > 0) {
+        if (line != NULL && strlen(line) > 0) {
             if (line[0] == '/') {
                 _parse_command(pjs, line);
             } else {

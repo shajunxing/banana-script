@@ -126,282 +126,31 @@ void print_hex(void *p, size_t len) {
     }
 }
 
-struct string *string_new(const char *p, size_t len) {
-    struct string *str = (struct string *)calloc(1, sizeof(struct string));
-    assert(str != NULL);
-    if (p && len) {
-        buffer_alloc(char, str->p, str->cap, len + 1);
-        memcpy(str->p, p, len);
-        str->len = len;
+void link_push(struct link_head *ptr, size_t *len, struct link_head *val) {
+    val->owner = ptr;
+    val->next = ptr->next;
+    val->prev = ptr;
+    if (ptr->next) {
+        ptr->next->prev = val;
     }
-    return str;
+    ptr->next = val;
+    (*len)++;
 }
 
-void string_delete(struct string *str) {
-    free(str->p);
-    free(str);
-}
-
-void string_clear(struct string *str) {
-    buffer_clear(char, str->p, str->len, str->cap);
-}
-
-void string_append(struct string *str, const char *p, size_t len) {
-    size_t newlen = str->len + len;
-    buffer_alloc(char, str->p, str->cap, newlen + 1);
-    memcpy(str->p + str->len, p, len);
-    str->len = newlen;
-}
-
-int string_compare(struct string *str_l, struct string *str_r) {
-    // DONT use min len, for example, "111" is > "11", if use min len, result == is wrong
-    return strncmp(str_l->p, str_r->p, str_l->len > str_r->len ? str_l->len : str_r->len);
-}
-
-struct list *list_new() {
-    struct list *list = (struct list *)calloc(1, sizeof(struct list));
-    assert(list != NULL);
-    return list;
-}
-
-void list_delete(struct list *list) {
-    free(list->p);
-    free(list);
-}
-
-void list_clear(struct list *list) {
-    buffer_clear(void *, list->p, list->len, list->cap);
-}
-
-void list_push(struct list *list, void *val) {
-    size_t newlen = list->len + 1;
-    buffer_alloc(void *, list->p, list->cap, newlen);
-    list->p[list->len] = val;
-    list->len = newlen;
-}
-
-void *list_pop(struct list *list) {
-    void *ret = NULL;
-    if (list->len > 0) {
-        list->len--;
-        ret = list->p[list->len];
-    }
-    return ret;
-}
-
-// always expand, be careful memory usage
-void list_put(struct list *list, size_t idx, void *val) {
-    if (val == NULL) { // special treat NULL to prevent useless expand
-        if (idx < list->len) {
-            list->p[idx] = NULL;
-        } // else do nothing
-    } else {
-        size_t newlen = idx + 1;
-        if (newlen > list->len) {
-            buffer_alloc(void *, list->p, list->cap, newlen);
-            list->len = newlen;
-        }
-        list->p[idx] = val;
-    }
-}
-
-void *list_get(struct list *list, size_t idx) {
-    if (idx < list->len) {
-        return list->p[idx];
-    } else {
-        return NULL;
-    }
-}
-
-struct map *map_new() {
-    struct map *map = (struct map *)calloc(1, sizeof(struct map));
-    assert(map != NULL);
-    return map;
-}
-
-static void _map_p_clear(struct mapnode *p, size_t cap) {
-    int i;
-    for (i = 0; i < cap; i++) {
-        struct mapnode *node = p + i;
-        if (node->k) {
-            string_delete(node->k);
-            node->k = NULL;
-        }
-        node->v = NULL;
-    }
-}
-
-void map_delete(struct map *map) {
-    _map_p_clear(map->p, map->cap);
-    free(map->p);
-    free(map);
-}
-
-void map_clear(struct map *map) {
-    _map_p_clear(map->p, map->cap);
-    map->len = 0;
-}
-
-static size_t _fh(const char *s, size_t slen, size_t mask) {
-    size_t hash = 0;
-    size_t i;
-    for (i = 0; i < slen; i++) {
-        hash = (hash + (hash << 4) + s[i]) & mask;
-    }
-    return hash;
-}
-
-static size_t _nh(size_t hash, size_t mask) {
-    // hash = hash * 5 + 1 can perfectly cover 0-2 pow
-    // https://tieba.baidu.com/p/8968552557
-    return (hash + (hash << 4) + 1) & mask;
-}
-
-static void _put_after_expanded(struct mapnode *p, size_t cap, const char *key, size_t klen, void *val) {
-    size_t mask = cap - 1;
-    size_t hash;
-    size_t rep;
-    for (rep = 0, hash = _fh(key, klen, mask); rep < cap; rep++, hash = _nh(hash, mask)) {
-        struct mapnode *node = p + hash;
-        // log("rep=%d hash=%d", rep, hash);
-        if (!node->k && !node->v) {
-            node->k = string_new(key, klen);
-            node->v = val;
-            return;
-        }
-    }
-    fatal("Whole loop ended, this shouldn't happen");
-}
-
-void map_put(struct map *map, const char *key, size_t klen, void *val) {
-    size_t mask;
-    size_t hash;
-    size_t rep;
-    if (!map->p) { // first allocate
-        buffer_alloc(struct mapnode, map->p, map->cap, 2);
-    }
-    mask = map->cap - 1;
-    for (rep = 0, hash = _fh(key, klen, mask); rep < map->cap; rep++, hash = _nh(hash, mask)) {
-        struct mapnode *node = map->p + hash;
-        // log("rep=%d hash=%d", rep, hash);
-        if (!node->k) {
-            if (node->v) {
-                fatal("Key is NULL but value not NULL, this shouldn't happen");
-            } else {
-                if (val) {
-                    size_t newlen = map->len + 1;
-                    size_t reqcap = newlen << 1;
-                    if (map->cap >= reqcap) {
-                        node->k = string_new(key, klen);
-                        node->v = val;
-                        map->len++;
-                        return;
-                    } else {
-                        // rehash
-                        struct mapnode *newp = NULL;
-                        size_t newlen = 0;
-                        size_t newcap = 0;
-                        size_t i;
-                        buffer_alloc(struct mapnode, newp, newcap, reqcap);
-                        // log("rehash, newmap->cap= %lld", newmap->cap);
-                        for (i = 0; i < map->cap; i++) {
-                            node = map->p + i;
-                            if (node->k && node->v) {
-                                _put_after_expanded(newp, newcap, node->k->p, node->k->len, node->v);
-                                newlen++;
-                            }
-                        }
-                        _put_after_expanded(newp, newcap, key, klen, val);
-                        newlen++;
-                        _map_p_clear(map->p, map->cap);
-                        free(map->p);
-                        map->p = newp;
-                        map->len = newlen;
-                        map->cap = newcap;
-                        return;
-                    }
-                } else {
-                    return;
-                }
-            }
-        } else if (node->k->len == klen && memcmp(node->k->p, key, klen) == 0) {
-            node->v = val;
-            return;
-        } else {
-            if (node->v) {
-                continue;
-            } else {
-                string_clear(node->k);
-                string_append(node->k, key, klen);
-                node->v = val;
-                return;
-            }
-        }
-    }
-    fatal("Whole loop ended, this shouldn't happen");
-}
-
-// v can be NULL
-void *map_get(struct map *map, const char *key, size_t klen) {
-    size_t mask = map->cap - 1;
-    size_t hash;
-    size_t rep;
-    for (rep = 0, hash = _fh(key, klen, mask); rep < map->cap; rep++, hash = _nh(hash, mask)) {
-        struct mapnode *node = map->p + hash;
-        if (!node->k) {
-            return NULL;
-        } else if (node->k->len == klen && memcmp(node->k->p, key, klen) == 0) {
-            return node->v;
-        }
-    }
-    return NULL;
-}
-
-void *map_get_sz(struct map *map, const char *key) {
-    return map_get(map, key, strlen(key));
-}
-
-struct link *link_new() {
-    struct link *link = (struct link *)calloc(1, sizeof(struct link));
-    assert(link != NULL);
-    return link;
-}
-
-void link_push(struct link *link, void *val) {
-    struct linknode *node = (struct linknode *)calloc(1, sizeof(struct linknode));
-    assert(node != NULL);
-    node->v = val;
-    node->owner = link;
-    node->next = link->p;
-    if (link->p) {
-        link->p->prev = node;
-    }
-    link->p = node;
-    link->len++;
-}
-
-void link_delete_node(struct link *link, struct linknode *node) {
-    if (node->owner != link) {
+void link_remove(struct link_head *ptr, size_t *len, struct link_head *val) {
+    if (val->owner != ptr) {
         return;
     }
-    if (link->p == node) {
-        link->p = node->next;
-    } else {
-        node->prev->next = node->next;
+    if (val->next) {
+        val->next->prev = val->prev;
     }
-    if (node->next) {
-        node->next->prev = node->prev;
+    if (val->prev) {
+        val->prev->next = val->next;
     }
-    free(node);
-    link->len--;
+    (*len)--;
 }
 
-void link_dump(struct link *link) {
-    printf("len=%lld\n", link->len);
-    link_for_each(link, n, printf("    %p-> {v=%p, next=%p, prev=%p}\n", n, n->v, n->next, n->prev));
-}
-
-void link_delete(struct link *link) {
-    link_for_each(link, n, link_delete_node(link, n));
-    free(link);
+void link_dump(struct link_head *ptr, size_t *len) {
+    printf("len=%lld\n", *len);
+    link_for_each(ptr, val, printf("    %p-> {next=%p, prev=%p}\n", val, val->next, val->prev));
 }

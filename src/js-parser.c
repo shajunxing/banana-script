@@ -83,7 +83,7 @@ static void _parse_function(struct js *pjs) {
         char *ident_h;
         size_t ident_len;
         size_t i = 0, j;
-        struct js_value *param;
+        struct js_value param;
         _expect(pjs, ts_left_parenthesis, "Expect (");
         if (!_accept(pjs, ts_right_parenthesis)) {
             for (;; i++) {
@@ -95,7 +95,7 @@ static void _parse_function(struct js *pjs) {
                     ident_h = _get_token_head(pjs);
                     ident_len = _get_token_length(pjs);
                     _next_token(pjs);
-                    param = js_array_new(pjs);
+                    param = js_array(pjs);
                     for (j = i; j < js_parameter_length(pjs); j++) {
                         js_array_push(pjs, param, js_parameter_get(pjs, j));
                     }
@@ -112,10 +112,10 @@ static void _parse_function(struct js *pjs) {
                     if (_accept(pjs, ts_assignment)) {
                         js_variable_declare(pjs, ident_h, ident_len, js_parse_expression(pjs));
                     } else {
-                        js_variable_declare(pjs, ident_h, ident_len, js_null_new(pjs));
+                        js_variable_declare(pjs, ident_h, ident_len, js_null());
                     }
                     param = js_parameter_get(pjs, i);
-                    if (param->type != vt_null) {
+                    if (param.type != vt_null) {
                         js_variable_assign(pjs, ident_h, ident_len, param);
                     }
                     if (_accept(pjs, ts_comma)) {
@@ -164,45 +164,45 @@ static void _parse_function(struct js *pjs) {
     }
 }
 
-static struct js_value *_parse_value(struct js *pjs) {
+static struct js_value _parse_value(struct js *pjs) {
     if (_require_exec(pjs)) {
-        struct js_value *ret;
-        struct js_value *spread;
+        struct js_value ret;
+        struct js_value spread;
         size_t i;
         char *k;
         size_t klen;
         switch (_get_token_state(pjs)) {
         case ts_null:
-            ret = js_null_new(pjs);
+            ret = js_null();
             _next_token(pjs);
             break;
         case ts_true:
-            ret = js_boolean_new(pjs, true);
+            ret = js_boolean(true);
             _next_token(pjs);
             break;
         case ts_false:
-            ret = js_boolean_new(pjs, false);
+            ret = js_boolean(false);
             _next_token(pjs);
             break;
         case ts_number:
-            ret = js_number_new(pjs, _get_token_number(pjs));
+            ret = js_number(_get_token_number(pjs));
             _next_token(pjs);
             break;
         case ts_string:
-            ret = js_string_new(pjs, _get_token_string_head(pjs), _get_token_string_length(pjs));
+            ret = js_string(pjs, _get_token_string_head(pjs), _get_token_string_length(pjs));
             _next_token(pjs);
             break;
         case ts_left_bracket:
             _next_token(pjs);
-            ret = js_array_new(pjs);
+            ret = js_array(pjs);
             if (!_accept(pjs, ts_right_bracket)) {
                 for (;;) {
                     if (_accept(pjs, ts_spread)) {
                         spread = js_parse_expression(pjs);
-                        if (spread->type != vt_array) {
+                        if (spread.type != vt_array) {
                             js_throw(pjs, "Operator ... requires array operand");
                         }
-                        for (i = 0; i < spread->value.array->len; i++) {
+                        for (i = 0; i < spread.value.array->len; i++) {
                             js_array_push(pjs, ret, js_array_get(pjs, spread, i));
                         }
                     } else {
@@ -220,7 +220,7 @@ static struct js_value *_parse_value(struct js *pjs) {
             break;
         case ts_left_brace:
             _next_token(pjs);
-            ret = js_object_new(pjs);
+            ret = js_object(pjs);
             if (!_accept(pjs, ts_right_brace)) {
                 for (;;) {
                     if (_get_token_state(pjs) == ts_string) {
@@ -247,7 +247,7 @@ static struct js_value *_parse_value(struct js *pjs) {
             break;
         case ts_function:
             _next_token(pjs);
-            ret = js_function_new(pjs, pjs->tok_cache_idx);
+            ret = js_function(pjs, pjs->tok_cache_idx);
             // only walk through, no exec
             pjs->parse_exec = false;
             _parse_function(pjs);
@@ -309,7 +309,7 @@ static struct js_value *_parse_value(struct js *pjs) {
         default:
             js_throw(pjs, "Not a value literal");
         }
-        return NULL;
+        return js_undefined();
     }
 }
 
@@ -324,7 +324,7 @@ enum _value_accessor_type {
 
 struct _value_accessor {
     enum _value_accessor_type type;
-    struct js_value *v; // value or array or object
+    struct js_value v; // value or array or object
     char *p; // identifier head, or object key head
     size_t n; // identifier len, or array index, or object key len
 };
@@ -336,7 +336,7 @@ struct _value_accessor {
 //     print_hex(acc.p, acc.n);
 // }
 
-static void _accessor_put(struct js *pjs, struct _value_accessor acc, struct js_value *v) {
+static void _accessor_put(struct js *pjs, struct _value_accessor acc, struct js_value v) {
     switch (acc.type) {
     case at_value:
         js_throw(pjs, "Can not put value to accessor value type");
@@ -350,7 +350,7 @@ static void _accessor_put(struct js *pjs, struct _value_accessor acc, struct js_
         js_object_put(pjs, acc.v, acc.p, acc.n, v);
         return;
     case at_optional_member:
-        if (acc.v->type == vt_object) {
+        if (acc.v.type == vt_object) {
             js_object_put(pjs, acc.v, acc.p, acc.n, v);
         } else {
             js_throw(pjs, "Not object");
@@ -361,7 +361,7 @@ static void _accessor_put(struct js *pjs, struct _value_accessor acc, struct js_
     }
 }
 
-static struct js_value *_accessor_get(struct js *pjs, struct _value_accessor acc) {
+static struct js_value _accessor_get(struct js *pjs, struct _value_accessor acc) {
     switch (acc.type) {
     case at_value:
         return acc.v;
@@ -372,24 +372,24 @@ static struct js_value *_accessor_get(struct js *pjs, struct _value_accessor acc
     case at_object_member:
         return js_object_get(pjs, acc.v, acc.p, acc.n);
     case at_optional_member:
-        if (acc.v->type == vt_object) {
+        if (acc.v.type == vt_object) {
             return js_object_get(pjs, acc.v, acc.p, acc.n);
         } else {
-            return js_null_new(pjs);
+            return js_null();
         }
     default:
         js_throw(pjs, "Unknown accessor type");
     }
 }
 
-static struct js_value *_parse_additive_expression(struct js *pjs);
+static struct js_value _parse_additive_expression(struct js *pjs);
 
 static struct _value_accessor _parse_accessor(struct js *pjs) {
     if (_require_exec(pjs)) {
         struct _value_accessor acc;
-        struct js_value *idx = NULL;
+        struct js_value idx;
         size_t tok_idx_backup;
-        struct js_value *spread;
+        struct js_value spread;
         size_t i;
         if (_accept(pjs, ts_left_parenthesis)) {
             acc.type = at_value;
@@ -408,23 +408,23 @@ static struct _value_accessor _parse_accessor(struct js *pjs) {
             if (_accept(pjs, ts_left_bracket)) {
                 acc.v = _accessor_get(pjs, acc);
                 idx = _parse_additive_expression(pjs);
-                if (acc.v->type == vt_array && idx->type == vt_number) {
+                if (acc.v.type == vt_array && idx.type == vt_number) {
                     acc.type = at_array_member;
-                    acc.n = (size_t)idx->value.number;
-                    if (acc.n != idx->value.number) {
+                    acc.n = (size_t)idx.value.number;
+                    if (acc.n != idx.value.number) {
                         js_throw(pjs, "Invalid array index, must be positive integer");
                     }
-                } else if (acc.v->type == vt_object && idx->type == vt_string) {
+                } else if (acc.v.type == vt_object && idx.type == vt_string) {
                     acc.type = at_object_member;
-                    acc.p = idx->value.string->p;
-                    acc.n = idx->value.string->len;
+                    acc.p = idx.value.string->p;
+                    acc.n = idx.value.string->len;
                 } else {
                     js_throw(pjs, "Must be array[number] or object[string]");
                 }
                 _expect(pjs, ts_right_bracket, "Expect ]");
             } else if (_accept(pjs, ts_member_access)) {
                 acc.v = _accessor_get(pjs, acc);
-                if (acc.v->type == vt_object && _get_token_state(pjs) == ts_identifier) {
+                if (acc.v.type == vt_object && _get_token_state(pjs) == ts_identifier) {
                     acc.type = at_object_member;
                     acc.p = _get_token_head(pjs);
                     acc.n = _get_token_length(pjs);
@@ -450,10 +450,10 @@ static struct _value_accessor _parse_accessor(struct js *pjs) {
                     for (;;) {
                         if (_accept(pjs, ts_spread)) {
                             spread = js_parse_expression(pjs);
-                            if (spread->type != vt_array) {
+                            if (spread.type != vt_array) {
                                 js_throw(pjs, "Operator ... requires array operand");
                             }
-                            for (i = 0; i < spread->value.array->len; i++) {
+                            for (i = 0; i < spread.value.array->len; i++) {
                                 js_parameter_push(pjs, js_array_get(pjs, spread, i));
                             }
                         } else {
@@ -468,26 +468,26 @@ static struct _value_accessor _parse_accessor(struct js *pjs) {
                         }
                     }
                 }
-                if (acc.v->type == vt_function) {
+                if (acc.v.type == vt_function) {
                     tok_idx_backup = pjs->tok_cache_idx;
-                    pjs->tok_cache_idx = acc.v->value.function.index;
+                    pjs->tok_cache_idx = acc.v.value.function->index;
                     // before executing function, put all closure variables into current stack
-                    map_for_each(acc.v->value.function.closure, k, v, js_variable_declare(pjs, k->p, k->len, v));
+                    js_value_map_for_each(acc.v.value.function->closure.p, acc.v.value.function->closure.cap, k, kl, v, js_variable_declare(pjs, k, kl, v));
                     _parse_function(pjs);
                     pjs->tok_cache_idx = tok_idx_backup;
-                } else if (acc.v->type == vt_cfunction) {
-                    acc.v->value.cfunction(pjs);
+                } else if (acc.v.type == vt_cfunction) {
+                    acc.v.value.cfunction(pjs);
                 } else {
                     js_throw(pjs, "Must be function");
                 }
                 // js_dump_stack(pjs);
                 acc.type = at_value;
-                acc.v = pjs->result ? pjs->result : js_null_new(pjs);
-                pjs->result = NULL;
+                acc.v = pjs->result.type == 0 ? js_null() : pjs->result;
+                pjs->result = js_undefined();
                 // if return value is function, put all variables in current stack into this function's closure
-                if (acc.v->type == vt_function) {
-                    struct map *variables = js_stack_peek(pjs)->variables;
-                    map_for_each(variables, k, v, map_put(acc.v->value.function.closure, k->p, k->len, v));
+                if (acc.v.type == vt_function) {
+                    struct js_stack_frame *frame = js_stack_peek(pjs);
+                    js_value_map_for_each(frame->vars, frame->vars_cap, k, kl, v, js_value_map_put(&(acc.v.value.function->closure.p), &(acc.v.value.function->closure.len), &(acc.v.value.function->closure.cap), k, kl, v));
                 }
                 js_stack_backward(pjs);
                 pjs->mark_return = false;
@@ -497,7 +497,7 @@ static struct _value_accessor _parse_accessor(struct js *pjs) {
         }
         return acc;
     } else {
-        struct _value_accessor acc = {0, NULL, NULL, 0};
+        struct _value_accessor acc = {0};
         if (_accept(pjs, ts_left_parenthesis)) {
             js_parse_expression(pjs);
             _expect(pjs, ts_right_parenthesis, "Expect )");
@@ -536,28 +536,28 @@ static struct _value_accessor _parse_accessor(struct js *pjs) {
     }
 }
 
-static struct js_value *_parse_access_call_expression(struct js *pjs) {
+static struct js_value _parse_access_call_expression(struct js *pjs) {
     if (_require_exec(pjs)) {
         return _accessor_get(pjs, _parse_accessor(pjs));
     } else {
         _parse_accessor(pjs);
-        return NULL;
+        return js_undefined();
     }
 }
 
-static struct js_value *_parse_prefix_expression(struct js *pjs) {
+static struct js_value _parse_prefix_expression(struct js *pjs) {
     if (_require_exec(pjs)) {
-        struct js_value *ret;
+        struct js_value ret;
         double sign = 0;
         if (_accept(pjs, ts_typeof)) {
             ret = _parse_access_call_expression(pjs);
-            ret = js_string_new_sz(pjs, js_value_type_name(ret));
+            ret = js_string_sz(pjs, js_value_type_name(ret.type));
         } else if (_accept(pjs, ts_not)) {
             ret = _parse_access_call_expression(pjs);
-            if (ret->type != vt_boolean) {
+            if (ret.type != vt_boolean) {
                 js_throw(pjs, "Operator ! requires boolean operand");
             }
-            ret = js_boolean_new(pjs, !ret->value.boolean);
+            ret = js_boolean(!ret.value.boolean);
         } else {
             if (_get_token_state(pjs) == ts_plus) {
                 sign = 1;
@@ -568,10 +568,10 @@ static struct js_value *_parse_prefix_expression(struct js *pjs) {
             }
             ret = _parse_access_call_expression(pjs);
             if (sign != 0) {
-                if (ret->type != vt_number) {
+                if (ret.type != vt_number) {
                     js_throw(pjs, "Prefix operators + - require number operand");
                 }
-                ret = js_number_new(pjs, sign * ret->value.number);
+                ret = js_number(sign * ret.value.number);
             }
         }
         return ret;
@@ -580,31 +580,31 @@ static struct js_value *_parse_prefix_expression(struct js *pjs) {
             _next_token(pjs);
         }
         _parse_access_call_expression(pjs);
-        return NULL;
+        return js_undefined();
     }
 }
 
-static struct js_value *_parse_multiplicative_expression(struct js *pjs) {
+static struct js_value _parse_multiplicative_expression(struct js *pjs) {
     if (_require_exec(pjs)) {
-        struct js_value *ret = _parse_prefix_expression(pjs);
+        struct js_value ret = _parse_prefix_expression(pjs);
         enum js_token_state stat;
-        struct js_value *val_r;
+        struct js_value val_r;
         while (_get_token_state(pjs) == ts_multiplication || _get_token_state(pjs) == ts_division || _get_token_state(pjs) == ts_mod) {
             stat = _get_token_state(pjs);
-            if (ret->type != vt_number) {
+            if (ret.type != vt_number) {
                 js_throw(pjs, "Operators * / % require left operand be number");
             }
             _next_token(pjs);
             val_r = _parse_prefix_expression(pjs);
-            if (val_r->type != vt_number) {
+            if (val_r.type != vt_number) {
                 js_throw(pjs, "Operators * / % require right operand be number");
             }
             if (stat == ts_multiplication) {
-                ret = js_number_new(pjs, ret->value.number * val_r->value.number);
+                ret = js_number(ret.value.number * val_r.value.number);
             } else if (stat == ts_division) {
-                ret = js_number_new(pjs, ret->value.number / val_r->value.number);
+                ret = js_number(ret.value.number / val_r.value.number);
             } else {
-                ret = js_number_new(pjs, fmod(ret->value.number, val_r->value.number));
+                ret = js_number(fmod(ret.value.number, val_r.value.number));
             }
         }
         return ret;
@@ -614,24 +614,24 @@ static struct js_value *_parse_multiplicative_expression(struct js *pjs) {
             _next_token(pjs);
             _parse_prefix_expression(pjs);
         }
-        return NULL;
+        return js_undefined();
     }
 }
 
 // needed by _parse_accessor()
-static struct js_value *_parse_additive_expression(struct js *pjs) {
+static struct js_value _parse_additive_expression(struct js *pjs) {
     if (_require_exec(pjs)) {
-        struct js_value *ret = _parse_multiplicative_expression(pjs);
+        struct js_value ret = _parse_multiplicative_expression(pjs);
         enum js_token_state stat;
-        struct js_value *val_r;
+        struct js_value val_r;
         for (;;) {
             stat = _get_token_state(pjs);
             if (stat == ts_plus) {
-                if (ret->type != vt_number && ret->type != vt_string) {
+                if (ret.type != vt_number && ret.type != vt_string) {
                     js_throw(pjs, "Operator + requires left operand be number or string");
                 }
             } else if (stat == ts_minus) {
-                if (ret->type != vt_number) {
+                if (ret.type != vt_number) {
                     js_throw(pjs, "Operator - requires left operand be number");
                 }
             } else {
@@ -639,18 +639,18 @@ static struct js_value *_parse_additive_expression(struct js *pjs) {
             }
             _next_token(pjs);
             val_r = _parse_multiplicative_expression(pjs);
-            if (val_r->type != ret->type) {
+            if (val_r.type != ret.type) {
                 js_throw(pjs, "Operators + - require right operand be same type");
             }
             if (stat == ts_plus) {
-                if (ret->type == vt_number) {
-                    ret = js_number_new(pjs, ret->value.number + val_r->value.number);
+                if (ret.type == vt_number) {
+                    ret = js_number(ret.value.number + val_r.value.number);
                 } else {
-                    ret = js_string_new(pjs, ret->value.string->p, ret->value.string->len);
-                    string_append(ret->value.string, val_r->value.string->p, val_r->value.string->len);
+                    ret = js_string(pjs, ret.value.string->p, ret.value.string->len);
+                    string_buffer_append(ret.value.string->p, ret.value.string->len, ret.value.string->cap, val_r.value.string->p, val_r.value.string->len);
                 }
             } else {
-                ret = js_number_new(pjs, ret->value.number - val_r->value.number);
+                ret = js_number(ret.value.number - val_r.value.number);
             }
         }
         return ret;
@@ -660,78 +660,72 @@ static struct js_value *_parse_additive_expression(struct js *pjs) {
             _next_token(pjs);
             _parse_multiplicative_expression(pjs);
         }
-        return NULL;
+        return js_undefined();
     }
 }
 
-static struct js_value *_parse_relational_expression(struct js *pjs) {
+static int _strcmp(char *lp, size_t llen, char *rp, size_t rlen) {
+    return strncmp(lp, rp, llen > rlen ? llen : rlen);
+}
+
+static struct js_value _parse_relational_expression(struct js *pjs) {
     if (_require_exec(pjs)) {
-        struct js_value *ret = _parse_additive_expression(pjs);
+        struct js_value ret = _parse_additive_expression(pjs);
         enum js_token_state stat;
-        struct js_value *val_r;
+        struct js_value val_r;
         bool eq;
         double num_l, num_r;
         if (_get_token_state(pjs) == ts_equal_to || _get_token_state(pjs) == ts_not_equal_to) {
             stat = _get_token_state(pjs);
             _next_token(pjs);
             val_r = _parse_additive_expression(pjs);
-            if (ret == val_r) {
+            if (memcmp(&ret, &val_r, sizeof(struct js_value)) == 0) {
                 eq = true;
-            } else if (ret->type == val_r->type) {
-                switch (ret->type) {
-                case vt_null:
-                    eq = true;
-                    break;
-                case vt_boolean:
-                    eq = ret->value.boolean == val_r->value.boolean;
-                    break;
-                case vt_number:
-                    eq = ret->value.number == val_r->value.number;
-                    break;
-                case vt_string:
-                    eq = string_compare(ret->value.string, val_r->value.string) == 0;
-                    break;
-                default:
+            } else if (ret.type == val_r.type) {
+                if (ret.type == vt_number) {
+                    eq = ret.value.number == val_r.value.number; // DONT memcmp two double, same value may be different memory content, for example, mod result 0 == 0 may be false perhaps -0 +0
+                } else if (ret.type == vt_string) {
+                    eq = _strcmp(ret.value.string->p, ret.value.string->len, val_r.value.string->p, val_r.value.string->len) == 0;
+                } else {
                     eq = false;
-                    break;
                 }
             } else {
                 eq = false;
             }
             if (stat == ts_equal_to) {
-                ret = js_boolean_new(pjs, eq);
+                ret = js_boolean(eq);
             } else {
-                ret = js_boolean_new(pjs, !eq);
+                ret = js_boolean(!eq);
             }
         } else if (_get_token_state(pjs) == ts_less_than || _get_token_state(pjs) == ts_less_than_or_equal_to || _get_token_state(pjs) == ts_greater_than || _get_token_state(pjs) == ts_greater_than_or_equal_to) {
             stat = _get_token_state(pjs);
-            if (ret->type != vt_number && ret->type != vt_string) {
+            if (ret.type != vt_number && ret.type != vt_string) {
                 js_throw(pjs, "Operators < <= > >= require left operand be number or string");
             }
             _next_token(pjs);
             val_r = _parse_additive_expression(pjs);
-            if (val_r->type != ret->type) {
+            if (val_r.type != ret.type) {
                 js_throw(pjs, "Operators < <= > >= require right operand be same type");
             }
-            if (ret->type == vt_number) {
-                num_l = ret->value.number;
-                num_r = val_r->value.number;
+            if (ret.type == vt_number) {
+                num_l = ret.value.number;
+                num_r = val_r.value.number;
             } else {
-                num_l = (double)string_compare(ret->value.string, val_r->value.string);
+                num_l = (double)_strcmp(ret.value.string->p, ret.value.string->len, val_r.value.string->p, val_r.value.string->len);
                 num_r = 0;
             }
             if (stat == ts_less_than) {
-                ret = js_boolean_new(pjs, num_l < num_r);
+                ret = js_boolean(num_l < num_r);
             } else if (stat == ts_less_than_or_equal_to) {
-                ret = js_boolean_new(pjs, num_l <= num_r);
+                ret = js_boolean(num_l <= num_r);
             } else if (stat == ts_greater_than) {
-                ret = js_boolean_new(pjs, num_l > num_r);
+                ret = js_boolean(num_l > num_r);
             } else if (stat == ts_greater_than_or_equal_to) {
-                ret = js_boolean_new(pjs, num_l >= num_r);
+                ret = js_boolean(num_l >= num_r);
             } else if (stat == ts_equal_to) {
-                ret = js_boolean_new(pjs, num_l == num_r);
+                ret = js_boolean(num_l == num_r);
             } else {
-                ret = js_boolean_new(pjs, num_l != num_r);
+                ret = js_boolean(num_l != num_r);
             }
         }
         return ret;
@@ -741,29 +735,29 @@ static struct js_value *_parse_relational_expression(struct js *pjs) {
             _next_token(pjs);
             _parse_additive_expression(pjs);
         }
-        return NULL;
+        return js_undefined();
     }
 }
 
-static struct js_value *_parse_logical_expression(struct js *pjs) {
+static struct js_value _parse_logical_expression(struct js *pjs) {
     if (_require_exec(pjs)) {
-        struct js_value *ret = _parse_relational_expression(pjs);
+        struct js_value ret = _parse_relational_expression(pjs);
         enum js_token_state stat;
-        struct js_value *val_r;
+        struct js_value val_r;
         while (_get_token_state(pjs) == ts_and || _get_token_state(pjs) == ts_or) {
             stat = _get_token_state(pjs);
-            if (ret->type != vt_boolean) {
+            if (ret.type != vt_boolean) {
                 js_throw(pjs, "Operators && || require left operand be boolean");
             }
             _next_token(pjs);
             val_r = _parse_relational_expression(pjs);
-            if (val_r->type != vt_boolean) {
+            if (val_r.type != vt_boolean) {
                 js_throw(pjs, "Operators && || require right operand be boolean");
             }
             if (stat == ts_and) {
-                ret = js_boolean_new(pjs, ret->value.boolean && val_r->value.boolean);
+                ret = js_boolean(ret.value.boolean && val_r.value.boolean);
             } else {
-                ret = js_boolean_new(pjs, ret->value.boolean || val_r->value.boolean);
+                ret = js_boolean(ret.value.boolean || val_r.value.boolean);
             }
         }
         return ret;
@@ -773,19 +767,19 @@ static struct js_value *_parse_logical_expression(struct js *pjs) {
             _next_token(pjs);
             _parse_relational_expression(pjs);
         }
-        return NULL;
+        return js_undefined();
     }
 }
 
 // ternary expression as root
-struct js_value *js_parse_expression(struct js *pjs) {
+struct js_value js_parse_expression(struct js *pjs) {
     if (_require_exec(pjs)) {
-        struct js_value *ret = _parse_logical_expression(pjs);
+        struct js_value ret = _parse_logical_expression(pjs);
         if (_accept(pjs, ts_question)) {
-            if (ret->type != vt_boolean) {
+            if (ret.type != vt_boolean) {
                 js_throw(pjs, "Operator ?: requires condition operand be boolean");
             }
-            if (ret->value.boolean) {
+            if (ret.value.boolean) {
                 ret = _parse_logical_expression(pjs);
                 _expect(pjs, ts_colon, "Expect :");
                 pjs->parse_exec = false;
@@ -807,7 +801,7 @@ struct js_value *js_parse_expression(struct js *pjs) {
             _expect(pjs, ts_colon, "Expect :");
             _parse_logical_expression(pjs);
         }
-        return NULL;
+        return js_undefined();
     }
 }
 
@@ -815,7 +809,7 @@ static void _parse_assignment_expression(struct js *pjs) {
     if (_require_exec(pjs)) {
         struct _value_accessor acc = _parse_accessor(pjs);
         enum js_token_state stat;
-        struct js_value *val, *varval;
+        struct js_value val, varval;
         if (_get_token_state(pjs) == ts_assignment || _get_token_state(pjs) == ts_plus_assignment || _get_token_state(pjs) == ts_minus_assignment || _get_token_state(pjs) == ts_multiplication_assignment || _get_token_state(pjs) == ts_division_assignment || _get_token_state(pjs) == ts_mod_assignment) {
             stat = _get_token_state(pjs);
             _next_token(pjs);
@@ -825,44 +819,44 @@ static void _parse_assignment_expression(struct js *pjs) {
             } else {
                 varval = _accessor_get(pjs, acc);
                 if (stat == ts_plus_assignment) {
-                    if (varval->type != vt_number && varval->type != vt_string) {
+                    if (varval.type != vt_number && varval.type != vt_string) {
                         js_throw(pjs, "Operator += requires left operand be number or string");
                     }
                 } else {
-                    if (varval->type != vt_number) {
+                    if (varval.type != vt_number) {
                         js_throw(pjs, "Operators -= *= /= %= require left operand be number");
                     }
                 }
-                if (val->type != varval->type) {
+                if (val.type != varval.type) {
                     js_throw(pjs, "Operators += -= *= /= %= require right operand be same type");
                 }
                 if (stat == ts_plus_assignment) {
-                    if (varval->type == vt_number) {
-                        varval = js_number_new(pjs, varval->value.number + val->value.number);
+                    if (varval.type == vt_number) {
+                        varval = js_number(varval.value.number + val.value.number);
                     } else {
-                        varval = js_string_new(pjs, varval->value.string->p, varval->value.string->len);
-                        string_append(varval->value.string, val->value.string->p, val->value.string->len);
+                        varval = js_string(pjs, varval.value.string->p, varval.value.string->len);
+                        string_buffer_append(varval.value.string->p, varval.value.string->len, varval.value.string->cap, val.value.string->p, val.value.string->len);
                     }
                 } else if (stat == ts_minus_assignment) {
-                    varval = js_number_new(pjs, varval->value.number - val->value.number);
+                    varval = js_number(varval.value.number - val.value.number);
                 } else if (stat == ts_multiplication_assignment) {
-                    varval = js_number_new(pjs, varval->value.number * val->value.number);
+                    varval = js_number(varval.value.number * val.value.number);
                 } else if (stat == ts_division_assignment) {
-                    varval = js_number_new(pjs, varval->value.number / val->value.number);
+                    varval = js_number(varval.value.number / val.value.number);
                 } else { // ts_mod_assignment
-                    varval = js_number_new(pjs, fmod(varval->value.number, val->value.number));
+                    varval = js_number(fmod(varval.value.number, val.value.number));
                 }
                 _accessor_put(pjs, acc, varval);
             }
         } else if (_get_token_state(pjs) == ts_plus_plus || _get_token_state(pjs) == ts_minus_minus) {
             varval = _accessor_get(pjs, acc);
-            if (varval->type != vt_number) {
+            if (varval.type != vt_number) {
                 js_throw(pjs, "Operators ++ -- require operand be number");
             }
             if (_get_token_state(pjs) == ts_plus_plus) {
-                varval = js_number_new(pjs, varval->value.number + 1);
+                varval = js_number(varval.value.number + 1);
             } else {
-                varval = js_number_new(pjs, varval->value.number - 1);
+                varval = js_number(varval.value.number - 1);
             }
             _accessor_put(pjs, acc, varval);
             _next_token(pjs);
@@ -893,7 +887,7 @@ static void _parse_declaration_expression(struct js *pjs) {
             if (_accept(pjs, ts_assignment)) {
                 js_variable_declare(pjs, ident_h, ident_len, js_parse_expression(pjs));
             } else {
-                js_variable_declare(pjs, ident_h, ident_len, js_null_new(pjs));
+                js_variable_declare(pjs, ident_h, ident_len, js_null());
             }
             if (_accept(pjs, ts_comma)) {
                 continue;
@@ -923,7 +917,7 @@ static void _parse_statement(struct js *pjs) {
            for_in,
            for_of } for_type;
     if (_require_exec(pjs)) {
-        struct js_value *cond = NULL, *val;
+        struct js_value cond = js_undefined(), val;
         size_t tok_idx_backup, tok_idx_backup_2, tok_idx_backup_3;
         struct _value_accessor acc;
         int loop_count;
@@ -940,17 +934,16 @@ static void _parse_statement(struct js *pjs) {
             js_stack_backward(pjs);
             _next_token(pjs);
         } else if (_accept(pjs, ts_if)) {
-            struct js_value *cond;
             _expect(pjs, ts_left_parenthesis, "Expect (");
             cond = js_parse_expression(pjs);
-            if (cond->type != vt_boolean) {
+            if (cond.type != vt_boolean) {
                 js_throw(pjs, "Condition must be boolean");
             }
             _expect(pjs, ts_right_parenthesis, "Expect )");
-            pjs->parse_exec = cond->value.boolean;
+            pjs->parse_exec = cond.value.boolean;
             _parse_statement(pjs);
             if (_accept(pjs, ts_else)) {
-                pjs->parse_exec = !cond->value.boolean;
+                pjs->parse_exec = !cond.value.boolean;
                 _parse_statement(pjs);
             }
             pjs->parse_exec = true; // restore execute
@@ -960,11 +953,11 @@ static void _parse_statement(struct js *pjs) {
             while (pjs->parse_exec && !pjs->mark_break) {
                 pjs->tok_cache_idx = tok_idx_backup; // restore token
                 cond = js_parse_expression(pjs);
-                if (cond->type != vt_boolean) {
+                if (cond.type != vt_boolean) {
                     js_throw(pjs, "Condition must be boolean");
                 }
                 _expect(pjs, ts_right_parenthesis, "Expect )");
-                pjs->parse_exec = cond->value.boolean;
+                pjs->parse_exec = cond.value.boolean;
                 _parse_statement(pjs); // skip if cond == false
                 pjs->mark_continue = false; // if not set to false, next cond may be NULL
             }
@@ -979,12 +972,12 @@ static void _parse_statement(struct js *pjs) {
                 pjs->mark_continue = false; // https://stackoverflow.com/questions/64120214/continue-statement-in-a-do-while-loop
                 _expect(pjs, ts_while, "Expect while");
                 _expect(pjs, ts_left_parenthesis, "Expect (");
-                cond = js_parse_expression(pjs); // may be NULL due to 'break' mark
-                if (cond && cond->type != vt_boolean) {
+                cond = js_parse_expression(pjs);
+                if (cond.type != 0 && cond.type != vt_boolean) { // may be NULL due to 'break' mark
                     js_throw(pjs, "Condition must be boolean");
                 }
                 _expect(pjs, ts_right_parenthesis, "Expect )");
-            } while ((cond && cond->value.boolean) && !pjs->mark_break);
+            } while (cond.type != 0 && cond.value.boolean && !pjs->mark_break);
             pjs->mark_break = false;
             pjs->mark_continue = false;
             _expect(pjs, ts_semicolon, "Expect ;");
@@ -1002,10 +995,10 @@ static void _parse_statement(struct js *pjs) {
                     _expect(pjs, ts_semicolon, "Expect ;");
                     for_type = classic_for;
                 } else if (_accept(pjs, ts_in)) {
-                    js_variable_declare(pjs, acc.p, acc.n, js_null_new(pjs));
+                    js_variable_declare(pjs, acc.p, acc.n, js_null());
                     for_type = for_in;
                 } else if (_accept(pjs, ts_of)) {
-                    js_variable_declare(pjs, acc.p, acc.n, js_null_new(pjs));
+                    js_variable_declare(pjs, acc.p, acc.n, js_null());
                     for_type = for_of;
                 } else {
                     js_throw(pjs, "Unknown for loop type");
@@ -1032,10 +1025,10 @@ static void _parse_statement(struct js *pjs) {
                 while (pjs->parse_exec && !pjs->mark_break) {
                     pjs->tok_cache_idx = tok_idx_backup;
                     if (_accept(pjs, ts_semicolon)) {
-                        cond = js_boolean_new(pjs, true);
+                        cond = js_boolean(true);
                     } else {
                         cond = js_parse_expression(pjs);
-                        if (cond->type != vt_boolean) {
+                        if (cond.type != vt_boolean) {
                             js_throw(pjs, "Condition must be boolean");
                         }
                         _expect(pjs, ts_semicolon, "Expect ;");
@@ -1046,7 +1039,7 @@ static void _parse_statement(struct js *pjs) {
                         _parse_assignment_expression(pjs);
                         _expect(pjs, ts_right_parenthesis, "Expect )");
                     }
-                    pjs->parse_exec = cond->value.boolean;
+                    pjs->parse_exec = cond.value.boolean;
                     _parse_statement(pjs);
                     pjs->mark_continue = false;
                     tok_idx_backup_3 = pjs->tok_cache_idx;
@@ -1064,14 +1057,14 @@ static void _parse_statement(struct js *pjs) {
                 _expect(pjs, ts_right_parenthesis, "Expect )");
                 tok_idx_backup = pjs->tok_cache_idx;
                 loop_count = 0;
-                if (val->type == vt_array) {
-                    list_for_each(val->value.array, i, v, {
-                        if (((struct js_value *)v)->type != vt_null) { // skip null
+                if (val.type == vt_array) {
+                    js_value_list_for_each(val.value.array->p, val.value.array->len, i, v, {
+                        if (v.type != vt_null) { // skip null
                             pjs->tok_cache_idx = tok_idx_backup;
                             if (for_type == for_in) {
-                                _accessor_put(pjs, acc, js_number_new(pjs, (double)i));
+                                _accessor_put(pjs, acc, js_number((double)i));
                             } else {
-                                _accessor_put(pjs, acc, (struct js_value *)v);
+                                _accessor_put(pjs, acc, v);
                             }
                             _parse_statement(pjs);
                             loop_count++;
@@ -1082,14 +1075,14 @@ static void _parse_statement(struct js *pjs) {
                         }
                     });
                     pjs->mark_break = false;
-                } else if (val->type == vt_object) {
-                    map_for_each(val->value.object, k, v, {
-                        if (((struct js_value *)v)->type != vt_null) { // skip null
+                } else if (val.type == vt_object) {
+                    js_value_map_for_each(val.value.object->p, val.value.object->cap, k, kl, v, {
+                        if (v.type != vt_null) { // skip null
                             pjs->tok_cache_idx = tok_idx_backup;
                             if (for_type == for_in) {
-                                _accessor_put(pjs, acc, js_string_new(pjs, k->p, k->len));
+                                _accessor_put(pjs, acc, js_string(pjs, k, kl));
                             } else {
-                                _accessor_put(pjs, acc, (struct js_value *)v);
+                                _accessor_put(pjs, acc, v);
                             }
                             _parse_statement(pjs);
                             loop_count++;
@@ -1126,7 +1119,7 @@ static void _parse_statement(struct js *pjs) {
             ident_h = _get_token_head(pjs);
             ident_len = _get_token_length(pjs);
             _next_token(pjs);
-            js_variable_declare(pjs, ident_h, ident_len, js_function_new(pjs, pjs->tok_cache_idx));
+            js_variable_declare(pjs, ident_h, ident_len, js_function(pjs, pjs->tok_cache_idx));
             // only walk through, no exec
             pjs->parse_exec = false;
             _parse_function(pjs);

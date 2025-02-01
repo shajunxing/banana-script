@@ -22,17 +22,13 @@ int main() {
             printf("Enter expression: ");
             str = read_line(stdin, &len);
             if (str == NULL) {
-                break;
+                continue;
             }
             js_load_string(pjs, str, len);
             js_value_dump(js_parse_expression(pjs));
             printf("\n");
         } else {
             puts(pjs->err_msg);
-            printf("pjs->src ");
-            buffer_dump(char, pjs->src, pjs->src_len, pjs->src_cap);
-            printf("pjs->tok_cache idx=%llu ", pjs->tok_cache_idx);
-            buffer_dump(struct js_token, pjs->tok_cache, pjs->tok_cache_len, pjs->tok_cache_cap);
         }
         js_delete(pjs);
     };

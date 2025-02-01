@@ -79,36 +79,22 @@ typedef enum {
     #define min(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
-// https://stackoverflow.com/questions/2611764/can-i-use-a-binary-literal-in-c-or-c
-#define _hex(n) 0x##n##LU
-#define _b8(x) ((x & 0x0000000FLU) ? 1 : 0) + ((x & 0x000000F0LU) ? 2 : 0) + ((x & 0x00000F00LU) ? 4 : 0) + ((x & 0x0000F000LU) ? 8 : 0) + ((x & 0x000F0000LU) ? 16 : 0) + ((x & 0x00F00000LU) ? 32 : 0) + ((x & 0x0F000000LU) ? 64 : 0) + ((x & 0xF0000000LU) ? 128 : 0)
-#define b8(d) ((unsigned char)_b8(_hex(d)))
-#define b16(dmsb, dlsb) (((unsigned short)b8(dmsb) << 8) + b8(dlsb))
-#define b32(dmsb, db2, db3, dlsb) (((unsigned long)b8(dmsb) << 24) + ((unsigned long)b8(db2) << 16) + ((unsigned long)b8(db3) << 8) + b8(dlsb))
-
-// https://stackoverflow.com/questions/2124339/c-preprocessor-va-args-number-of-arguments compatible with msvc
-// _1 ... _63 are param name placeholders, finally returns N
-// zero parameter will cause problem, see https://gist.github.com/aprell/3722962 also only support gcc/clang
-#define _expand(x) x
-#define _numargs(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, _33, _34, _35, _36, _37, _38, _39, _40, _41, _42, _43, _44, _45, _46, _47, _48, _49, _50, _51, _52, _53, _54, _55, _56, _57, _58, _59, _60, _61, _62, _63, N, ...) N
-#define numargs(...) _expand(_numargs(_, ##__VA_ARGS__, 63, 62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50, 49, 48, 47, 46, 45, 44, 43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0))
-
-#define fatal(fmt, ...)                          \
-    do {                                         \
-        log("Fatal error: " fmt, ##__VA_ARGS__); \
-        exit(EXIT_FAILURE);                      \
+#define fatal(fmt, ...)                                                             \
+    do {                                                                            \
+        printf("%s:%d: Fatal error: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); \
+        exit(EXIT_FAILURE);                                                         \
     } while (0)
 
 #if defined assert
     #undef assert
 #endif
 
-#define assert(cond)                            \
-    do {                                        \
-        if (!(cond)) {                          \
-            log("Assertion failed: %s", #cond); \
-            exit(EXIT_FAILURE);                 \
-        }                                       \
+#define assert(cond)                                                            \
+    do {                                                                        \
+        if (!(cond)) {                                                          \
+            printf("%s:%d: Assertion failed: %s\n", __FILE__, __LINE__, #cond); \
+            exit(EXIT_FAILURE);                                                 \
+        }                                                                       \
     } while (0)
 
 // js-buffer.c
@@ -117,6 +103,8 @@ shared char *read_file(const char *filename, size_t *plen);
 shared char *read_line(FILE *fp, size_t *plen);
 shared const char *ascii_abbreviation(int ch);
 shared void print_hex(void *p, size_t len);
+
+#define alloc(type, num) ((type *)calloc((num), sizeof(type)))
 
 // buffer's capacity is always pow of 2
 #define buffer_alloc(type, p, cap, reqcap)                                             \
@@ -158,6 +146,16 @@ shared void print_hex(void *p, size_t len);
         (len) = _newlen;                         \
     } while (0)
 
+#define buffer_put(type, p, len, cap, idx, v)        \
+    do {                                             \
+        size_t _newlen = (idx) + 1;                  \
+        if (_newlen > (len)) {                       \
+            buffer_alloc(type, (p), (cap), _newlen); \
+            (len) = _newlen;                         \
+        }                                            \
+        (p)[(idx)] = v;                              \
+    } while (0)
+
 // use "clear" instead of "empty", to avoid conflit meaning "is empty", refer C++ string
 #define buffer_clear(type, p, num, cap)       \
     do {                                      \
@@ -176,6 +174,7 @@ shared void print_hex(void *p, size_t len);
     } while (0)
 
 #define string_buffer_clear(str, len, cap) buffer_clear(char, (str), (len), (cap))
+
 #define string_buffer_append(str, len, cap, s, l)      \
     do {                                               \
         size_t _newlen = (len) + (l);                  \
@@ -183,149 +182,37 @@ shared void print_hex(void *p, size_t len);
         memcpy((str) + (len), (s), (l));               \
         (len) = _newlen;                               \
     } while (0)
+
 #define string_buffer_append_sz(str, len, cap, s)                  \
     do {                                                           \
         const char *_s = (s);                                      \
         string_buffer_append((str), (len), (cap), _s, strlen(_s)); \
     } while (0)
+
 #define string_buffer_append_ch(str, len, cap, c)          \
     do {                                                   \
         char _c = (c);                                     \
         string_buffer_append((str), (len), (cap), &_c, 1); \
     } while (0)
 
-struct string {
-    char *p;
-    size_t len;
-    size_t cap;
+struct link_head {
+    struct link_head *owner;
+    struct link_head *next;
+    struct link_head *prev;
 };
 
-#define string_dump(s)                              \
-    do {                                            \
-        struct string *_s = (s);                    \
-        buffer_dump(char, _s->p, _s->len, _s->cap); \
+shared void link_push(struct link_head *ptr, size_t *len, struct link_head *val);
+#define link_for_each(p, v, block)                              \
+    do {                                                        \
+        struct link_head *_v = (struct link_head *)((p)->next); \
+        while (_v) {                                            \
+            struct link_head *v = _v;                           \
+            _v = _v->next;                                      \
+            block;                                              \
+        }                                                       \
     } while (0)
-shared struct string *string_new(const char *p, size_t len);
-shared void string_delete(struct string *str);
-shared void string_clear(struct string *str);
-shared void string_append(struct string *str, const char *p, size_t len);
-// _sz ended macros, if str is a function, be careful to prevent side effect
-#define string_append_sz(str, p)              \
-    do {                                      \
-        char *_p = (p);                       \
-        string_append((str), _p, strlen(_p)); \
-    } while (0)
-#define string_append_ch(str, ch)      \
-    do {                               \
-        char _ch = (ch);               \
-        string_append((str), &_ch, 1); \
-    } while (0)
-shared int string_compare(struct string *str_l, struct string *str_r);
-
-struct list {
-    void **p;
-    size_t len;
-    size_t cap;
-};
-
-#define list_dump(l)                                  \
-    do {                                              \
-        struct list *_l = (l);                        \
-        buffer_dump(void *, _l->p, _l->len, _l->cap); \
-    } while (0)
-shared struct list *list_new();
-shared void list_delete(struct list *list);
-shared void list_clear(struct list *list);
-shared void list_push(struct list *list, void *val);
-shared void *list_pop(struct list *list);
-shared void list_put(struct list *list, size_t idx, void *val);
-shared void *list_get(struct list *list, size_t idx);
-// DONT use conflict name such as 'list'
-// since list_put will expand, here skip NULL element to prevent NULL pointer crash, for example in _mark_in_use, be careful
-#define list_for_each(l, i, v, block)   \
-    do {                                \
-        struct list *_l = (l);          \
-        size_t i;                       \
-        for (i = 0; i < _l->len; i++) { \
-            void *v = _l->p[i];         \
-            if (v) {                    \
-                block;                  \
-            }                           \
-        }                               \
-    } while (0)
-
-struct mapnode {
-    struct string *k;
-    void *v;
-};
-
-struct map {
-    struct mapnode *p;
-    size_t len;
-    size_t cap;
-};
-
-#define map_dump(m)                                           \
-    do {                                                      \
-        struct map *_m = (m);                                 \
-        buffer_dump(struct mapnode, _m->p, _m->len, _m->cap); \
-    } while (0)
-
-shared struct map *map_new();
-shared void map_delete(struct map *map);
-shared void map_clear(struct map *map);
-shared void map_put(struct map *map, const char *key, size_t klen, void *val);
-#define map_put_sz(m, k, v)              \
-    do {                                 \
-        const char *_k = (k);            \
-        map_put((m), _k, strlen(_k), v); \
-    } while (0)
-shared void *map_get(struct map *map, const char *key, size_t klen);
-shared void *map_get_sz(struct map *map, const char *key);
-// DONT use conflict name such as 'k' 'v'
-#define map_for_each(m, _k, _v, block)        \
-    do {                                      \
-        struct map *_m = (m);                 \
-        size_t _i;                            \
-        for (_i = 0; _i < _m->cap; _i++) {    \
-            struct mapnode *_kv = _m->p + _i; \
-            struct string *_k = _kv->k;       \
-            void *_v = _kv->v;                \
-            if (_k && _v) {                   \
-                block;                        \
-            }                                 \
-        }                                     \
-    } while (0)
-
-struct link;
-
-struct linknode {
-    void *v;
-    struct link *owner;
-    struct linknode *next;
-    struct linknode *prev;
-};
-
-struct link {
-    struct linknode *p;
-    size_t len;
-};
-
-shared struct link *link_new();
-shared void link_push(struct link *link, void *val);
-#define link_for_each(l, n, block)   \
-    do {                             \
-        struct link *_l = (l);       \
-        struct linknode *_n = _l->p; \
-        while (_n) {                 \
-            struct linknode *n = _n; \
-            _n = _n->next;           \
-            block;                   \
-        }                            \
-    } while (0)
-shared void link_delete_node(struct link *link, struct linknode *node);
-shared void link_dump(struct link *link);
-shared void link_delete(struct link *link);
+shared void link_remove(struct link_head *ptr, size_t *len, struct link_head *val);
+shared void link_dump(struct link_head *ptr, size_t *len);
 
 // https://codelucky.com/c-macros/
 // https://en.wikipedia.org/wiki/X_Macro
@@ -435,6 +322,7 @@ struct js_token {
 };
 
 enum js_value_type {
+    vt_undefined = 0, // only means not exists, because 0 always means empty state, won't return to user
     vt_null,
     vt_boolean,
     vt_number,
@@ -446,50 +334,126 @@ enum js_value_type {
 };
 
 struct js;
+struct js_managed_string;
+struct js_managed_array;
+struct js_managed_object;
+struct js_managed_function;
 
 struct js_value {
     enum js_value_type type;
     union {
         bool boolean;
         double number;
-        struct string *string;
-        struct list *array;
-        struct map *object;
-        // forward declaraction can only be pointer, so put js_value behind js_token
-        // https://stackoverflow.com/questions/9776391/how-to-solve-the-compiling-error-c2079-on-windows
-        struct {
-            size_t index; // cached token start location
-            struct map *closure;
-        } function;
+        struct js_managed_string *string;
+        struct js_managed_array *array;
+        struct js_managed_object *object;
+        struct js_managed_function *function;
         void (*cfunction)(struct js *);
     } value;
-    bool in_use;
 };
 
-shared const char *js_value_type_name(struct js_value *val);
-shared struct js_value *js_null_new(struct js *pjs);
-shared struct js_value *js_boolean_new(struct js *pjs, bool b);
-shared struct js_value *js_number_new(struct js *pjs, double n);
-shared struct js_value *js_string_new(struct js *pjs, const char *str, size_t len);
-static inline struct js_value *js_string_new_sz(struct js *pjs, const char *str) {
-    return js_string_new(pjs, str, strlen(str));
-}
-shared struct js_value *js_array_new(struct js *pjs);
-shared void js_array_push(struct js *pjs, struct js_value *arr, struct js_value *val);
-shared void js_array_put(struct js *pjs, struct js_value *arr, size_t idx, struct js_value *val);
-shared struct js_value *js_array_get(struct js *pjs, struct js_value *arr, size_t idx);
-shared struct js_value *js_object_new(struct js *pjs);
-shared void js_object_put(struct js *pjs, struct js_value *obj, const char *key, size_t klen, struct js_value *val);
-static inline void js_object_put_sz(struct js *pjs, struct js_value *obj, const char *key, struct js_value *val) {
-    js_object_put(pjs, obj, key, strlen(key), val);
-}
-shared struct js_value *js_object_get(struct js *pjs, struct js_value *obj, const char *key, size_t klen);
-static inline struct js_value *js_object_get_sz(struct js *pjs, struct js_value *obj, const char *key) {
-    return js_object_get(pjs, obj, key, strlen(key));
-}
-shared struct js_value *js_function_new(struct js *pjs, size_t idx);
-shared struct js_value *js_cfunction_new(struct js *pjs, void (*cfunc)(struct js *));
-shared void js_value_dump(struct js_value *val);
+struct js_managed_head {
+    struct link_head h;
+    bool in_use;
+    enum js_value_type type;
+};
+
+struct js_managed_string {
+    struct js_managed_head h;
+    char *p;
+    size_t len;
+    size_t cap;
+};
+
+struct js_managed_array {
+    struct js_managed_head h;
+    struct js_value *p;
+    size_t len;
+    size_t cap;
+};
+
+struct js_key_value {
+    struct {
+        char *p;
+        size_t len;
+        size_t cap;
+    } k;
+    struct js_value v;
+};
+
+struct js_managed_object {
+    struct js_managed_head h;
+    struct js_key_value *p;
+    size_t len;
+    size_t cap;
+};
+
+struct js_managed_function {
+    struct js_managed_head h;
+    size_t index; // cached token start location
+    struct {
+        struct js_key_value *p;
+        size_t len;
+        size_t cap;
+    } closure; // closure
+};
+
+// js-value.c
+
+shared void js_value_map_put(struct js_key_value **p, size_t *len, size_t *cap, const char *key, size_t klen, struct js_value val);
+shared void js_value_map_put_sz(struct js_key_value **p, size_t *len, size_t *cap, const char *key, struct js_value val);
+shared struct js_value js_value_map_get(struct js_key_value *p, size_t cap, const char *key, size_t klen);
+shared struct js_value js_value_map_get_sz(struct js_key_value *p, size_t cap, const char *key);
+// DONT use conflict name such as 'k' 'v'
+#define js_value_map_for_each(_p, cap, _k, _kl, _v, block) \
+    do {                                                   \
+        struct js_key_value *__p = (_p);                   \
+        size_t _cap = (cap);                               \
+        size_t _i;                                         \
+        for (_i = 0; _i < _cap; _i++) {                    \
+            struct js_key_value *_kv = __p + _i;           \
+            char *_k = _kv->k.p;                           \
+            size_t _kl = _kv->k.len;                       \
+            struct js_value _v = _kv->v;                   \
+            if (_k != NULL && _v.type != 0) {              \
+                block;                                     \
+            }                                              \
+        }                                                  \
+    } while (0)
+shared void js_value_map_free(struct js_key_value **p, size_t *len, size_t *cap);
+shared void js_value_map_dump(struct js_key_value *p, size_t len, size_t cap);
+// DONT use conflict name such as 'list'
+#define js_value_list_for_each(p, len, i, v, block) \
+    do {                                            \
+        struct js_value *_p = (p);                  \
+        size_t _len = (len);                        \
+        size_t i;                                   \
+        for (i = 0; i < _len; i++) {                \
+            struct js_value v = _p[i];              \
+            if (v.type != 0) {                      \
+                block;                              \
+            }                                       \
+        }                                           \
+    } while (0)
+shared const char *js_value_type_name(enum js_value_type type);
+shared struct js_value js_undefined();
+shared struct js_value js_null();
+shared struct js_value js_boolean(bool b);
+shared struct js_value js_number(double d);
+shared struct js_value js_string(struct js *pjs, const char *str, size_t len);
+shared struct js_value js_string_sz(struct js *pjs, const char *str);
+shared struct js_value js_array(struct js *pjs);
+shared void js_array_push(struct js *pjs, struct js_value arr, struct js_value val);
+shared void js_array_put(struct js *pjs, struct js_value arr, size_t idx, struct js_value val);
+shared struct js_value js_array_get(struct js *pjs, struct js_value arr, size_t idx);
+shared struct js_value js_object(struct js *pjs);
+shared void js_object_put(struct js *pjs, struct js_value obj, const char *key, size_t klen, struct js_value val);
+shared void js_object_put_sz(struct js *pjs, struct js_value obj, const char *key, struct js_value val);
+shared struct js_value js_object_get(struct js *pjs, struct js_value obj, const char *key, size_t klen);
+shared struct js_value js_object_get_sz(struct js *pjs, struct js_value obj, const char *key);
+shared struct js_value js_function(struct js *pjs, size_t idx);
+shared struct js_value js_cfunction(struct js *pjs, void (*cfunc)(struct js *));
+shared void js_value_dump(struct js_value val);
 
 struct js {
     // source
@@ -519,26 +483,24 @@ struct js {
     bool mark_break;
     bool mark_continue;
     bool mark_return;
-    struct js_value *value_null; // reduce duplicated values
-    struct js_value *value_true;
-    struct js_value *value_false;
-    struct link *values;
-    struct list *stack;
-    struct js_value *result; // function result CANNOT be put in stack, because 'return' could be inside more stack level inside function
+    struct link_head heap; // managed values
+    size_t heap_len;
+    struct js_stack_frame *stack;
+    size_t stack_len;
+    size_t stack_cap;
+    struct js_value result; // function result CANNOT be put in stack, because 'return' could be inside more stack level inside function
 };
 
 struct js_stack_frame {
     size_t descr_h;
     size_t descr_t;
-    struct map *variables;
-    struct list *parameters;
+    struct js_key_value *vars; // variables map
+    size_t vars_len;
+    size_t vars_cap;
+    struct js_value *params; // parameters list
+    size_t params_len;
+    size_t params_cap;
 };
-static inline char *js_stack_frame_descr_head(struct js *pjs, struct js_stack_frame *frame) {
-    return pjs->src + frame->descr_h;
-}
-static inline size_t js_stack_frame_descr_len(struct js_stack_frame *frame) {
-    return frame->descr_t - frame->descr_h;
-}
 
 #define js_try(pjs) (setjmp((pjs)->err_env) == 0)
 
@@ -555,46 +517,30 @@ static inline size_t js_stack_frame_descr_len(struct js_stack_frame *frame) {
 
 shared struct js *js_new();
 shared void js_delete(struct js *pjs);
+shared void js_collect_garbage(struct js *pjs);
 shared void js_load_string(struct js *pjs, const char *p, size_t len);
-#define js_load_string_sz(pjs, p)              \
-    do {                                       \
-        const char *_p = (p);                  \
-        js_load_string((pjs), _p, strlen(_p)); \
-    } while (0)
+shared void js_load_string_sz(struct js *pjs, const char *p);
 shared void js_print_source(struct js *pjs);
 shared void js_print_statistics(struct js *pjs);
 shared void js_dump_source(struct js *pjs);
 shared void js_dump_tokens(struct js *pjs);
-shared void js_dump_values(struct js *pjs);
+shared void js_dump_heap(struct js *pjs);
 shared void js_dump_stack(struct js *pjs);
-shared void js_collect_garbage(struct js *pjs);
-shared struct js_stack_frame *js_stack_frame_new();
-shared void js_stack_frame_delete(struct js_stack_frame *frame);
-shared void js_stack_push(struct js *pjs, struct js_stack_frame *frame);
-shared struct js_stack_frame *js_stack_pop(struct js *pjs);
+shared void js_stack_frame_clear(struct js_stack_frame *frame);
 shared struct js_stack_frame *js_stack_peek(struct js *pjs);
 shared void js_stack_forward(struct js *pjs, size_t tok_h, size_t tok_t);
 shared void js_stack_backward(struct js *pjs);
 shared void js_stack_backward_to(struct js *pjs, size_t level);
-shared void js_variable_declare(struct js *pjs, char *name, size_t name_len, struct js_value *val);
-#define js_variable_declare_sz(pjs, name, val)                 \
-    do {                                                       \
-        char *_name = (name);                                  \
-        js_variable_declare((pjs), _name, strlen(_name), val); \
-    } while (0)
+shared void js_variable_declare(struct js *pjs, char *name, size_t name_len, struct js_value val);
+shared void js_variable_declare_sz(struct js *pjs, char *name, struct js_value val);
 shared void js_variable_erase(struct js *pjs, char *name, size_t name_len);
-shared void js_variable_assign(struct js *pjs, char *name, size_t name_len, struct js_value *val);
-#define js_variable_assign_sz(pjs, name, val)                    \
-    do {                                                         \
-        char *_name = (name);                                    \
-        js_variable_assign_sz((pjs), _name, strlen(_name), val); \
-    } while (0)
-shared struct js_value *js_variable_fetch(struct js *pjs, char *name, size_t name_len);
-static inline struct js_value *js_variable_fetch_sz(struct js *pjs, char *name) {
-    return js_variable_fetch(pjs, name, strlen(name));
-}
-shared void js_parameter_push(struct js *pjs, struct js_value *param);
-shared struct js_value *js_parameter_get(struct js *pjs, size_t idx);
+shared void js_variable_erase_sz(struct js *pjs, char *name);
+shared void js_variable_assign(struct js *pjs, char *name, size_t name_len, struct js_value val);
+shared void js_variable_assign_sz(struct js *pjs, char *name, struct js_value val);
+shared struct js_value js_variable_fetch(struct js *pjs, char *name, size_t name_len);
+shared struct js_value js_variable_fetch_sz(struct js *pjs, char *name);
+shared void js_parameter_push(struct js *pjs, struct js_value param);
+shared struct js_value js_parameter_get(struct js *pjs, size_t idx);
 shared size_t js_parameter_length(struct js *pjs);
 
 // js-lexer.c
@@ -605,7 +551,7 @@ shared void js_lexer_print_error(struct js *pjs);
 
 // js-parser.c
 
-shared struct js_value *js_parse_expression(struct js *pjs);
+shared struct js_value js_parse_expression(struct js *pjs);
 shared void js_parse_script(struct js *pjs);
 shared void js_parser_print_error(struct js *pjs);
 

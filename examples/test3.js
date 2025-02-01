@@ -48,6 +48,7 @@ let o2 = {};
 for (let k in o1) {
     o2[k] = o1[k];
 }
+i = 0;
 let o3 = [];
 for (let v of o1) {
     o3[i] = v;

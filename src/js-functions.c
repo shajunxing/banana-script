@@ -21,5 +21,5 @@ void js_function_print(struct js *pjs) {
 }
 
 void js_function_clock(struct js *pjs) {
-    pjs->result = js_number_new(pjs, clock() * 1.0 / CLOCKS_PER_SEC);
+    pjs->result = js_number(clock() * 1.0 / CLOCKS_PER_SEC);
 }

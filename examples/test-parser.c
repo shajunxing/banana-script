@@ -13,9 +13,9 @@ You should have received a copy of the GNU General Public License along with thi
 void parse(char *src, size_t len, bool exec) {
     struct js *pjs = js_new();
     // predefined functions
-    js_variable_declare_sz(pjs, "gc", js_cfunction_new(pjs, js_collect_garbage));
-    js_variable_declare_sz(pjs, "dump", js_cfunction_new(pjs, js_dump_stack));
-    js_variable_declare_sz(pjs, "print", js_cfunction_new(pjs, js_function_print));
+    js_variable_declare_sz(pjs, "gc", js_cfunction(pjs, js_collect_garbage));
+    js_variable_declare_sz(pjs, "dump", js_cfunction(pjs, js_dump_stack));
+    js_variable_declare_sz(pjs, "print", js_cfunction(pjs, js_function_print));
     if (js_try(pjs)) {
         js_load_string(pjs, src, len);
     } else {

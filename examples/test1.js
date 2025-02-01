@@ -14,6 +14,7 @@ let eq_same_obj = complex_obj_1 == complex_obj;
 let eq_null = null == null;
 let ne_bool = false != true;
 let eq_num = 1.23e2 == 123e0;
+let eq_str = "hello" == "hello";
 let ne_str = "hello" != "world";
 let ne_arr = [] != [];
 let ne_obj = {} != {};
