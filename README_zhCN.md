@@ -52,7 +52,7 @@
 
 垃圾回收是手动的，你可以在你需要的任何时候执行。
 
-`delete` 语义和JavaScript不同，JavaScript删除的是对象成员，但这毫无意义，因为只需要把它们置为`null`即可。在这里`delete`可以删除当前堆栈层级的局部变量。比如，可以配合垃圾收集器把执行环境清空得一点不剩。再比如，加入函数闭包的变量是返回之前的所有局部变量，可以在返回之前`delete`掉用不到变量以减少闭包大小，在REPL环境里执行以下两条语句，可以看到区别。
+`delete` 语义和JavaScript不同，JavaScript删除的是对象成员，但这毫无意义，因为只需要把它们置为`null`即可。在这里`delete`可以删除当前作用域范围的局部变量。比如，可以配合垃圾收集器把执行环境清空得一点不剩。再比如，加入函数闭包的变量是返回之前的所有局部变量，可以在返回之前`delete`掉用不到变量以减少闭包大小，在REPL环境里执行以下两条语句，可以看到区别。
 
 - `let f = function(a, b){let c = a + b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`
 - `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`

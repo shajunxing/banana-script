@@ -551,13 +551,13 @@ enum js_call_stack_frame_type { js_call_stack_frame_type_list };
 
 struct js_call_stack_frame {
     enum js_call_stack_frame_type type;
-    size_t ret_addr; // function stack return address
     struct js_key_value *vars; // variables map
     size_t vars_len;
     size_t vars_cap;
     struct js_value *params; // parameters list
     size_t params_len;
     size_t params_cap;
+    size_t ret_addr; // function stack return address
 };
 
 #define js_try(pjs) (setjmp((pjs)->err_env) == 0)

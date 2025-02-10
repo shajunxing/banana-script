@@ -246,7 +246,7 @@ struct js_call_stack_frame *js_call_stack_peek(struct js *pjs) {
 }
 
 void js_call_stack_push(struct js *pjs, enum js_call_stack_frame_type type, size_t ret_addr) {
-    struct js_call_stack_frame frame = {type, ret_addr, NULL, 0, 0, NULL, 0, 0};
+    struct js_call_stack_frame frame = {type, NULL, 0, 0, NULL, 0, 0, ret_addr};
     buffer_push(struct js_call_stack_frame, pjs->call_stack, pjs->call_stack_len, pjs->call_stack_cap, frame);
     // js_dump_call_stack(pjs);
 }

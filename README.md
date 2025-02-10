@@ -52,7 +52,7 @@ No modules. In inperpreter's view, source code is only one large flat text.
 
 Garbage collection is manual, you can do it at any time you need.
 
-`delete` is semantic different from JavaScript, which removes object members, but this makes no sense because you just need to set them to `null`. Here `delete` can delete local variables on current stack depth. For example, it can be used with garbage collector to empty whole execution environment to nothing left. For another example, variables added to the function closure are all local variables before return, so unused variables can be `delete`d before return to reduce closure size, run following two statements in REPL environment to see differences.
+`delete` is semantic different from JavaScript, which removes object members, but this makes no sense because you just need to set them to `null`. Here `delete` You can delete local variables within current scope. For example, it can be used with garbage collector to empty whole execution environment to nothing left. For another example, variables added to the function closure are all local variables before return, so unused variables can be `delete`d before return to reduce closure size, run following two statements in REPL environment to see differences.
 
 - `let f = function(a, b){let c = a + b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`
 - `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`
@@ -68,6 +68,8 @@ C functions must be `void (*)(struct js *)` format, use `js_c_function()` to cre
 There are three types of string: `vt_scripture` means immuable `const char *` written in engine c source code, eg. `typeof` result, `vt_inscription` means immuable string loaded from javascript source code such as variable identifier, string literals, they are stored in engine context's `tablet`, and `vt_string` are mutable. These three string types can be used for futher optimization, for example, string split can be optimized for `vt_scripture` and `vt_inscription`.
 
 Value types `vt_string`, `vt_array`, `vt_object` and `vt_function` are hang on engine context's `heap`, and managed by garbage collector. Why `vt_function` is managed is because it has closure.
+
+Variable scope is combined into call stack. Call stack has following types: `cs_root` is root stack, which is unique and not deletable, `cs_block` means block statement scope, `cs_for` is for loop scope to fit `let` keyword, `cs_function` is function scope and in which `params` and `ret_addr` are available.
 
 Hashmap operation `js_value_map_put`'s algorithm:
 
