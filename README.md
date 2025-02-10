@@ -24,7 +24,7 @@ This project is C89 compatable, no other dependences, even make systems are not 
 
 Data types are `null, boolean, number, string, array, object, function`, results of `typeof` correspond strictly to these names. No `undefined` because `null` is enough. Array and object are clean, no predefined members such as prototypes.
 
-Variable declaraction use `let`, all variables are local. Access undeclared variables will cause error, and access array/object's unexisting members will get `null`. `const` is not supported because it's meaningless, for example, a constant pointed to an array/object, should it's member be immunable? if not, why should I keep `const`? if so, value must be marked immunable, but it's weird in point of garbage collector's view, because all values should be cleanable.
+Variable declaraction use `let`, all variables are local. Access undeclared variables will cause error, and access array/object's unexisting members will get `null`. `const` is not supported because, firstly, it is ambiguous: contents of array/object pointed to by constants are still mutable. If contents are immutable, it means that read-only attribute must be marked on value rather than variable, which is unacceptable for garbage collector. Secondly, I require everything to be collectible, so I do not need `const`.
 
 Function definition supports default parameter `param = value` and rest parameter `...params`. Array literal and function call support spread syntax `...`, which will not skip `null` members. No `this, arguments` in function.
 
