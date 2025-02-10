@@ -19,7 +19,7 @@ const char *js_token_state_name(enum js_token_state stat) {
     if (stat >= 0 && stat < sizeof(names)) {
         return names[stat];
     } else {
-        return "";
+        return "???";
     }
 }
 
@@ -74,38 +74,43 @@ static void _calculate_token_number(struct js *pjs) {
     pjs->tok.num = num;
 }
 
-static enum js_token_state _match_keyword_fast(const char *id, size_t idlen) {
-    static const int keywords[] = {12, 'b', 25, 'c', 39, 'd', 62, 'e', 83, 'f', 94, 'i', 137, 'l', 146, 'n', 154, 'o', 165, 'r', 170, 't', 187, 'w', 214, 1, 'r', 28, 1, 'e', 31, 1, 'a', 34, 1, 'k', 37, 0, ts_break, 1, 'o', 42, 1, 'n', 45, 1, 't', 48, 1, 'i', 51, 1, 'n', 54, 1, 'u', 57, 1, 'e', 60, 0, ts_continue, 2, 'e', 67, 'o', 81, 1, 'l', 70, 1, 'e', 73, 1, 't', 76, 1, 'e', 79, 0, ts_delete, 0, ts_do, 1, 'l', 86, 1, 's', 89, 1, 'e', 92, 0, ts_else, 3, 'a', 101, 'u', 112, 'o', 132, 1, 'l', 104, 1, 's', 107, 1, 'e', 110, 0, ts_false, 1, 'n', 115, 1, 'c', 118, 1, 't', 121, 1, 'i', 124, 1, 'o', 127, 1, 'n', 130, 0, ts_function, 1, 'r', 135, 0, ts_for, 2, 'f', 142, 'n', 144, 0, ts_if, 0, ts_in, 1, 'e', 149, 1, 't', 152, 0, ts_let, 1, 'u', 157, 1, 'l', 160, 1, 'l', 163, 0, ts_null, 1, 'f', 168, 0, ts_of, 1, 'e', 173, 1, 't', 176, 1, 'u', 179, 1, 'r', 182, 1, 'n', 185, 0, ts_return, 2, 'y', 192, 'r', 206, 1, 'p', 195, 1, 'e', 198, 1, 'o', 201, 1, 'f', 204, 0, ts_typeof, 1, 'u', 209, 1, 'e', 212, 0, ts_true, 1, 'h', 217, 1, 'i', 220, 1, 'l', 223, 1, 'e', 226, 0, ts_while};
-    size_t i;
-    size_t k = 0;
-    for (i = 0; i < idlen; i++) {
-        char c = id[i];
-        bool matched = false;
-        int j;
-        int jmax = keywords[k];
-        for (j = 0; j < jmax; j++) {
-            k++;
-            if (c == keywords[k]) {
-                k++;
-                k = keywords[k];
-                matched = true;
-                break;
-            }
-            k++;
-        }
-        if (!matched) {
-            return ts_identifier;
+static enum js_token_state _match_keyword(const char *id, size_t idlen) {
+#define kw_entry(kw) \
+    { #kw, sizeof(#kw) - 1, ts_##kw }
+    static const struct {
+        const char *name;
+        size_t len;
+        enum js_token_state token;
+    } keywords[] = {
+                    kw_entry(null),
+                    kw_entry(true),
+                    kw_entry(false),
+                    kw_entry(let),
+                    kw_entry(if),
+                    kw_entry(else),
+                    kw_entry(while),
+                    kw_entry(do),
+                    kw_entry(for),
+                    kw_entry(break),
+                    kw_entry(continue),
+                    kw_entry(function),
+                    kw_entry(return),
+                    kw_entry(in),
+                    kw_entry(of),
+                    kw_entry(typeof),
+                    kw_entry(delete),
+    };
+    int i;
+    for (i = 0; i < countof(keywords); i++) {
+        // match keyword len, DONT use token len, for example, "fals"
+        if (strncmp(id, keywords[i].name, max(idlen, keywords[i].len)) == 0) {
+            return keywords[i].token;
         }
     }
-    if (keywords[k] == 0) {
-        k++;
-        return keywords[k];
-    } else {
-        return ts_identifier;
-    }
+    return ts_identifier;
 }
 
-void js_lexer_next_token(struct js *pjs) {
+static void _next_token(struct js *pjs) {
     // use DFA because fit my thinking habits, is simple for me
     // DONT use switch/case because "break" will conflict with "for"
     // following firefox Syntax error text, use F12 to check
@@ -113,7 +118,6 @@ void js_lexer_next_token(struct js *pjs) {
     // DONT calculate tok.line in one place because when tok.t=\n and return, and call again, \n may be calcualted more than once
     while (pjs->tok.t < pjs->src_len) {
         // always make sure [tok.h, tok.t) is printable, eg. tok.t point to next outside, and correctly count new line
-        // log("%2d %3s  %s", pjs->tok.line, ascii_abbreviation(tok_t_char), js_token_state_name(pjs->tok.stat));
         if (pjs->tok.stat == ts_searching) {
             // searching state matches tok.h, which is inside scope
             char tok_h_char;
@@ -450,8 +454,20 @@ void js_lexer_next_token(struct js *pjs) {
                     pjs->tok.t++;
                     pjs->tok.stat = ts_multiplication_assignment;
                     goto matched;
+                } else if (tok_t_char == '*') {
+                    pjs->tok.t++;
+                    pjs->tok.stat = ts_exponentiation_matching;
                 } else {
                     pjs->tok.stat = ts_multiplication;
+                    goto matched;
+                }
+            } else if (pjs->tok.stat == ts_exponentiation_matching) {
+                if (tok_t_char == '=') {
+                    pjs->tok.t++;
+                    pjs->tok.stat = ts_exponentiation_assignment;
+                    goto matched;
+                } else {
+                    pjs->tok.stat = ts_exponentiation;
                     goto matched;
                 }
             } else if (pjs->tok.stat == ts_mod_matching) {
@@ -529,6 +545,9 @@ void js_lexer_next_token(struct js *pjs) {
     case ts_multiplication_matching:
         pjs->tok.stat = ts_multiplication;
         goto matched;
+    case ts_exponentiation_matching:
+        pjs->tok.stat = ts_exponentiation;
+        goto matched;
     case ts_mod_matching:
         pjs->tok.stat = ts_mod;
         goto matched;
@@ -548,26 +567,37 @@ matched:
         char *tok_hdr = _token_head(pjs);
         size_t tok_len = _token_length(pjs);
         if (pjs->tok.stat == ts_identifier) {
-            pjs->tok.stat = _match_keyword_fast(tok_hdr, tok_len);
-        }
-        // DONT declare a variable = js_token_state_name(pjs->tok.stat), or in release mode will cause "warning: unused variable" because log() is not exist
-        switch (pjs->tok.stat) {
-        case ts_identifier:
-        case ts_string:
-            log("%ld:%s:%.*s", pjs->tok.line, js_token_state_name(pjs->tok.stat), (int)tok_len, tok_hdr);
-            break;
-        case ts_number:
-            log("%ld:%s:%g", pjs->tok.line, js_token_state_name(pjs->tok.stat), pjs->tok.num);
-            break;
-        default:
-            log("%ld:%s", pjs->tok.line, js_token_state_name(pjs->tok.stat));
-            break;
+            pjs->tok.stat = _match_keyword(tok_hdr, tok_len);
         }
     }
     return;
 }
 
-void js_lexer_print_error(struct js *pjs) {
+void js_next_token(struct js *pjs) {
+    do {
+        _next_token(pjs);
+    } while (pjs->tok.stat == ts_block_comment || pjs->tok.stat == ts_line_comment);
+}
+
+void js_token_dump(struct js *pjs) {
+    const char *tok_name = js_token_state_name(pjs->tok.stat);
+    char *tok_hdr = _token_head(pjs);
+    size_t tok_len = _token_length(pjs);
+    switch (pjs->tok.stat) {
+    case ts_identifier:
+    case ts_string:
+        printf("%ld:%s:%.*s", pjs->tok.line, tok_name, (int)tok_len, tok_hdr);
+        break;
+    case ts_number:
+        printf("%ld:%s:%g", pjs->tok.line, tok_name, pjs->tok.num);
+        break;
+    default:
+        printf("%ld:%s", pjs->tok.line, tok_name);
+        break;
+    }
+}
+
+void js_print_error(struct js *pjs) {
     printf("%s:%ld %ld:%s:%.*s: %s\n", pjs->err_file, pjs->err_line,
            pjs->tok.line, js_token_state_name(pjs->tok.stat),
            (int)_token_length(pjs), _token_head(pjs), pjs->err_msg);

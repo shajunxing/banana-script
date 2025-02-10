@@ -5,17 +5,17 @@
 // }
 // let sub = function(a, b = 3) {
 //     return a - b;
-//     nr_add = "never reached";
+//     nr_sub = "never reached";
 // };
 // let add_sub = [ add, sub ];
 // let mul_div = {
 //     mul : function(a = 4, b) {
 //         return a * b;
-//         nr_add = "never reached";
+//         nr_mul = "never reached";
 //     },
 //     div : function(a, b) {
 //         return a / b;
-//         nr_add = "never reached";
+//         nr_div = "never reached";
 //     }
 // };
 // let default_result = add();
@@ -23,7 +23,7 @@
 // let sub_result = sub(7);
 // let mul_result = mul_div.mul(null, 10, 11, 12);
 // let div_result = mul_div["div"](13, 14, 15);
-// [false, {"foo" : dump}][1].foo();
+[false, {"foo" : dump}][1].foo();
 
 // function add_many(a, b = 2, ...rest) {
 //     let ret = a + b;
@@ -32,7 +32,7 @@
 //     }
 //     return ret;
 // }
-// let result = add_many(1, null, 3, 4, null, 5);
+// let add_many_result = add_many(...[1, null, 3], 4, ...[null, 5]);
 
 // let ret = {
 //     mul : function(a = 4, b) {
@@ -45,15 +45,15 @@
 //     }
 // }["mul"](3, 2);
 
-function recur(param, i) {
-    if (i > 30) {
-        return "done";
-    }
-    param[i] = i % 2 == 0;
-    // dump();
-    // print(i, i % 2, i % 2 == 0, param[i], param);
-    return recur(param, i + 1);
-}
-let recur_param = [];
-let recur_result = recur(recur_param, 0);
-let yes = 2 % 2 == 0;
+// function recur(param, i) {
+//     if (i > 30) {
+//         return "done";
+//     }
+//     param[i] = i % 2 == 0;
+//     // dump();
+//     // print(i, i % 2, i % 2 == 0, param[i], param);
+//     return recur(param, i + 1);
+// }
+// let recur_param = [];
+// let recur_result = recur(recur_param, 0);
+// let yes = 2 % 2 == 0;

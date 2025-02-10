@@ -14,8 +14,8 @@ struct js *js_new() {
     struct js *pjs = (struct js *)calloc(1, sizeof(struct js));
     pjs->tok.stat = ts_searching;
     pjs->tok.line = 1;
-    // stack root
-    js_stack_forward(pjs, 0, 0);
+    // call_stack root
+    js_call_stack_push(pjs, cs_root, 0);
     // DONT setjmp() here because after this function exit, longjmp() behavior is undefined
     // https://en.cppreference.com/w/c/program/longjmp
     return pjs;
@@ -50,21 +50,27 @@ void _free_managed(struct js_managed_head *mh) {
 }
 
 void js_delete(struct js *pjs) {
-    int level;
+    int depth;
     free(pjs->src);
-    free(pjs->tok_cache);
     link_for_each(&(pjs->heap), v, {
         link_remove(&(pjs->heap), &(pjs->heap_len), v);
         _free_managed((struct js_managed_head *)v);
     });
-    for (level = 0; level < pjs->stack_len; level++) {
-        js_stack_frame_clear(pjs->stack + level);
+    for (depth = 0; depth < pjs->call_stack_len; depth++) {
+        js_call_stack_frame_clear(pjs->call_stack + depth);
     }
-    free(pjs->stack);
+    free(pjs->call_stack);
+    free(pjs->call_stack_depths);
+    free(pjs->eval_stack);
+    free(pjs->bytecodes);
+    free(pjs->tablet);
     free(pjs);
 }
 
-static void _mark_in_use(struct js_value val) {
+static void _mark_in_use(struct js *pjs, struct js_value val) {
+    // printf("_mark_in_use: ");
+    // js_value_dump(pjs, val);
+    // printf("\n");
     switch (val.type) {
     case vt_string:
         if (!val.value.string->h.in_use) {
@@ -75,7 +81,7 @@ static void _mark_in_use(struct js_value val) {
         if (!val.value.array->h.in_use) {
             val.value.array->h.in_use = true;
             js_value_list_for_each(val.value.array->p, val.value.array->len, i, v, {
-                _mark_in_use(v);
+                _mark_in_use(pjs, v);
             });
         }
         break;
@@ -86,7 +92,7 @@ static void _mark_in_use(struct js_value val) {
                 // https://stackoverflow.com/questions/1486904/how-do-i-best-silence-a-warning-about-unused-variables
                 (void)k;
                 (void)kl;
-                _mark_in_use(v);
+                _mark_in_use(pjs, v);
             });
         }
         break;
@@ -96,26 +102,28 @@ static void _mark_in_use(struct js_value val) {
             js_value_map_for_each(val.value.function->closure.p, val.value.function->closure.cap, k, kl, v, {
                 (void)k;
                 (void)kl;
-                _mark_in_use(v);
+                _mark_in_use(pjs, v);
             });
         }
         break;
     default:
+        // puts("skip");
         break;
     }
 }
 
 void js_collect_garbage(struct js *pjs) {
-    size_t level;
+    size_t depth;
     // mark
-    for (level = 0; level < pjs->stack_len; level++) {
-        struct js_stack_frame *frame = pjs->stack + level;
+    for (depth = 0; depth < pjs->call_stack_len; depth++) {
+        struct js_call_stack_frame *frame = pjs->call_stack + depth;
         js_value_map_for_each(frame->vars, frame->vars_cap, k, kl, v, {
             (void)k;
             (void)kl;
-            _mark_in_use(v);
+            _mark_in_use(pjs, v);
         });
     }
+    // js_dump_heap(pjs);
     // sweep
     link_for_each(&pjs->heap, v, {
         struct js_managed_head *mh = (struct js_managed_head *)v;
@@ -126,25 +134,11 @@ void js_collect_garbage(struct js *pjs) {
             _free_managed(mh);
         }
     });
+    // js_dump_heap(pjs);
 }
 
 void js_load_string(struct js *pjs, const char *p, size_t len) {
-    size_t i;
     string_buffer_append(pjs->src, pjs->src_len, pjs->src_cap, p, len);
-    for (;;) {
-        js_lexer_next_token(pjs);
-        if (pjs->tok.stat == ts_end_of_file) {
-            break;
-        } else if (pjs->tok.stat == ts_block_comment || pjs->tok.stat == ts_line_comment) {
-            // remove comment here because in parser, token index always start from 0, can not invoke _next_token() at beginning, so if there are comments in beginning, no way to skip
-            continue;
-        } else {
-            buffer_push(struct js_token, pjs->tok_cache, pjs->tok_cache_len, pjs->tok_cache_cap, pjs->tok);
-        }
-    }
-    for (i = 0; i < pjs->tok_cache_len; i++) {
-        log("%s", js_token_state_name(pjs->tok_cache[i].stat));
-    }
 }
 
 void js_load_string_sz(struct js *pjs, const char *p) {
@@ -157,19 +151,12 @@ void js_print_source(struct js *pjs) {
 
 void js_print_statistics(struct js *pjs) {
     printf("heap len=%llu\n", pjs->heap_len);
-    printf("stack len=%llu\n", pjs->stack_len);
+    printf("stack len=%llu\n", pjs->call_stack_len);
 }
 
 void js_dump_source(struct js *pjs) {
-    printf("source ");
-    buffer_dump(char, pjs->src, pjs->src_len, pjs->src_cap);
-}
-
-void js_dump_tokens(struct js *pjs) {
-    if (pjs->tok_cache_len) {
-        printf("token idx=%llu %s\n", pjs->tok_cache_idx,
-               js_token_state_name(pjs->tok_cache[pjs->tok_cache_idx].stat));
-    }
+    printf("source len=%llu cap=%llu:\n", pjs->src_len, pjs->src_cap);
+    print_hex(pjs->src, pjs->src_len);
 }
 
 void js_dump_heap(struct js *pjs) {
@@ -188,7 +175,7 @@ void js_dump_heap(struct js *pjs) {
             printf("[");
             js_value_list_for_each(ma->p, ma->len, i, v, {
                 printf("%llu:", i);
-                js_value_dump(v);
+                js_value_dump(pjs, v);
                 printf(",");
             });
             printf("]");
@@ -199,7 +186,7 @@ void js_dump_heap(struct js *pjs) {
             printf("{");
             js_value_map_for_each(mo->p, mo->cap, k, kl, v, {
                 printf("%.*s:", (int)kl, k);
-                js_value_dump(v);
+                js_value_dump(pjs, v);
                 printf(",");
             });
             printf("}");
@@ -210,7 +197,7 @@ void js_dump_heap(struct js *pjs) {
             printf("<function{");
             js_value_map_for_each(mf->closure.p, mf->closure.cap, k, kl, v, {
                 printf("%.*s:", (int)kl, k);
-                js_value_dump(v);
+                js_value_dump(pjs, v);
                 printf(",");
             });
             printf("}>");
@@ -224,67 +211,72 @@ void js_dump_heap(struct js *pjs) {
     });
 }
 
-static char *_frame_descr_head(struct js *pjs, struct js_stack_frame *frame) {
-    return pjs->src + frame->descr_h;
-}
-
-static size_t _frame_descr_len(struct js_stack_frame *frame) {
-    return frame->descr_t - frame->descr_h;
-}
-
-void js_dump_stack(struct js *pjs) {
-    size_t level;
-    printf("stack len=%llu cap=%llu:\n", pjs->stack_len, pjs->stack_cap);
-    for (level = 0; level < pjs->stack_len; level++) {
-        struct js_stack_frame *frame = pjs->stack + level;
-        printf("    %llu. descr=%.*s:\n", level, (int)_frame_descr_len(frame), _frame_descr_head(pjs, frame));
+void js_dump_call_stack(struct js *pjs) {
+#define X(name) #name,
+    static const char *const names[] = {js_call_stack_frame_type_list};
+#undef X
+    size_t depth;
+    printf("call stack len=%llu cap=%llu:\n", pjs->call_stack_len, pjs->call_stack_cap);
+    for (depth = 0; depth < pjs->call_stack_len; depth++) {
+        struct js_call_stack_frame *frame = pjs->call_stack + depth;
+        printf("    depth=%llu type=%s ret_addr=%llu:\n", depth, names[frame->type], frame->ret_addr);
         printf("        parameters len=%llu cap=%llu:\n", frame->params_len, frame->params_cap);
         js_value_list_for_each(frame->params, frame->params_len, i, v, {
             printf("            %llu: ", i);
-            js_value_dump(v);
+            js_value_dump(pjs, v);
             printf("\n");
         });
         printf("        variables len=%llu cap=%llu:\n", frame->vars_len, frame->vars_cap);
         js_value_map_for_each(frame->vars, frame->vars_cap, k, kl, v, {
             printf("            %.*s = ", (int)kl, k);
-            js_value_dump(v);
+            js_value_dump(pjs, v);
             printf("\n");
         });
     }
 }
 
-void js_stack_frame_clear(struct js_stack_frame *frame) {
+void js_call_stack_frame_clear(struct js_call_stack_frame *frame) {
     js_value_map_free(&(frame->vars), &(frame->vars_len), &(frame->vars_cap));
     free(frame->params);
 }
 
 // return pointer, DONT return a copy, because modify copy's such as 'len' 'cap' are useless
-struct js_stack_frame *js_stack_peek(struct js *pjs) {
-    return pjs->stack + pjs->stack_len - 1;
+struct js_call_stack_frame *js_call_stack_peek(struct js *pjs) {
+    return pjs->call_stack + pjs->call_stack_len - 1;
 }
 
-void js_stack_forward(struct js *pjs, size_t tok_h, size_t tok_t) {
-    struct js_stack_frame frame = {tok_h, tok_t, NULL, 0, 0, NULL, 0, 0};
-    buffer_push(struct js_stack_frame, pjs->stack, pjs->stack_len, pjs->stack_cap, frame);
-    // js_dump_stack(pjs);
+void js_call_stack_push(struct js *pjs, enum js_call_stack_frame_type type, size_t ret_addr) {
+    struct js_call_stack_frame frame = {type, ret_addr, NULL, 0, 0, NULL, 0, 0};
+    buffer_push(struct js_call_stack_frame, pjs->call_stack, pjs->call_stack_len, pjs->call_stack_cap, frame);
+    // js_dump_call_stack(pjs);
 }
 
-void js_stack_backward(struct js *pjs) {
-    assert(pjs->stack_len > 1);
-    js_stack_frame_clear(js_stack_peek(pjs));
-    pjs->stack_len--;
-    // js_dump_stack(pjs);
+void js_call_stack_pop(struct js *pjs) {
+    assert(pjs->call_stack_len > 1);
+    js_call_stack_frame_clear(js_call_stack_peek(pjs));
+    pjs->call_stack_len--;
+    // js_dump_call_stack(pjs);
 }
 
-void js_stack_backward_to(struct js *pjs, size_t level) {
-    assert(level > 0);
-    while (pjs->stack_len > level) {
-        js_stack_backward(pjs);
+void js_call_stack_backup(struct js *pjs) {
+    // printf("pjs->call_stack_len=%llu\n", pjs->call_stack_len);
+    buffer_push(size_t, pjs->call_stack_depths, pjs->call_stack_depths_len, pjs->call_stack_depths_cap, pjs->call_stack_len);
+}
+
+void js_call_stack_restore(struct js *pjs) {
+    size_t depth;
+    assert(pjs->call_stack_depths_len > 0);
+    pjs->call_stack_depths_len--;
+    depth = pjs->call_stack_depths[pjs->call_stack_depths_len];
+    // printf("depth=%llu\n", depth);
+    assert(depth > 0);
+    while (pjs->call_stack_len > depth) {
+        js_call_stack_pop(pjs);
     }
 }
 
 void js_variable_declare(struct js *pjs, char *name, size_t name_len, struct js_value val) {
-    struct js_stack_frame *frame = js_stack_peek(pjs);
+    struct js_call_stack_frame *frame = js_call_stack_peek(pjs);
     if (js_value_map_get(frame->vars, frame->vars_cap, name, name_len).type != 0) {
         printf("Variable \"%.*s\" already exists\n", (int)name_len, name);
         js_throw(pjs, "Variable name already exists");
@@ -296,8 +288,8 @@ void js_variable_declare_sz(struct js *pjs, char *name, struct js_value val) {
     js_variable_declare(pjs, name, strlen(name), val);
 }
 
-void js_variable_erase(struct js *pjs, char *name, size_t name_len) {
-    struct js_stack_frame *frame = js_stack_peek(pjs);
+void js_variable_delete(struct js *pjs, char *name, size_t name_len) {
+    struct js_call_stack_frame *frame = js_call_stack_peek(pjs);
     if (js_value_map_get(frame->vars, frame->vars_cap, name, name_len).type != 0) {
         js_value_map_put(&(frame->vars), &(frame->vars_len), &(frame->vars_cap), name, name_len, js_undefined());
         return;
@@ -307,16 +299,16 @@ void js_variable_erase(struct js *pjs, char *name, size_t name_len) {
     js_throw(pjs, "Variable not found");
 }
 
-void js_variable_erase_sz(struct js *pjs, char *name) {
-    js_variable_erase(pjs, name, strlen(name));
+void js_variable_delete_sz(struct js *pjs, char *name) {
+    js_variable_delete(pjs, name, strlen(name));
 }
 
-void js_variable_assign(struct js *pjs, char *name, size_t name_len, struct js_value val) {
-    int level; //  DONT use size_t because if level = 0,  level-- will become large positive number
+void js_variable_put(struct js *pjs, char *name, size_t name_len, struct js_value val) {
+    int depth; //  DONT use size_t because if depth = 0,  depth-- will become large positive number
     // log("%.*s", (int)name_len, name);
-    // js_dump_stack(pjs);
-    for (level = (int)pjs->stack_len - 1; level >= 0; level--) {
-        struct js_stack_frame *frame = pjs->stack + level;
+    // js_dump_call_stack(pjs);
+    for (depth = (int)pjs->call_stack_len - 1; depth >= 0; depth--) {
+        struct js_call_stack_frame *frame = pjs->call_stack + depth;
         if (js_value_map_get(frame->vars, frame->vars_cap, name, name_len).type != 0) {
             js_value_map_put(&(frame->vars), &(frame->vars_len), &(frame->vars_cap), name, name_len, val);
             return;
@@ -325,18 +317,18 @@ void js_variable_assign(struct js *pjs, char *name, size_t name_len, struct js_v
     js_throw(pjs, "Variable not found");
 }
 
-void js_variable_assign_sz(struct js *pjs, char *name, struct js_value val) {
-    js_variable_assign(pjs, name, strlen(name), val);
+void js_variable_put_sz(struct js *pjs, char *name, struct js_value val) {
+    js_variable_put(pjs, name, strlen(name), val);
 }
 
-struct js_value js_variable_fetch(struct js *pjs, char *name, size_t name_len) {
-    int level;
+struct js_value js_variable_get(struct js *pjs, char *name, size_t name_len) {
+    int depth;
     // log("%.*s", (int)name_len, name);
-    // js_dump_stack(pjs);
-    for (level = (int)pjs->stack_len - 1; level >= 0; level--) {
-        struct js_stack_frame *frame = pjs->stack + level;
+    // js_dump_call_stack(pjs);
+    for (depth = (int)pjs->call_stack_len - 1; depth >= 0; depth--) {
+        struct js_call_stack_frame *frame = pjs->call_stack + depth;
         struct js_value ret = js_value_map_get(frame->vars, frame->vars_cap, name, name_len);
-        // log("level=%d, frame=%p, ret=%p", level, frame, ret);
+        // log("depth=%d, frame=%p, ret=%p", depth, frame, ret);
         if (ret.type != 0) {
             // log("Variable found");
             return ret;
@@ -346,17 +338,17 @@ struct js_value js_variable_fetch(struct js *pjs, char *name, size_t name_len) {
     js_throw(pjs, "Variable not found");
 }
 
-struct js_value js_variable_fetch_sz(struct js *pjs, char *name) {
-    return js_variable_fetch(pjs, name, strlen(name));
+struct js_value js_variable_get_sz(struct js *pjs, char *name) {
+    return js_variable_get(pjs, name, strlen(name));
 }
 
 void js_parameter_push(struct js *pjs, struct js_value param) {
-    struct js_stack_frame *frame = js_stack_peek(pjs);
+    struct js_call_stack_frame *frame = js_call_stack_peek(pjs);
     buffer_push(struct js_value, frame->params, frame->params_len, frame->params_cap, param);
 }
 
 struct js_value js_parameter_get(struct js *pjs, size_t idx) {
-    struct js_stack_frame *frame = js_stack_peek(pjs);
+    struct js_call_stack_frame *frame = js_call_stack_peek(pjs);
     if (idx < frame->params_len) {
         struct js_value ret = frame->params[idx];
         return ret.type == 0 ? js_null() : ret;
@@ -366,5 +358,134 @@ struct js_value js_parameter_get(struct js *pjs, size_t idx) {
 }
 
 size_t js_parameter_length(struct js *pjs) {
-    return js_stack_peek(pjs)->params_len;
+    return js_call_stack_peek(pjs)->params_len;
+}
+
+void js_evaluation_stack_push(struct js *pjs, struct js_value item) {
+    buffer_push(struct js_value, pjs->eval_stack, pjs->eval_stack_len, pjs->eval_stack_cap, item);
+}
+
+void js_evaluation_stack_pop(struct js *pjs, size_t count) {
+    if (pjs->eval_stack_len < count) {
+        fatal("evaluation stack count %llu less than %llu, failed to pop", pjs->eval_stack_len, count);
+    } else {
+        pjs->eval_stack_len -= count;
+    }
+}
+
+void js_evaluation_stack_clear(struct js *pjs) {
+    pjs->eval_stack_len = 0;
+}
+
+struct js_value *js_evaluation_stack_peek(struct js *pjs, intptr_t inv) {
+    intptr_t pos = pjs->eval_stack_len - 1 + inv;
+    assert(pos >= 0);
+    assert(pos < (intptr_t)pjs->eval_stack_len);
+    return pjs->eval_stack + pos;
+}
+
+size_t js_add_bytecode(struct js *pjs, struct js_bytecode bytecode) {
+    size_t pos = pjs->bytecodes_len;
+    buffer_push(struct js_bytecode, pjs->bytecodes, pjs->bytecodes_len, pjs->bytecodes_cap, bytecode);
+    return pos;
+}
+
+// DONT use vaarg because msvc only support >0 args
+struct js_bytecode js_bytecode(enum js_opcode op, ...) {
+    struct js_bytecode bytecode;
+    va_list args;
+    bytecode.opcode = op;
+    va_start(args, op);
+    switch (op) {
+    case op_value:
+    case op_variable_declare:
+    case op_variable_delete:
+    case op_variable_put:
+    case op_variable_get:
+    case op_eval_stack_duplicate:
+    case op_eval_stack_pop:
+    case op_jump:
+    case op_jump_if_false:
+    case op_call_stack_push_function:
+    case op_for_in:
+    case op_for_of:
+    case op_nop:
+    case op_function:
+    case op_parameter_get:
+        bytecode.operand = va_arg(args, struct js_value);
+        break;
+    default:
+        break;
+    }
+    va_end(args);
+    return bytecode;
+}
+
+void js_dump_bytecode(struct js *pjs, struct js_bytecode *pcode) {
+#define X(name) #name,
+    static const char *const names[] = {js_opcode_list};
+#undef X
+    printf("%-27s  ", names[pcode->opcode]);
+    switch (pcode->opcode) {
+    case op_value:
+    case op_variable_declare:
+    case op_variable_delete:
+    case op_variable_put:
+    case op_variable_get:
+    case op_eval_stack_duplicate:
+    case op_eval_stack_pop:
+    case op_jump:
+    case op_jump_if_false:
+    case op_call_stack_push_function:
+    case op_for_in:
+    case op_for_of:
+    case op_nop:
+    case op_function:
+    case op_parameter_get:
+        js_value_dump(pjs, pcode->operand);
+        break;
+    default:
+        break;
+    }
+}
+
+void js_dump_bytecodes(struct js *pjs) {
+    size_t i;
+    printf("bytecodes len=%llu cap=%llu:\n", pjs->bytecodes_len, pjs->bytecodes_cap);
+    for (i = 0; i < pjs->bytecodes_len; i++) {
+        struct js_bytecode *pcode = pjs->bytecodes + i;
+        printf("%6llu  ", i);
+        js_dump_bytecode(pjs, pcode);
+        printf("\n");
+    }
+}
+
+void js_dump_evaluation_stack(struct js *pjs) {
+    size_t i;
+    printf("evaluation stack len=%llu cap=%llu:\n", pjs->eval_stack_len, pjs->eval_stack_cap);
+    for (i = 0; i < pjs->eval_stack_len; i++) {
+        struct js_value *pval = pjs->eval_stack + i;
+        printf("%6llu  ", i);
+        js_value_dump(pjs, *pval);
+        printf("\n");
+    }
+}
+
+void js_dump_tablet(struct js *pjs) {
+    printf("tablet len=%llu cap=%llu:\n", pjs->tablet_len, pjs->tablet_cap);
+    print_hex(pjs->tablet, pjs->tablet_len);
+}
+
+size_t js_inscribe_tablet(struct js *pjs, char *p, size_t len) {
+    char *cmp_h;
+    size_t i, cmp_len = 0;
+    for (i = 0; i <= pjs->tablet_len; i++) {
+        cmp_h = pjs->tablet + i;
+        cmp_len = min(pjs->tablet_len - i, len);
+        if (memcmp(cmp_h, p, cmp_len) == 0) {
+            break;
+        }
+    }
+    string_buffer_append(pjs->tablet, pjs->tablet_len, pjs->tablet_cap, p + cmp_len, len - cmp_len);
+    return i;
 }

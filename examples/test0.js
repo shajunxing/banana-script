@@ -31,4 +31,4 @@ let if while
 
 break continue function return
 
-. . ... in of typeof delete
+. . ... in of typeof delete * *= ** **=

@@ -16,16 +16,27 @@ int main(int argc, char *argv[]) {
         char *src = read_file(argv[1], &len);
         if (src) {
             struct js *pjs = js_new();
+            struct js_value print_func = js_c_function(pjs, js_c_print);
+            struct js_value console_obj = js_object(pjs);
+            js_variable_declare_sz(pjs, "print", print_func);
+            js_variable_declare_sz(pjs, "console", console_obj);
+            js_object_put_sz(pjs, &console_obj, "log", print_func);
+            js_variable_declare_sz(pjs, "gc", js_c_function(pjs, js_collect_garbage));
+            js_variable_declare_sz(pjs, "dump", js_c_function(pjs, js_dump_call_stack));
+            js_variable_declare_sz(pjs, "stat", js_c_function(pjs, js_print_statistics));
+            js_variable_declare_sz(pjs, "clock", js_c_function(pjs, js_c_clock));
             if (js_try(pjs)) {
                 js_load_string(pjs, src, len);
-                while (pjs->tok.stat != ts_end_of_file) {
-                    js_next_token(pjs);
-                    js_token_dump(pjs);
-                    printf("\n");
-                }
+                js_next_token(pjs);
+                js_parse_script(pjs);
+                js_dump_bytecodes(pjs);
+                js_dump_tablet(pjs);
+                js_interpret(pjs);
             } else {
                 js_print_error(pjs);
             }
+            js_dump_call_stack(pjs);
+            js_dump_evaluation_stack(pjs);
             js_delete(pjs);
             free(src);
             return EXIT_SUCCESS;

@@ -16,28 +16,23 @@ int main(int argc, char *argv[]) {
         char *src = read_file(argv[1], &len);
         if (src) {
             struct js *pjs = js_new();
-            int stage = 0;
             if (js_try(pjs)) {
                 // predefined functions
-                struct js_value print_func = js_cfunction(pjs, js_function_print);
+                struct js_value print_func = js_c_function(pjs, js_c_print);
                 struct js_value console_obj = js_object(pjs);
                 js_variable_declare_sz(pjs, "print", print_func);
                 js_variable_declare_sz(pjs, "console", console_obj);
-                js_object_put_sz(pjs, console_obj, "log", print_func);
-                js_variable_declare_sz(pjs, "gc", js_cfunction(pjs, js_collect_garbage));
-                js_variable_declare_sz(pjs, "dump", js_cfunction(pjs, js_dump_stack));
-                js_variable_declare_sz(pjs, "stat", js_cfunction(pjs, js_print_statistics));
-                js_variable_declare_sz(pjs, "clock", js_cfunction(pjs, js_function_clock));
+                js_object_put_sz(pjs, &console_obj, "log", print_func);
+                js_variable_declare_sz(pjs, "gc", js_c_function(pjs, js_collect_garbage));
+                js_variable_declare_sz(pjs, "dump", js_c_function(pjs, js_dump_call_stack));
+                js_variable_declare_sz(pjs, "stat", js_c_function(pjs, js_print_statistics));
+                js_variable_declare_sz(pjs, "clock", js_c_function(pjs, js_c_clock));
                 js_load_string(pjs, src, len);
-                stage = 1;
-                pjs->parse_exec = true;
+                js_next_token(pjs);
                 js_parse_script(pjs);
+                js_interpret(pjs);
             } else {
-                if (stage == 0) {
-                    js_lexer_print_error(pjs);
-                } else {
-                    js_parser_print_error(pjs);
-                }
+                js_print_error(pjs);
             }
             js_delete(pjs);
             free(src);

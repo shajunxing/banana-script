@@ -11,11 +11,9 @@ You should have received a copy of the GNU General Public License along with thi
 #include "../src/js.h"
 
 int main() {
-    printf("A calculator that supports arithmetic, relational, logical operations and more\n");
-    printf("Powered by Banana JS\n\n");
+    printf("Banana JS Calculator. Copyright (C) 2024 ShaJunXing <shajunxing@hotmail.com>.\n\n");
     for (;;) {
         struct js *pjs = js_new();
-        pjs->parse_exec = true;
         if (js_try(pjs)) {
             char *str;
             size_t len;
@@ -25,8 +23,10 @@ int main() {
                 continue;
             }
             js_load_string(pjs, str, len);
-            js_value_dump(js_parse_expression(pjs));
-            printf("\n");
+            js_next_token(pjs);
+            js_parse_expression(pjs);
+            js_interpret(pjs);
+            js_dump_evaluation_stack(pjs);
         } else {
             puts(pjs->err_msg);
         }

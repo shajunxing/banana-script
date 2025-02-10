@@ -5,8 +5,9 @@ function foo(a) {
         };
     };
 }
-let bar = foo(1)(2);
-let baz = bar(3);
+let bar = foo(1);
+let baz = bar(2);
+let qux = baz(3);
 
 let a = [ "A", null, "B", null ];
 let b = [ "C", ...a, null, "D" ];
@@ -37,4 +38,4 @@ let type5 = typeof "hello";
 let type6 = typeof[];
 let type7 = typeof{};
 let type8 = typeof function() {};
-let type9 = typeof gc;
+// let type9 = typeof gc;
