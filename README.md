@@ -31,10 +31,12 @@ Function definition supports default parameter `param = value` and rest paramete
 Operators follow strict rule, no implicit conversion. Only boolean can do logical operations. `== !=` are strict meaning, and can be done by all types. Strings can do all relational operations and `+`. Numbers can do all relational and numerical operations. Operator precedence from low to high is:
 
 - Ternary operator `? :`
-- `&& ||`
-- `== != < <= > >=`
-- `+ -`
-- `* / %`
+- Logical or operator `||`
+- Logical and operator `&&`
+- Relational operator `== != < <= > >=`
+- Additive operator `+ -`
+- Multiplicative operator `* / %`
+- Exponential operator `**`
 - Prefix operator `+ - ! typeof`
 - Array/object member access and function call operator `[] . ?. ()`
 
