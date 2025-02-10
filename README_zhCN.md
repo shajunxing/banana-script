@@ -4,7 +4,9 @@
 
 [英文版](README.md) | [中文版](README_zhCN.md)
 
-![REPL截图](screenshot.png "REPL截图")
+![REPL截图](screenshot1.png "REPL截图")
+
+![REPL截图](screenshot2.png "REPL截图")
 
 ## 2025.02.10
 

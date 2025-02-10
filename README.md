@@ -4,7 +4,9 @@ This article is openly licensed via [CC BY-NC-ND 4.0](https://creativecommons.or
 
 [English Version](README.md) | [Chinese Version](README_zhCN.md)
 
-![REPL screenshot](screenshot.png "REPL screenshot")
+![REPL screenshot](screenshot1.png "REPL screenshot")
+
+![REPL screenshot](screenshot2.png "REPL screenshot")
 
 ## 2025.02.10
 
