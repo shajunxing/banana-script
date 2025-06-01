@@ -4,7 +4,7 @@ This article is openly licensed via [CC BY-NC-ND 4.0](https://creativecommons.or
 
 [English Version](README.md) | [Chinese Version](README_zhCN.md)
 
-Project Address: <https://github.com/shajunxing/banana-js>
+Project Address: <https://github.com/shajunxing/banana-script>
 
 ![REPL screenshot](screenshot1.png "REPL screenshot")
 

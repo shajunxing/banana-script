@@ -4,7 +4,7 @@
 
 [英文版](README.md) | [中文版](README_zhCN.md)
 
-项目地址：<https://github.com/shajunxing/banana-js>
+项目地址：<https://github.com/shajunxing/banana-script>
 
 ![REPL截图](screenshot1.png "REPL截图")
 
