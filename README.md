@@ -1,4 +1,4 @@
-# Banana JS, An inperpreter for a strict subset of JavaScript
+# Banana Script, An inperpreter for a strict subset of JavaScript
 
 This article is openly licensed via [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/).
 
