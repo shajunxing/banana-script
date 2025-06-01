@@ -1,8 +1,10 @@
-# Banana JS，一个严格子集 JavaScript 的解释器
+# Banana Script，一个严格子集 JavaScript 的解释器
 
 本文使用 [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/) 许可。
 
 [英文版](README.md) | [中文版](README_zhCN.md)
+
+项目地址：<https://github.com/shajunxing/banana-js>
 
 ![REPL截图](screenshot1.png "REPL截图")
 
@@ -18,7 +20,7 @@
 
 ## 构建
 
-本项目兼容 C89，没有其他依赖，甚至不需要 make 系统，只需要 C 编译器，目前在 msvc 和 mingw 上测试过。首先，下载我的另一个项目 [Banana Make](https://github.com/shajunxing/banana-make)，这是一个单独的文件 `make.h`，然后打开 `make.c`，修改 `#include` 为正确的路径，然后使用 msvc 输入 `cl make.c && make.exe release`，或者使用 mingw 输入 `gcc -o make.exe make.c && ./make.exe release`。除了`release`编译模式之外，还有`debug`和`ndebug`另外两个模式，分别表示保留调试符号并显示日志输出，以及保留调试符号但是隐藏日志输出。可执行文件位于 `bin` 文件夹中，包括 REPL 环境、脚本执行器、一个有趣的玩具计算器和词法语法解析器测试工具。
+本项目兼容 C99，没有其他依赖，甚至不需要 make 系统，只需要 C 编译器，目前在 msvc 和 mingw 上测试过。首先，下载我的另一个项目 [Banana Make](https://github.com/shajunxing/banana-make)，这是一个单独的文件 `make.h`，然后打开 `make.c`，修改 `#include` 为正确的路径，然后使用 msvc 输入 `cl make.c && make.exe release`，或者使用 mingw 输入 `gcc -o make.exe make.c && ./make.exe release`。除了`release`编译模式之外，还有`debug`和`ndebug`另外两个模式，分别表示保留调试符号并显示日志输出，以及保留调试符号但是隐藏日志输出。可执行文件位于 `bin` 文件夹中，包括 REPL 环境、脚本执行器、一个有趣的玩具计算器和词法语法解析器测试工具。
 
 ## 语法
 
@@ -26,7 +28,7 @@
 
 变量声明使用 `let`，所有变量都是局部变量。访问未声明的变量会引发错误，访问数组/对象不存在的成员会返回 `null`。不支持 `const`，因为首先它有歧义：常量指向的数组/对象的内容依旧是可变的，如果内容不可变，就意味着必须在值而非变量上标记只读属性，而这对于垃圾回收器而言是不可接受的；其次我要求所有内容都是可清理的，因此我不需要`const`。
 
-函数定义支持默认参数 `param = value` 和剩余参数 `...params`。数组字面量和函数调用支持扩展语法 `...`，不会跳过`null`成员。函数中没有 `this, arguments`。
+函数定义支持默认参数 `param = value` 和剩余参数 `...params`。数组字面量和函数调用支持展开语法 `...`，不会跳过`null`成员。函数中没有 `this, arguments`。
 
 运算符遵循严格规则，没有隐式转换。只有布尔值可以进行逻辑运算。`== !=` 是严格意义上的比较，可以应用于所有类型。字符串支持所有关系运算符和 `+`。数字支持所有关系和数值运算符。运算符的优先级从低到高为：
 

@@ -4,6 +4,8 @@ This article is openly licensed via [CC BY-NC-ND 4.0](https://creativecommons.or
 
 [English Version](README.md) | [Chinese Version](README_zhCN.md)
 
+Project Address: <https://github.com/shajunxing/banana-js>
+
 ![REPL screenshot](screenshot1.png "REPL screenshot")
 
 ![REPL screenshot](screenshot2.png "REPL screenshot")
@@ -18,7 +20,7 @@ My goal is to weed out useless and ambiguous parts of JavaScript language that I
 
 ## Build
 
-This project is C89 compatable, no other dependences, even make systems are not necessary, only need C compiler, currently tested on msvc and mingw. First, download my another project [Banana Make](https://github.com/shajunxing/banana-make), this is only one single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`. Executables are in `bin` folder, includeing REPL environment, script executor, a funny toy calculator and lexer parser test tools.
+This project is C99 compatable, no other dependences, even make systems are not necessary, only need C compiler, currently tested on msvc and mingw. First, download my another project [Banana Make](https://github.com/shajunxing/banana-make), this is only one single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`. Executables are in `bin` folder, includeing REPL environment, script executor, a funny toy calculator and lexer parser test tools.
 
 ## Syntax
 
@@ -52,7 +54,7 @@ No modules. In inperpreter's view, source code is only one large flat text.
 
 Garbage collection is manual, you can do it at any time you need.
 
-`delete` is semantic different from JavaScript, which removes object members, but this makes no sense because you just need to set them to `null`. Here `delete` You can delete local variables within current scope. For example, it can be used with garbage collector to empty whole execution environment to nothing left. For another example, variables added to the function closure are all local variables before return, so unused variables can be `delete`d before return to reduce closure size, run following two statements in REPL environment to see differences.
+`delete` is semantic different from JavaScript, which removes object members, but this makes no sense because you just need to set them to `null`. Here `delete` can delete local variables within current scope. For example, it can be used with garbage collector to empty whole execution environment to nothing left. For another example, variables added to the function closure are all local variables before return, so unused variables can be `delete`d before return to reduce closure size, run following two statements in REPL environment to see differences.
 
 - `let f = function(a, b){let c = a + b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`
 - `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`
@@ -69,7 +71,7 @@ There are three types of string: `vt_scripture` means immuable `const char *` wr
 
 Value types `vt_string`, `vt_array`, `vt_object` and `vt_function` are hang on engine context's `heap`, and managed by garbage collector. Why `vt_function` is managed is because it has closure.
 
-Variable scope is combined into call stack. Call stack has following types: `cs_root` is root stack, which is unique and not deletable, `cs_block` means block statement scope, `cs_for` is for loop scope to fit `let` keyword, `cs_function` is function scope and in which `params` and `ret_addr` are available.
+Variable scope is combined into call stack. Call stack has following types: `cs_root` is root stack, which is unique and not deletable, `cs_block` means block statement scope, `cs_loop` is loop scope to fit `break` and specially to fit `let` in `for` loop, `cs_function` is function scope and in which `params` and `jmp_addr` are available.
 
 Hashmap operation `js_value_map_put`'s algorithm:
 
@@ -80,27 +82,27 @@ Hashmap operation `js_value_map_put`'s algorithm:
     null          null            not null       add key value, may need rehash, return
     null          null            null           no op, return
     matched       not null        not null       replace value, return
-    matched       not null        null           replace value, len--, return
-    matched       null            not null       replace value, len++, return
+    matched       not null        null           replace value, length--, return
+    matched       null            not null       replace value, length++, return
     matched       null            null           return
     not matched   not null                       continue
     not matched   not null                       continue
-    not matched   null            not null       next stage // replace key value, len++, return
+    not matched   null            not null       next stage // replace key value, length++, return
     not matched   null            null           next stage // replace key, return
     whole loop ended                             fatal, shouldn't happen
     whole loop ended                             fatal, shouldn't happen
 
 may encounter "not matched null" -> "not matched null" -> ... -> "matched", if operate with first result, will cause duplicate, so "not matched null" may enter next stage, record position, and special treat:
 
-    null          null            not null       replace key value to recorded position, len++, return
+    null          null            not null       replace key value to recorded position, length++, return
     not matched                                  continue
-    whole loop ended                             replace key value to recorded position, len++, return
+    whole loop ended                             replace key value to recorded position, length++, return
 
-when handling rehash, DONT return a new map like realloc(), that's very stupid, if this map is another data structute's element, it will become wild pointer
+when handling rehash, DON'T return a new map like realloc(), that's very stupid, if this map is another data structute's element, it will become wild pointer
 
 val can be NULL. If key does not exist, will skip. If key exists, means delete operation, set val to NULL, k unchanged, so that rehash no needed, to make sure find loop won't break if following keys exists
 
-"len" means number of keys in map, it is meanless for user because NULL val exists, DONT use it outside
+"length" means number of keys in map, it is meanless for user because NULL val exists, DON'T use it outside
 
 when rehash, not null key null value will not be added
 
@@ -162,7 +164,7 @@ xxx_expression is only name from LOWEST precedence to HIGHEST, for example, rela
 
 only inside () [] can start from expression, elsewhere expression to prevent = , conflict
 
-DONT add comma_expression and DONT put assignment_expression into the chain, because left value has to be lazyed, it is too complicated to deliver lazy evaluation literal representation such as 'foo["bar"]' in each chain, and more and more complicated, for example, have to save object key as dynamic, because it may be a result.
+DON'T add comma_expression and DON'T put assignment_expression into the chain, because left value has to be lazyed, it is too complicated to deliver lazy evaluation literal representation such as 'foo["bar"]' in each chain, and more and more complicated, for example, have to save object key as dynamic, because it may be a result.
 
 string can do following operations:
 
@@ -199,6 +201,7 @@ use 'expression' to prevent conflict, still can down to () to include them:
             | 'function' identifier _function
             | 'return' [expression] ';'
             | 'delete' identifier ';'
+            | 'try' '{' { statement } '}' ['catch' '(' identifier ')' '{' { statement } '}' ]
             | declaration_expression ';'
             | assignment_expression ';'
 
@@ -227,4 +230,27 @@ for loop types in parser:
     for (a in
     for (a of
 
-DONT use inline, even slower in mingw and size increased about 10k
+DON'T use inline, even slower in mingw and size increased about 10k
+
+Why upgrade to C99?
+
+- Array initialization with enum indices in C <https://eli.thegreenplace.net/2011/02/15/array-initialization-with-enum-indices-in-c-but-not-c>
+- vsnprintf
+- anonymous struct/union
+- compound literal such as (struct foo){...}
+- binary literal '0b'
+- __func__
+
+New vm instruction structure:
+
+support maximum 64 opcodes, 0-3 operands, 16 operand types
+binary structure is (C means opcode, D E F means 1st 2nd 3rd operand type):
+             low -> high
+no operand : CCCCCC00
+ 1 operand : CCCCCC01 DDDD0000
+ 2 operands: CCCCCC10 DDDDEEEE
+ 3 operands: CCCCCC11 DDDDEEEE FFFF0000
+
+dependency: front part is independent of back part, you can build front without back
+js-common <- js-data <- js-vm
+
