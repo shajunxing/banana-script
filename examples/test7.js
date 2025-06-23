@@ -1,1 +1,0 @@
-delete console;delete dump;delete gc;delete stat;delete print;delete clock;
