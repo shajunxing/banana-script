@@ -55,7 +55,7 @@
 
 ## 技术内幕
 
-本项目兼容 C99，没有其他依赖，甚至不需要 make 系统，只需要 C 编译器，目前在 msvc 和 mingw 上测试过。首先，从 [Banana Make](https://github.com/shajunxing/banana-make) 下载单独文件 `make.h`，然后打开 `make.c`，修改 `#include` 为正确的路径，然后使用 msvc 输入 `cl make.c && make.exe release`，或者使用 mingw 输入 `gcc -o make.exe make.c && ./make.exe release`。除了`release`编译模式之外，还有`debug`和`ndebug`另外两个模式，分别表示保留调试符号并显示日志输出，以及保留调试符号但是隐藏日志输出。可执行文件位于 `bin` 文件夹中。
+本项目兼容 C99，没有其他依赖，甚至不需要 make 系统，只需要 C 编译器，目前在 msvc 和 mingw 上测试过。首先，从 <https://github.com/shajunxing/banana-make> 下载单独文件 `make.h`，然后打开 `make.c`，修改 `#include` 为正确的路径，然后使用 msvc 输入 `cl make.c && make.exe release`，或者使用 mingw 输入 `gcc -o make.exe make.c && ./make.exe release`。除了`release`编译模式之外，还有`debug`和`ndebug`另外两个模式，分别表示保留调试符号并显示日志输出，以及保留调试符号但是隐藏日志输出。可执行文件位于 `bin` 文件夹中。
 
 项目遵循“最小依赖”原则，只包含必须的头文件，且模块之间只有单向引用，没有循环引用。模块的功能和依赖关系如下：
 
@@ -69,7 +69,7 @@
 ```
 
 - `js-common`： 项目通用的常量、宏定义和函数，例如日志打印、内存读写
-- `js-data`：数值类型和垃圾回收，你甚至可以在C项目里单独使用该模块操作带GC功能的高级数据结构
+- `js-data`：数值类型和垃圾回收，你甚至可以在C项目里单独使用该模块操作带GC功能的高级数据结构，参见 <https://github.com/shajunxing/banana-cvar>
 - `js-vm`：字节码虚拟机，单独编译可得到不带源代码解析功能的最小足迹的解释器
 - `js-syntax`：词法解析和语法解析，讲源代码转化为字节码
 

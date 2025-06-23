@@ -55,7 +55,7 @@ Garbage collection is manual, you can do it at any time you need.
 
 ## Technical internals
 
-This project is C99 compatable, no other dependences, even make systems are not necessary, only need C compiler, currently tested on msvc and mingw. First, from [Banana Make](https://github.com/shajunxing/banana-make) download single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`. Executables are in `bin` folder.
+This project is C99 compatable, no other dependences, even make systems are not necessary, only need C compiler, currently tested on msvc and mingw. First, from <https://github.com/shajunxing/banana-make> download single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`. Executables are in `bin` folder.
 
 Project follows "minimal dependency" rule, only including necessary headers. Also, there's only one-way referencing between modules, with no circular referencing. Here’s how modules work and their dependencies:
 
@@ -69,7 +69,7 @@ Project follows "minimal dependency" rule, only including necessary headers. Als
 ```
 
 - `js-common`: Constants, macro definitions, and functions common to project, such as log, memory io
-- `js-data`: Data types and garbage collection, you can even use this module separately in C projects to manipulate high-level data structures with GC functionality
+- `js-data`: Data types and garbage collection, you can even use this module separately in C projects to manipulate high-level data structures with GC functionality, see <https://github.com/shajunxing/banana-cvar>
 - `js-vm`: Bytecode Virtual Machine, compiled separately to get an interpreter with minimal footprint without source code parsing
 - `js-syntax`: Lexical parsing and syntax parsing, which converts source code into bytecode
 
@@ -361,3 +361,20 @@ In gcc, DON'T use const in struct, will cause entire struct be const, see: https
 
 Add '::' after using AST, have to use AST, top-down mechanism cannot pass lvalue as rvalue (function) 's first operand. AST can do transformation.
 
+    let z = 10;
+    function foo(a = z, b, ...c) { // parameter default value can be an expression, so it is not fixed
+        console.log(c);
+    }
+    bar(1, 2, ...arr); // number of parameters cannot be determined at compile time
+    function foo() {
+        let a = 1;
+        let bar = function (b) {
+            return a + b;
+        }; // test whether 'bar' will be wrongly added into closure to cause recursion
+        return bar;
+    }
+    // test undefined array hole correctly converted to null
+    function foo(a, b, c) {
+        dump();
+    }
+    foo(...[null, null, 3]);
