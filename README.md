@@ -55,7 +55,7 @@ Garbage collection is manual, you can do it at any time you need.
 
 ## Technical internals
 
-This project is C99 compatable, no other dependences, even make systems are not necessary, only need C compiler, currently tested on msvc and mingw. First, from <https://github.com/shajunxing/banana-make> download single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`. Executables are in `bin` folder.
+This project is C99 compatable, no other dependences, even make systems are not necessary, only need C compiler, compilation environment is msgc/gcc/mingw. First, from <https://github.com/shajunxing/banana-make> download single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`. Executables are in `bin` folder.
 
 Project follows "minimal dependency" rule, only including necessary headers. Also, there's only one-way referencing between modules, with no circular referencing. Here’s how modules work and their dependencies:
 
