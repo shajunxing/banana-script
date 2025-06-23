@@ -6,45 +6,37 @@ This article is openly licensed via [CC BY-NC-ND 4.0](https://creativecommons.or
 
 Project Address: <https://github.com/shajunxing/banana-script>
 
-![REPL screenshot](screenshot1.png "REPL screenshot")
+![REPL](screenshot1.png "REPL")
 
-![REPL screenshot](screenshot2.png "REPL screenshot")
-
-## 2025.02.10
-
-After heavy code refactoring, from introducing token cache to using `js_value` instead of `js_value *` to reduce lots of memory allocation operation (structure assignment is about 10 times faster than memory allocation), to introducing bytecodes, performance vs python reduced from dozen to about 5, now performance problems are mainly in hashmap operations such as `js_variable_get`. Maybe in the future variable access can be optimized to array operation.
+![Command line parameters](screenshot2.png "Command line parameters")
 
 ## Introduction
 
-My goal is to weed out useless and ambiguous parts of JavaScript language that I've summarized in practice, and to create a minimal syntax interpreter by keeping only what I like and need. **Only JSON-compatible data types and function are supported, function is first-class value, and function supports closure. I don't like object-oriented programming, so everything class related are not supported**. There are no built-in immunable global variables, global functions, or object members, even contents added during interpreter initialization can be easily deleted at any time and reverted to clean empty state.
+My goal is to remove and modify useless and ambiguous parts of JavaScript language that I've summarized in practice, and to create a minimal syntax interpreter by keeping only what I like and need. **Only JSON-compatible data types and function are supported, function is first-class value, and function supports closure. I don't like object-oriented programming, so everything class related are not supported**. There are no built-in immunable global variables, global functions, or object members, even contents added during interpreter initialization can be easily deleted at any time and reverted to clean empty state.
 
-## Build
+## Two-Minute Brief Syntax Guide for Proficient JavaScript Users
 
-This project is C99 compatable, no other dependences, even make systems are not necessary, only need C compiler, currently tested on msvc and mingw. First, download my another project [Banana Make](https://github.com/shajunxing/banana-make), this is only one single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`. Executables are in `bin` folder, includeing REPL environment, script executor, a funny toy calculator and lexer parser test tools.
+Data types are `null` `boolean` `number` `string` `array` `object` `function`, results of `typeof` correspond strictly to these names. No `undefined` because `null` is enough. Array and object are clean, no predefined members such as `__proto__`.
 
-## Syntax
+Variable declaraction use `let`, all variables are local, `const` is not supported because all must be deletable. Access undeclared variables will cause error, access array/object's unexisting members will get `null`, and put `null` will delete corresponding member.
 
-Data types are `null, boolean, number, string, array, object, function`, results of `typeof` correspond strictly to these names. No `undefined` because `null` is enough. Array and object are clean, no predefined members such as prototypes.
-
-Variable declaraction use `let`, all variables are local. Access undeclared variables will cause error, and access array/object's unexisting members will get `null`. `const` is not supported because, firstly, it is ambiguous: contents of array/object pointed to by constants are still mutable. If contents are immutable, it means that read-only attribute must be marked on value rather than variable, which is unacceptable for garbage collector. Secondly, I require everything to be collectible, so I do not need `const`.
-
-Function definition supports default parameter `param = value` and rest parameter `...params`. Array literal and function call support spread syntax `...`, which will not skip `null` members. No `this, arguments` in function.
+Function definition supports default parameter `param = value` and rest parameter `...params`. Array literal and function call support spread syntax `...`, which will not skip `null` members. No predefined members such as `this` `arguments` in function. If `return` is outside function, means exit vm.
 
 Operators follow strict rule, no implicit conversion. Only boolean can do logical operations. `== !=` are strict meaning, and can be done by all types. Strings can do all relational operations and `+`. Numbers can do all relational and numerical operations. Operator precedence from low to high is:
 
-- Ternary operator `? :`
+- Ternary operator `?` `:`
 - Logical or operator `||`
 - Logical and operator `&&`
-- Relational operator `== != < <= > >=`
-- Additive operator `+ -`
-- Multiplicative operator `* / %`
+- Relational operator `==` `!=` `<` `<=` `>` `>=`
+- Additive operator `+` `-`
+- Multiplicative operator `*` `/` `%`
 - Exponential operator `**`
-- Prefix operator `+ - ! typeof`
-- Array/object member access and function call operator `[] . ?. ()`
+- Prefix operator `+` `-` `!` `typeof`
+- Array/object member access and function call operator `[]` `.` `?.` `()`
 
-Assignment expression `= += -= *= /= %= ++ --` does not return value, Comma expression `,` is not supported.
+Assignment expression `=` `+=` `-=` `*=` `/=` `%=` `++` `--` does not return value, Comma expression `,` is not supported.
 
-`if`, `while`, `do while`, `for`'s condition must be boolean. `for` loop only support following syntax, `[]` means optional. `for in` and `for of` only handle non-null members:
+Conditional statement is `if`, loops are `while` `do while` `for`, conditions must be boolean. `for` loop only support following syntax, `[]` means optional. `for in` and `for of` only handle non-null members:
 
 - `for ([[let] variable = expression ] ; [condition] ; [assignment expression])`
 - `for ([let] variable in array/object)`
@@ -54,18 +46,36 @@ No modules. In inperpreter's view, source code is only one large flat text.
 
 Garbage collection is manual, you can do it at any time you need.
 
-`delete` is semantic different from JavaScript, which removes object members, but this makes no sense because you just need to set them to `null`. Here `delete` can delete local variables within current scope. For example, it can be used with garbage collector to empty whole execution environment to nothing left. For another example, variables added to the function closure are all local variables before return, so unused variables can be `delete`d before return to reduce closure size, run following two statements in REPL environment to see differences.
+`delete` means delete local variable within current scope (object members can be deleted by setting `null`). For example, variables added to the function closure are all local variables before return, so unused variables can be `delete`d before return to reduce closure size, run following two statements in REPL environment to see differences.
 
 - `let f = function(a, b){let c = a + b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`
 - `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`
 
-## Standard library and interoperability with C language
-
-All values are `struct js_value` type, you can create by `js_xxx()` functions, `xxx` is value type, and you can read c values direct from this struct, see definition in `js.h`. All created values are managed by `struct js *`, core context of this engine, following garbage collecting rules. DON'T directly modify their content, if you want to get different values, create new one. Compound types `array object` can be operated by `js_array_xxx() js_object_xxx()` functions.
-
-C functions must be `void (*)(struct js *)` format, use `js_c_function()` to create c function value, yes of course they are all values and can be put anywhere, for example, if put on stack root using `js_variable_declare()`, they will be global. Inside C functions, parameters passed in can be obtained by `js_parameter_length() js_parameter_get()` functions, and return value just put to `result` of `struct js *`.
+`throw` can throw any value, which are received by `catch`. `finally` is not supported, because I think it's totally unecessary, and will make code execution order weird.
 
 ## Technical internals
+
+This project is C99 compatable, no other dependences, even make systems are not necessary, only need C compiler, currently tested on msvc and mingw. First, from [Banana Make](https://github.com/shajunxing/banana-make) download single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`. Executables are in `bin` folder.
+
+Project follows "minimal dependency" rule, only including necessary headers. Also, there's only one-way referencing between modules, with no circular referencing. Here’s how modules work and their dependencies:
+
+```
+    js-common   js-data     js-vm       js-syntax
+        <-----------
+                    <-----------
+                                <-----------
+        <-----------------------
+        <-----------------------------------
+```
+
+- `js-common`: Constants, macro definitions, and functions common to project, such as log, memory io
+- `js-data`: Data types and garbage collection, you can even use this module separately in C projects to manipulate high-level data structures with GC functionality
+- `js-vm`: Bytecode Virtual Machine, compiled separately to get an interpreter with minimal footprint without source code parsing
+- `js-syntax`: Lexical parsing and syntax parsing, which converts source code into bytecode
+
+All values are `struct js_value` type, you can create by `js_xxx()` functions, `xxx` is value type, and you can read c values direct from this struct, see definition in `js_data.h`. Created values follow garbage collecting rules. DON'T directly modify their content, if you want to get different values, create new one. Compound types `array` `object` can be operated by `js_array_xxx()` `js_object_xxx()` functions.
+
+C functions must be `struct js_result (*)(struct js_vm *)` format, use `js_c_function()` to create c function value, yes of course they are all values and can be put anywhere, for example, if put on stack root using `js_variable_declare()`, they will be global. `struct js_result` has two members, if `.success` is true, `.value` is return value, if false, `.value` is received by `catch` if there are `try catch`. c function can also call script function using `js_call()`. Inside C function, use `js_parameter_base()` `js_parameter_length()` `js_parameter_get()` to get passed in parameters.
 
 There are three types of string: `vt_scripture` means immuable `const char *` written in engine c source code, eg. `typeof` result, `vt_inscription` means immuable string loaded from javascript source code such as variable identifier, string literals, they are stored in engine context's `tablet`, and `vt_string` are mutable. These three string types can be used for futher optimization, for example, string split can be optimized for `vt_scripture` and `vt_inscription`.
 
@@ -73,30 +83,60 @@ Value types `vt_string`, `vt_array`, `vt_object` and `vt_function` are hang on e
 
 Variable scope is combined into call stack. Call stack has following types: `cs_root` is root stack, which is unique and not deletable, `cs_block` means block statement scope, `cs_loop` is loop scope to fit `break` and specially to fit `let` in `for` loop, `cs_function` is function scope and in which `params` and `jmp_addr` are available.
 
-Hashmap operation `js_value_map_put`'s algorithm:
+Hashmap operation `js_map_put`'s algorithm:
 
     loop key      loop value      new value      operation
     -----------------------------------------------------------
-    null          not null                       fatal, shouldn't happen
-    null          not null                       fatal, shouldn't happen
-    null          null            not null       add key value, may need rehash, return
+    null          not null        ..             fatal, shouldn't happen
+    null          not null        ..             fatal, shouldn't happen
+    null          null            not null       add key value, length++, chech rehash
     null          null            null           no op, return
     matched       not null        not null       replace value, return
     matched       not null        null           replace value, length--, return
-    matched       null            not null       replace value, length++, return
+    matched       null            not null       replace value, length++, chech rehash
     matched       null            null           return
-    not matched   not null                       continue
-    not matched   not null                       continue
-    not matched   null            not null       next stage // replace key value, length++, return
-    not matched   null            null           next stage // replace key, return
-    whole loop ended                             fatal, shouldn't happen
-    whole loop ended                             fatal, shouldn't happen
+    not matched   not null        ..             continue
+    not matched   not null        ..             continue
+    not matched   null            not null       next stage
+    not matched   null            null           next stage
+    whole loop ended              ..             fatal, shouldn't happen
+    whole loop ended              ..             fatal, shouldn't happen
 
 may encounter "not matched null" -> "not matched null" -> ... -> "matched", if operate with first result, will cause duplicate, so "not matched null" may enter next stage, record position, and special treat:
 
-    null          null            not null       replace key value to recorded position, length++, return
+    null          null            not null       replace key value to recorded position, length++, chech rehash
     not matched                                  continue
-    whole loop ended                             replace key value to recorded position, length++, return
+    whole loop ended                             replace key value to recorded position, length++, chech rehash
+
+all stages must chech rehash, especially stage 2, or sometimes will fatal "Whole loop ended, this shouldn't happen" (because is full, no empty space)
+
+test_js_value_loop generated 6.5G huge dump.txt, use tail command:
+
+```
+length=0 capacity=0
+key=b, value=vt_number
+length=1 capacity=2
+    0 b vt_number
+    1  vt_undefined
+key=b, value=vt_undefined
+length=0 capacity=2
+    0 b vt_undefined
+    1  vt_undefined
+key=5zNugcVa2jZNC1oSNbqg6yd9bIYTaYisB4rv6Hpfknt0d0SVgYtYbdlVjhJ2puzSagZZs9o, value=vt_undefined
+length=0 capacity=2
+    0 b vt_undefined
+    1  vt_undefined
+key=Swy4fCH8h03lkwQwW9BxW7O3dH9EReeng80wiI37Jwid6RXMwQ0cgiPn, value=vt_scripture
+length=1 capacity=2
+    0 b vt_undefined
+    1 Swy4fCH8h03lkwQwW9BxW7O3dH9EReeng80wiI37Jwid6RXMwQ0cgiPn vt_scripture
+key=CVUcQn5KYZkjKSa1eJAsg0nUQsnZBdSNquxXsYnwIoNTEAtZBOt, value=vt_array
+length=2 capacity=2
+    0 CVUcQn5KYZkjKSa1eJAsg0nUQsnZBdSNquxXsYnwIoNTEAtZBOt vt_array
+    1 Swy4fCH8h03lkwQwW9BxW7O3dH9EReeng80wiI37Jwid6RXMwQ0cgiPn vt_scripture
+key=EFvi653FKJKm04nqvfux6YzKZhmukC7biyUhulH9eLPxZUX, value=vt_c_function
+ERROR src\js-data.c:144:js_map_put: Fatal error: Whole loop ended, this shouldn't happen
+```
 
 when handling rehash, DON'T return a new map like realloc(), that's very stupid, if this map is another data structute's element, it will become wild pointer
 
@@ -202,6 +242,7 @@ use 'expression' to prevent conflict, still can down to () to include them:
             | 'return' [expression] ';'
             | 'delete' identifier ';'
             | 'try' '{' { statement } '}' ['catch' '(' identifier ')' '{' { statement } '}' ]
+            | 'throw' expression ';'
             | declaration_expression ';'
             | assignment_expression ';'
 
@@ -240,17 +281,83 @@ Why upgrade to C99?
 - compound literal such as (struct foo){...}
 - binary literal '0b'
 - __func__
+- typeof (c23)
 
 New vm instruction structure:
 
+```
 support maximum 64 opcodes, 0-3 operands, 16 operand types
-binary structure is (C means opcode, D E F means 1st 2nd 3rd operand type):
+instruction binary structure is (C means opcode, D E F means 1st 2nd 3rd operand type):
              low -> high
 no operand : CCCCCC00
- 1 operand : CCCCCC01 DDDD0000
- 2 operands: CCCCCC10 DDDDEEEE
- 3 operands: CCCCCC11 DDDDEEEE FFFF0000
+ 1 operand : CCCCCC01 DDDD0000 ...operand0...
+ 2 operands: CCCCCC10 DDDDEEEE ...operand0... ...operand1...
+ 3 operands: CCCCCC11 DDDDEEEE FFFF0000 ...operand0... ...operand1... ...operand2...
+```
 
-dependency: front part is independent of back part, you can build front without back
-js-common <- js-data <- js-vm
+Length limits for some fields (if not specified, will be 'size_t'):
+
+|||
+|-|-|
+|uint8_t|some types|
+|uint16_t|number of globals, locals, parameters, closure. object key, stack length|
+|uint32_t|scripture, source, bytecode length|
+
+Variable scope:
+
+    local->closure->global
+
+function parameters are not standalone scope, they will be merged into locals, so 'function(a){let a;}' is not allowed. for example, "function foo(a) { let b; return function bar() {}; }", a and b will all be put into bar's closure, they must prevent naming confliction.
+
+Before op_call, stack layout is shown below, just fit accessor model:
+
+    (* top *)
+    sf_function(egress, parameters, ...)
+    sf_value(function/c_function)
+    (* bottom *)
+
+Before function returns, push return value to stack
+
+Map based variable speed too low problem, if using ast, maybe can change to index visit. But functions may be dynamic, so maybe only local variables can determine position?
+
+```
+Macro and function naming rule:
+prefix _ means local file scope
+prefix __ means function scope
+Function variables do not necessarily follow this rule
+Macro argument must prefix with __arg_, to prevent if some struct members have same name and appear inside macro, will wrongly be replaced
+```
+
+    /*
+    test special cases
+    node.js, quickjs will treat both a and b as reference
+    node.js:
+        [ 1, [ 1 ] ]
+        [ 2, [ 2 ] ]
+    quickjs:
+        1,1
+        2,2
+    in banana script, for better performence, only strings, arrays, objects, functions are passed by reference, so a is seperated, if you want to be connected, use array or object. But after all, it is not a good practise, better not using OO style.
+    */
+    function foo() {
+        let a;
+        let b = [];
+        function bar(i, j) {
+            a = i;
+            b[0] = j;
+        }
+        function qux() {
+            return [a, b];
+        }
+        return [bar, qux];
+    }
+    let barqux = foo();
+    barqux[0](1, 1);
+    console.log(barqux[1]());
+    barqux[0](2, 2);
+    console.log(barqux[1]());
+
+In gcc, DON'T use const in struct, will cause entire struct be const, see: https://stackoverflow.com/questions/34989921/assignment-of-read-only-member-error-when-assigning-to-non-const-member-of-a-s
+
+Add '::' after using AST, have to use AST, top-down mechanism cannot pass lvalue as rvalue (function) 's first operand. AST can do transformation.
 
