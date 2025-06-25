@@ -561,12 +561,12 @@ struct js_result js_run(struct js_vm *vm) {
             return (struct js_result){.success = false, .value = __error};                             \
         }                                                                                              \
     } while (0)
-#define __try(__arg_expression)                       \
-    do {                                              \
-        struct js_result result = (__arg_expression); \
-        if (!result.success) {                        \
-            __throw(result.value);                    \
-        }                                             \
+#define __do_try(__arg_expression) /* if using __try, clang_format will add new line after it */ \
+    do {                                                                                         \
+        result = (__arg_expression);                                                             \
+        if (!result.success) {                                                                   \
+            __throw(result.value);                                                               \
+        }                                                                                        \
     } while (0);
 #define __lhs container
 #define __rhs selector
@@ -588,10 +588,10 @@ struct js_result js_run(struct js_vm *vm) {
                     _stack_push_value(vm, js_null());
                     break;
                 case opd_empty_array:
-                    _stack_push_value(vm, js_array(&(vm->heap.base), &(vm->heap.length), &(vm->heap.capacity)));
+                    _stack_push_value(vm, js_array(&(vm->heap)));
                     break;
                 case opd_empty_object:
-                    _stack_push_value(vm, js_object(&(vm->heap.base), &(vm->heap.length), &(vm->heap.capacity)));
+                    _stack_push_value(vm, js_object(&(vm->heap)));
                     break;
                 case opd_boolean:
                     _stack_push_value(vm, js_boolean(instruction.operands[1].value_bool));
@@ -605,7 +605,7 @@ struct js_result js_run(struct js_vm *vm) {
                 case opd_function:
                     // closure must be added just before return, NOT here, because closure = local variables before return
                     // NONONO, closure must be added just after function definition, not before return, for example, returning function is declared outside this function, shoun't carry this function's local variable as closure.
-                    value = js_function(&(vm->heap.base), &(vm->heap.length), &(vm->heap.capacity), instruction.operands[1].value_function.ingress);
+                    value = js_function(&(vm->heap), instruction.operands[1].value_function.ingress);
                     yes = false; // if is created inside another function (if not, closure is not necessary)
                     // if c function is in call stack chain, definitely there are atleast 1 script function stack after c stack
                     _call_stack_for_each(vm, frame, {
@@ -868,7 +868,7 @@ struct js_result js_run(struct js_vm *vm) {
         case op_parameter_get_rest:
             enforce(instruction.num_operands == 1);
             enforce(instruction.operands[0].type == opd_inscription);
-            value = js_array(&(vm->heap.base), &(vm->heap.length), &(vm->heap.capacity));
+            value = js_array(&(vm->heap));
             frame = _stack_peek(vm, 0);
             enforce(frame->type == sf_function);
             while (frame->parameters.index < frame->parameters.length) {
@@ -885,15 +885,8 @@ struct js_result js_run(struct js_vm *vm) {
         case op_add:
             __rhs = _stack_pop_value(vm);
             __lhs = _stack_pop_value(vm);
-            if (__lhs.type == vt_number && __rhs.type == vt_number) {
-                _stack_push_value(vm, js_number(__lhs.number + __rhs.number));
-            } else if (js_is_string(&__lhs) && js_is_string(&__rhs)) {
-                value = js_string(&(vm->heap.base), &(vm->heap.length), &(vm->heap.capacity), js_string_base(&__lhs), js_string_length(&__lhs));
-                string_buffer_append(value.managed->string.base, value.managed->string.length, value.managed->string.capacity, js_string_base(&__rhs), js_string_length(&__rhs));
-                _stack_push_value(vm, value);
-            } else {
-                __throw(js_scripture_sz("Add operand must be number or string"));
-            }
+            __do_try(js_add(&(vm->heap), &__lhs, &__rhs));
+            _stack_push_value(vm, result.value);
             break;
         case op_sub:
         case op_mul:
@@ -1086,7 +1079,7 @@ struct js_result js_run(struct js_vm *vm) {
                     if (kv->key.base != NULL && kv->value.type != vt_undefined && kv->value.type != vt_null) {
                         // printf("index = %llu\index", index);
                         if (instruction.opcode == op_for_in_next) {
-                            value = js_string(&(vm->heap.base), &(vm->heap.length), &(vm->heap.capacity), kv->key.base, kv->key.length);
+                            value = js_string(&(vm->heap), kv->key.base, kv->key.length);
                         } else {
                             value = kv->value;
                         }
@@ -1140,7 +1133,7 @@ void js_collect_garbage(struct js_vm *vm) {
             __mark_list(frame->parameters);
         }
     });
-    js_sweep(&(vm->heap.base), &(vm->heap.length), &(vm->heap.capacity));
+    js_sweep(&(vm->heap));
 #undef __mark_list
 #undef __mark_map
 }

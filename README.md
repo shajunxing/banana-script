@@ -46,7 +46,7 @@ No modules. In inperpreter's view, source code is only one large flat text.
 
 Garbage collection is manual, you can do it at any time you need.
 
-`delete` means delete local variable within current scope (object members can be deleted by setting `null`). For example, variables added to the function closure are all local variables before return, so unused variables can be `delete`d before return to reduce closure size, run following two statements in REPL environment to see differences.
+`delete` means delete local variable within current scope (object members can be deleted by setting `null`). For example, variables added to the function closure are all local variables before function variable declaration, so unused variables can be `delete`d before return to reduce closure size, run following two statements in REPL environment to see differences.
 
 - `let f = function(a, b){let c = a + b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`
 - `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`
@@ -55,17 +55,17 @@ Garbage collection is manual, you can do it at any time you need.
 
 ## Technical internals
 
-This project is C99 compatable, no other dependences, even make systems are not necessary, only need C compiler, compilation environment is msgc/gcc/mingw. First, from <https://github.com/shajunxing/banana-make> download single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`. Executables are in `bin` folder.
+This project is C99 compatable, no other dependences, even make systems are not necessary, only need C compiler, compilation environment is msgc/gcc/mingw. First, from <https://github.com/shajunxing/banana-nomake> download single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`. Executables are in `bin` folder.
 
 Project follows "minimal dependency" rule, only including necessary headers. Also, there's only one-way referencing between modules, with no circular referencing. Here’s how modules work and their dependencies:
 
 ```
-    js-common   js-data     js-vm       js-syntax
-        <-----------
-                    <-----------
-                                <-----------
-        <-----------------------
-        <-----------------------------------
+js-common   js-data     js-vm       js-syntax
+    <-----------
+                <-----------
+                            <-----------
+    <-----------------------
+    <-----------------------------------
 ```
 
 - `js-common`: Constants, macro definitions, and functions common to project, such as log, memory io

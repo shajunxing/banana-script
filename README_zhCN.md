@@ -46,7 +46,7 @@
 
 垃圾回收是手动的，你可以在你需要的任何时候执行。
 
-`delete` 语义为删除当前作用域范围的局部变量（对象成员置`null`即可删除）。比如，加入函数闭包的变量是返回之前的所有局部变量，可以在返回之前`delete`掉无用的变量以减少闭包大小，在REPL环境里执行以下两条语句，可以看到区别。
+`delete` 语义为删除当前作用域范围的局部变量（对象成员置`null`即可删除）。比如，加入函数闭包的变量是声明函数变量之前的所有局部变量，可以在返回之前`delete`掉无用的变量以减少闭包大小，在REPL环境里执行以下两条语句，可以看到区别。
 
 - `let f = function(a, b){let c = a + b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`
 - `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`
@@ -55,7 +55,7 @@
 
 ## 技术内幕
 
-本项目兼容 C99，没有其他依赖，甚至不需要 make 系统，只需要 C 编译器，编译环境为 msvc/gcc/mingw。首先，从 <https://github.com/shajunxing/banana-make> 下载单独文件 `make.h`，然后打开 `make.c`，修改 `#include` 为正确的路径，然后使用 msvc 输入 `cl make.c && make.exe release`，或者使用 mingw 输入 `gcc -o make.exe make.c && ./make.exe release`。可执行文件位于 `bin` 文件夹中。
+本项目兼容 C99，没有其他依赖，甚至不需要 make 系统，只需要 C 编译器，编译环境为 msvc/gcc/mingw。首先，从 <https://github.com/shajunxing/banana-nomake> 下载单独文件 `make.h`，然后打开 `make.c`，修改 `#include` 为正确的路径，然后使用 msvc 输入 `cl make.c && make.exe release`，或者使用 mingw 输入 `gcc -o make.exe make.c && ./make.exe release`。可执行文件位于 `bin` 文件夹中。
 
 项目遵循“最小依赖”原则，只包含必须的头文件，且模块之间只有单向引用，没有循环引用。模块的功能和依赖关系如下：
 
@@ -71,11 +71,11 @@
 - `js-common`： 项目通用的常量、宏定义和函数，例如日志打印、内存读写
 - `js-data`：数值类型和垃圾回收，你甚至可以在C项目里单独使用该模块操作带GC功能的高级数据结构，参见 <https://github.com/shajunxing/banana-cvar>
 - `js-vm`：字节码虚拟机，单独编译可得到不带源代码解析功能的最小足迹的解释器
-- `js-syntax`：词法解析和语法解析，讲源代码转化为字节码
+- `js-syntax`：词法解析和语法解析，将源代码转化为字节码
 
 所有值都是 `struct js_value` 类型，你可以通过 `js_xxx()` 函数创建，`xxx` 是值类型，你可以直接从这个结构体中读取 C 值，参见 `js_data.h` 中的定义。创建的值遵循垃圾回收规则。不要直接修改它们，如果你想得到不同的值，就创建新值。复合类型 `array` `object` 可以通过 `js_array_xxx()` `js_object_xxx()` 函数进行操作。
 
-C 函数必须是 `struct js_result (*)(struct js_vm *)` 格式，使用 `js_c_function()` 来创建 C 函数值，是的，当然它们都是值，可以放在任何地方，例如，如果使用 `js_variable_declare()` 放在堆栈根上，它们就是全局的。`struct js_result` 有两个成员，如果 `.success` 是 true, `.value` 就是返回值, 如果 false, `.value` 将会被 `catch` 接收，如果 `try catch` 存在的话. C函数同样也可以使用 `js_call()`调用脚本函数。在C函数内部，使用`js_parameter_base()` `js_parameter_length()` `js_parameter_get()`函数获取传入参数。
+C 函数必须是 `struct js_result (*)(struct js_vm *)` 格式，使用 `js_c_function()` 来创建 C 函数值，是的，当然它们都是值，可以放在任何地方，例如，如果使用 `js_variable_declare()` 放在堆栈根上，它们就是全局的。`struct js_result` 有两个成员，如果 `.success` 是 true, `.value` 就是返回值, 如果 false, `.value` 将会被 `catch` 接收，如果 `try catch` 存在的话。C函数同样也可以使用 `js_call()`调用脚本函数。在C函数内部，使用`js_parameter_base()` `js_parameter_length()` `js_parameter_get()`函数获取传入参数。
 
 ## 其它详见英文版
 

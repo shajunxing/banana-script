@@ -142,11 +142,7 @@ struct js_stack_frame {
 struct js_vm {
     struct js_bytecode bytecode;
     struct js_cross_reference cross_reference;
-    struct {
-        struct js_managed_value **base;
-        size_t length;
-        size_t capacity;
-    } heap;
+    struct js_heap heap;
     struct js_variable_map globals; // global variables, moved from stk_root
     // struct {
     //     struct js_call_stack_frame *base;
@@ -164,13 +160,6 @@ struct js_vm {
         uint16_t capacity;
     } stack;
     uint32_t pc; // program counter, next instruction offset
-};
-
-// since js_value is closely binded with js_vm, this structure cannot be put in js-data.h, such as string add
-// if success, value is return data, or it is error description
-struct js_result {
-    bool success;
-    struct js_value value;
 };
 
 shared void js_put_instruction(struct js_bytecode *, uint32_t *, uint8_t, uint8_t, ...);

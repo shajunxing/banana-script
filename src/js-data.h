@@ -95,6 +95,18 @@ struct js_managed_value {
     };
 };
 
+struct js_heap {
+    struct js_managed_value **base;
+    size_t length;
+    size_t capacity;
+};
+
+// if success, value is return data, or it is error description
+struct js_result {
+    bool success;
+    struct js_value value;
+};
+
 // DON'T use conflict name such as 'k' 'v'
 #define js_map_for_each(__arg_base, __arg_length, __arg_capacity, __arg_k, __arg_kl, __arg_v, __arg_block) \
     do {                                                                                                   \
@@ -150,27 +162,29 @@ shared struct js_value js_number(double);
 shared struct js_value js_scripture(const char *, uint32_t);
 shared struct js_value js_scripture_sz(const char *);
 shared struct js_value js_inscription(uint8_t **, uint32_t, uint32_t);
-shared struct js_value js_string(struct js_managed_value ***, size_t *, size_t *, const char *, size_t);
-shared struct js_value js_string_sz(struct js_managed_value ***, size_t *, size_t *, const char *);
-shared struct js_value js_array(struct js_managed_value ***, size_t *, size_t *);
+shared struct js_value js_string(struct js_heap *, const char *, size_t);
+shared struct js_value js_string_sz(struct js_heap *, const char *);
+shared struct js_value js_array(struct js_heap *);
 shared void js_array_push(struct js_value *, struct js_value);
 shared void js_array_put(struct js_value *, size_t, struct js_value);
 shared struct js_value js_array_get(struct js_value *, size_t);
-shared struct js_value js_object(struct js_managed_value ***, size_t *, size_t *);
+shared struct js_value js_object(struct js_heap *);
 shared void js_object_put(struct js_value *, const char *, uint16_t, struct js_value);
 shared void js_object_put_sz(struct js_value *, const char *, struct js_value);
 shared struct js_value js_object_get(struct js_value *, const char *, uint16_t);
 shared struct js_value js_object_get_sz(struct js_value *, const char *);
-shared struct js_value js_function(struct js_managed_value ***, size_t *, size_t *, uint32_t);
+shared struct js_value js_function(struct js_heap *, uint32_t);
 shared struct js_value js_c_function(void *);
 shared void js_mark(struct js_value *);
-shared void js_sweep(struct js_managed_value ***, size_t *, size_t *);
+shared void js_sweep(struct js_heap *);
 shared void js_managed_value_dump(struct js_managed_value *);
 shared void js_value_dump(struct js_value *);
+shared void js_value_print(struct js_value *);
 shared bool js_is_string(struct js_value *);
 shared char *js_string_base(struct js_value *);
 shared size_t js_string_length(struct js_value *);
 shared int js_string_compare(struct js_value *, struct js_value *);
+shared struct js_result js_add(struct js_heap *, struct js_value *, struct js_value *);
 
 #ifndef NOTEST
 
@@ -180,7 +194,7 @@ shared int test_js_map_loop(int, char *[]);
 shared int test_js_value(int, char *[]);
 shared int test_js_value_loop(int, char *[]);
 shared int test_js_value_bug(int, char *[]);
-shared int test_js_string_like(int, char *[]);
+shared int test_js_string_family(int, char *[]);
 
 #endif
 

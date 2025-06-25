@@ -8,7 +8,7 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "../banana-make/make.h"
+#include "../banana-nomake/make.h"
 
 #define proj "js"
 #define bin_dir "bin" pathsep

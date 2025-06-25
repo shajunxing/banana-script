@@ -322,24 +322,24 @@ struct js_value js_inscription(uint8_t **base, uint32_t offset, uint32_t length)
     return (struct js_value){.type = vt_inscription, .inscription.base = base, .inscription.offset = offset, .inscription.length = length};
 }
 
-struct js_value js_string(struct js_managed_value ***heap, size_t *length, size_t *capacity, const char *str, size_t slen) {
+struct js_value js_string(struct js_heap *heap, const char *str, size_t slen) {
     struct js_value ret = {.type = vt_string};
     ret.managed = alloc(struct js_managed_value, 1);
     ret.managed->type = vt_string;
     string_buffer_append(ret.managed->string.base, ret.managed->string.length, ret.managed->string.capacity, str, slen);
-    buffer_push(*heap, *length, *capacity, ret.managed);
+    buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
     return ret;
 }
 
-struct js_value js_string_sz(struct js_managed_value ***heap, size_t *length, size_t *capacity, const char *str) {
-    return js_string(heap, length, capacity, str, strlen(str));
+struct js_value js_string_sz(struct js_heap *heap, const char *str) {
+    return js_string(heap, str, strlen(str));
 }
 
-struct js_value js_array(struct js_managed_value ***heap, size_t *length, size_t *capacity) {
+struct js_value js_array(struct js_heap *heap) {
     struct js_value ret = {.type = vt_array};
     ret.managed = alloc(struct js_managed_value, 1);
     ret.managed->type = vt_array;
-    buffer_push(*heap, *length, *capacity, ret.managed);
+    buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
     return ret;
 }
 
@@ -366,11 +366,11 @@ struct js_value js_array_get(struct js_value *container, size_t index) {
     }
 }
 
-struct js_value js_object(struct js_managed_value ***heap, size_t *length, size_t *capacity) {
+struct js_value js_object(struct js_heap *heap) {
     struct js_value ret = {.type = vt_object};
     ret.managed = alloc(struct js_managed_value, 1);
     ret.managed->type = vt_object;
-    buffer_push(*heap, *length, *capacity, ret.managed);
+    buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
     return ret;
 }
 
@@ -392,12 +392,12 @@ struct js_value js_object_get_sz(struct js_value *container, const char *key) {
     return js_object_get(container, key, (uint16_t)strlen(key));
 }
 
-struct js_value js_function(struct js_managed_value ***heap, size_t *length, size_t *capacity, uint32_t ingress) {
+struct js_value js_function(struct js_heap *heap, uint32_t ingress) {
     struct js_value ret = {.type = vt_function};
     ret.managed = alloc(struct js_managed_value, 1);
     ret.managed->type = vt_function;
     ret.managed->function.ingress = ingress;
-    buffer_push(*heap, *length, *capacity, ret.managed);
+    buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
     return ret;
 }
 
@@ -475,22 +475,22 @@ void _free_managed(struct js_managed_value *managed) {
     }
 }
 
-void js_sweep(struct js_managed_value ***heap, size_t *length, size_t *capacity) {
-    struct js_managed_value **new_heap = NULL;
+void js_sweep(struct js_heap *heap) {
+    struct js_managed_value **new_base = NULL;
     size_t new_length = 0;
     size_t new_capacity = 0;
-    buffer_for_each(*heap, *length, *capacity, i, v, {
+    buffer_for_each(heap->base, heap->length, heap->capacity, i, v, {
         if ((*v)->in_use) {
             (*v)->in_use = 0;
-            buffer_push(new_heap, new_length, new_capacity, *v);
+            buffer_push(new_base, new_length, new_capacity, *v);
         } else {
             _free_managed(*v);
         }
     });
-    free(*heap);
-    *heap = new_heap;
-    *length = new_length;
-    *capacity = new_capacity;
+    free(heap->base);
+    heap->base = new_base;
+    heap->length = new_length;
+    heap->capacity = new_capacity;
 }
 
 void js_managed_value_dump(struct js_managed_value *managed) { // also used by heap dump
@@ -545,10 +545,10 @@ void js_value_dump(struct js_value *value) {
         printf("%lg", value->number);
         break;
     case vt_scripture:
-        printf("'''%.*s'''", (int)value->scripture.length, value->scripture.base);
+        printf("'''%.*s'''", (int)js_string_length(value), js_string_base(value));
         break;
     case vt_inscription:
-        printf("''%.*s''", (int)value->inscription.length, *(value->inscription.base) + value->inscription.offset); // must cast (uintptr_t), or + result will be wrong, wonder why?
+        printf("''%.*s''", (int)js_string_length(value), js_string_base(value));
         break;
     case vt_string:
     case vt_array:
@@ -558,6 +558,51 @@ void js_value_dump(struct js_value *value) {
         break;
     case vt_c_function:
         printf("<c_function %p>", value->c_function);
+        break;
+    default:
+        fatal("Unknown value type %d", value->type);
+    }
+}
+
+void js_value_print(struct js_value *value) {
+    switch (value->type) {
+    case vt_null:
+        printf("null");
+        break;
+    case vt_boolean:
+        printf(value->boolean ? "true" : "false");
+        break;
+    case vt_number:
+        printf("%lg", value->number);
+        break;
+    case vt_scripture:
+    case vt_inscription:
+    case vt_string:
+        printf("%.*s", (int)js_string_length(value), js_string_base(value));
+        break;
+    case vt_array:
+        printf("[");
+        js_list_for_each(value->managed->array.base, value->managed->array.length, _, i, v, {
+            printf("%zu:", i);
+            js_value_print(v);
+            printf(",");
+        });
+        printf("]");
+        break;
+    case vt_object:
+        printf("{");
+        js_map_for_each(value->managed->object.base, _, value->managed->object.capacity, k, kl, v, {
+            printf("%.*s:", (int)kl, k);
+            js_value_print(v);
+            printf(",");
+        });
+        printf("}");
+        break;
+    case vt_function:
+        printf("<function>");
+        break;
+    case vt_c_function:
+        printf("<c_function>");
         break;
     default:
         fatal("Unknown value type %d", value->type);
@@ -669,7 +714,7 @@ struct tablet {
     long qux;
 };
 
-static struct js_value _random_js_value(struct js_managed_value ***heap, size_t *length, size_t *capacity, enum js_value_type type, size_t depth) {
+static struct js_value _random_js_value(struct js_heap *heap, enum js_value_type type, size_t depth) {
     // https://www.biblestudytools.com/topical-verses/the-25-most-read-bible-verses/
     static const char *scriptures[] = {
         "1. John 3:16 - For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.",
@@ -704,25 +749,25 @@ static struct js_value _random_js_value(struct js_managed_value ***heap, size_t 
     case vt_inscription:
         return js_inscription((uint8_t **)&ptablet, (uint32_t)offsetof(struct tablet, s), (uint32_t)strlen(tablet.s));
     case vt_string:
-        return js_string_sz(heap, length, capacity, random_sz_static(NULL));
+        return js_string_sz(heap, random_sz_static(NULL));
     case vt_array:
-        ret = js_array(heap, length, capacity);
+        ret = js_array(heap);
         for (i = 0; i < rand() % 10; i++) {
-            struct js_value v = _random_js_value(heap, length, capacity, _random_js_value_type(), depth + 1);
+            struct js_value v = _random_js_value(heap, _random_js_value_type(), depth + 1);
             js_array_put(&ret, rand() % 100, v);
         }
         return ret;
     case vt_object:
-        ret = js_object(heap, length, capacity);
+        ret = js_object(heap);
         for (i = 0; i < rand() % 10; i++) {
-            struct js_value v = _random_js_value(heap, length, capacity, _random_js_value_type(), depth + 1);
+            struct js_value v = _random_js_value(heap, _random_js_value_type(), depth + 1);
             js_object_put_sz(&ret, random_sz_static(NULL), v);
         }
         return ret;
     case vt_function:
-        ret = js_function(heap, length, capacity, rand() % UINT32_MAX);
+        ret = js_function(heap, rand() % UINT32_MAX);
         for (i = 0; i < rand() % 10; i++) {
-            struct js_value v = _random_js_value(heap, length, capacity, _random_js_value_type(), depth + 1);
+            struct js_value v = _random_js_value(heap, _random_js_value_type(), depth + 1);
             size_t len = ret.managed->function.closure.length; // uint16_t -> size_t
             size_t cap = ret.managed->function.closure.capacity;
             js_map_put_sz(ret.managed->function.closure.base, len, cap, random_sz_static(NULL), v);
@@ -738,43 +783,37 @@ static struct js_value _random_js_value(struct js_managed_value ***heap, size_t 
 }
 
 int test_js_value(int argc, char *argv[]) {
-    struct js_managed_value **heap = NULL;
-    size_t length = 0;
-    size_t capacity = 0;
+    struct js_heap heap = {0};
     for (enum js_value_type type = 1; type < countof(_value_type_names); type++) {
-        struct js_value val = _random_js_value(&heap, &length, &capacity, type, 0);
+        struct js_value val = _random_js_value(&heap, type, 0);
         printf("%s: ", _value_type_names[type]);
         js_value_dump(&val);
         printf("\n");
     }
-    js_sweep(&heap, &length, &capacity);
-    buffer_free(heap, length, capacity);
+    js_sweep(&heap);
+    buffer_free(heap.base, heap.length, heap.capacity);
     return EXIT_SUCCESS;
 }
 
 int test_js_value_loop(int argc, char *argv[]) {
-    struct js_managed_value **heap = NULL;
-    size_t length = 0;
-    size_t capacity = 0;
+    struct js_heap heap = {0};
     for (;;) {
         for (int i = 0; i < 10000; i++) {
-            struct js_value val = _random_js_value(&heap, &length, &capacity, _random_js_value_type(), 0);
+            struct js_value val = _random_js_value(&heap, _random_js_value_type(), 0);
             if (rand() % 10 == 0) { // mark 1/10 of them
                 js_mark(&val);
             }
         }
-        js_sweep(&heap, &length, &capacity);
-        js_sweep(&heap, &length, &capacity); // second round sweep remained all
-        buffer_free(heap, length, capacity);
+        js_sweep(&heap);
+        js_sweep(&heap); // second round sweep remained all
+        buffer_free(heap.base, heap.length, heap.capacity);
         putchar('.');
     }
 }
 
 int test_js_value_bug(int argc, char *argv[]) {
     // REPRODUCE BUG:
-    struct js_managed_value **heap = NULL;
-    size_t length = 0;
-    size_t capacity = 0;
+    struct js_heap heap = {0};
     const char *bug_keys[] = {"b",
                               "CVUcQn5KYZkjKSa1eJAsg0nUQsnZBdSNquxXsYnwIoNTEAtZBOt",
                               "Swy4fCH8h03lkwQwW9BxW7O3dH9EReeng80wiI37Jwid6RXMwQ0cgiPn",
@@ -785,7 +824,7 @@ int test_js_value_bug(int argc, char *argv[]) {
         size_t nh = _next_hash(fh, 0b01);
         printf("%d. %s %zu %zu\n", i, k, fh, nh);
     }
-    struct js_value obj = js_object(&heap, &length, &capacity);
+    struct js_value obj = js_object(&heap);
     js_object_put_sz(&obj, bug_keys[0], js_boolean(true));
     js_object_put_sz(&obj, bug_keys[0], js_null());
     js_object_put_sz(&obj, bug_keys[2], js_boolean(true));
@@ -794,16 +833,27 @@ int test_js_value_bug(int argc, char *argv[]) {
     return EXIT_SUCCESS;
 }
 
-int test_js_string_like(int argc, char *argv[]) {
-    struct js_managed_value **heap = NULL;
-    size_t length = 0;
-    size_t capacity = 0;
+int test_js_string_family(int argc, char *argv[]) {
+    struct js_heap heap = {0};
     for (;;) {
         for (uint8_t vt = vt_scripture; vt <= vt_string; vt++) {
-            struct js_value str = _random_js_value(&heap, &length, &capacity, vt, 0);
+            struct js_value str = _random_js_value(&heap, vt, 0);
             printf("%s %s %.*s\n", js_is_string(&str) ? "true" : "false", _value_type_names[vt], (int)js_string_length(&str), js_string_base(&str));
-            js_sweep(&heap, &length, &capacity);
+            js_sweep(&heap);
         }
+    }
+}
+
+struct js_result js_add(struct js_heap *heap, struct js_value *lhs, struct js_value *rhs) {
+    struct js_value value;
+    if (lhs->type == vt_number && rhs->type == vt_number) {
+        return (struct js_result){.success = true, .value = js_number(lhs->number + rhs->number)};
+    } else if (js_is_string(lhs) && js_is_string(rhs)) {
+        value = js_string(heap, js_string_base(lhs), js_string_length(lhs));
+        string_buffer_append(value.managed->string.base, value.managed->string.length, value.managed->string.capacity, js_string_base(rhs), js_string_length(rhs));
+        return (struct js_result){.success = true, .value = value};
+    } else {
+        return (struct js_result){.success = false, .value = js_scripture_sz("Add operand must be number or string")};
     }
 }
 

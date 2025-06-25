@@ -19,54 +19,9 @@ static struct js_result _dump(struct js_vm *vm) {
     return (struct js_result){.success = true, .value = js_null()};
 }
 
-void _print_value(struct js_value *value) {
-    switch (value->type) {
-    case vt_null:
-        printf("null");
-        break;
-    case vt_boolean:
-        printf(value->boolean ? "true" : "false");
-        break;
-    case vt_number:
-        printf("%lg", value->number);
-        break;
-    case vt_scripture:
-    case vt_inscription:
-    case vt_string:
-        printf("%.*s", (int)js_string_length(value), js_string_base(value));
-        break;
-    case vt_array:
-        printf("[");
-        js_list_for_each(value->managed->array.base, value->managed->array.length, _, i, v, {
-            printf("%zu:", i);
-            _print_value(v);
-            printf(",");
-        });
-        printf("]");
-        break;
-    case vt_object:
-        printf("{");
-        js_map_for_each(value->managed->object.base, _, value->managed->object.capacity, k, kl, v, {
-            printf("%.*s:", (int)kl, k);
-            _print_value(v);
-            printf(",");
-        });
-        printf("}");
-        break;
-    case vt_function:
-        printf("<function>");
-        break;
-    case vt_c_function:
-        printf("<c_function>");
-        break;
-    default:
-        fatal("Unknown value type %d", value->type);
-    }
-}
-
 static struct js_result _print(struct js_vm *vm) {
     for (uint16_t i = 0; i < js_parameter_length(vm); i++) {
-        _print_value(js_parameter_base(vm) + i);
+        js_value_print(js_parameter_base(vm) + i);
         printf(" ");
     }
     printf("\n");
@@ -92,9 +47,9 @@ static struct js_result _input(struct js_vm *vm) {
         if (!js_is_string(param)) {
             return (struct js_result){.success = false, .value = js_scripture_sz("Prompt must be string")};
         }
-        _print_value(param);
+        js_value_print(param);
     }
-    struct js_value line = js_string(&(vm->heap.base), &(vm->heap.length), &(vm->heap.capacity), NULL, 0);
+    struct js_value line = js_string(&(vm->heap), NULL, 0);
     for (;;) {
         int ch = fgetc(stdin);
         if (ch == EOF || ch == '\n') {
@@ -123,7 +78,7 @@ static struct js_result _length(struct js_vm *vm) {
 
 static void _add_globals(struct js_vm *vm) {
     js_variable_declare_sz(vm, "dump", js_c_function(_dump));
-    struct js_value console = js_object(&(vm->heap.base), &(vm->heap.length), &(vm->heap.capacity));
+    struct js_value console = js_object(&(vm->heap));
     struct js_value print = js_c_function(_print);
     js_object_put_sz(&console, "log", print);
     js_variable_declare_sz(vm, "console", console);
@@ -246,19 +201,32 @@ static int _repl() {
                 struct js_token tok_bak = token;
                 uint32_t bc_len_bak = vm.bytecode.length;
                 uint32_t xref_len_bak = vm.cross_reference.length;
+                uint32_t pc_bak = vm.pc;
                 // concat line to source to make sure next_token works correctly
                 string_buffer_append(source.base, source.length, source.capacity, line.base, line.length);
                 // set from eof state to searching state
                 // token.state = ts_searching;
+                // if runtime error happens, for example, if happens inside a function with no return value need to process, for example, print(...), after op_call there is an op_stack_pop, next statement will continue run at following op_stack_pop will failed because stack has been cleared. there are 2 solution: 1. move vm->pc to the end, 2. rollback
+                bool rollback = false;
                 if (js_compile(&source, &token, &(vm.bytecode), &(vm.cross_reference))) {
                     // log_info("OK, %u,%u-%u,%u", token.head_line, token.head_offset, token.tail_line, token.tail_offset);
-                    js_run(&vm);
+                    struct js_result result = js_run(&vm);
+                    if (!result.success) {
+                        printf("Runtime Error: ");
+                        js_value_print(&(result.value));
+                        printf("\n");
+                        rollback = true;
+                    }
                 } else {
+                    rollback = true;
+                }
+                if (rollback) {
                     // log_info("Failed");
                     source.length = src_len_bak;
                     token = tok_bak;
                     vm.bytecode.length = bc_len_bak;
                     vm.cross_reference.length = xref_len_bak;
+                    vm.pc = pc_bak;
                 }
             }
         }
@@ -315,7 +283,7 @@ int _help(char *arg_0) {
         X(test_js_value)            \
         X(test_js_value_loop)       \
         X(test_js_value_bug)        \
-        X(test_js_string_like)      \
+        X(test_js_string_family)    \
         X(test_vm_structure_size)   \
         X(test_instruction_get_put) \
         X(test_vm_run)              \
@@ -464,7 +432,7 @@ int main(int argc, char *argv[]) {
                 }
             } else {
                 printf("Runtime Error: ");
-                _print_value(&(result.value));
+                js_value_print(&(result.value));
                 return EXIT_FAILURE;
             }
         } else if (action == a_unassemble) {
