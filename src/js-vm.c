@@ -770,7 +770,7 @@ struct js_result js_run(struct js_vm *vm) {
             } else {
                 __lhs = js_null();
             }
-            __rhs = js_parameter_get(vm, frame->parameters.index++);
+            __rhs = js_parameter_get(vm, _stack_peek(vm, 0)->parameters.index++);
             if (__rhs.type != vt_null) {
                 __lhs = __rhs;
             }
@@ -1098,7 +1098,7 @@ struct js_result js_run(struct js_vm *vm) {
             }
             break;
         default:
-            fatal("Unknown opcode %u %s", instruction.opcode, _opcode_names[instruction.opcode]);
+            fatal("Unknown opcode %u", instruction.opcode);
             break;
         }
     tail:

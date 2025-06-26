@@ -8,8 +8,8 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef JS_PARSER_H
-#define JS_PARSER_H
+#ifndef JS_SYNTAX_H
+#define JS_SYNTAX_H
 
 #include "js-vm.h"
 

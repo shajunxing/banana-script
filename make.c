@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with thi
 #define dll_file_name proj dllext
 #define dll_file_path bin_dir dll_file_name
 #define lib_file bin_dir proj libext
+#define msvc_nodefaultlib " msvcrt.lib libvcruntime.lib ucrt.lib kernel32.lib user32.lib"
 char *cc = NULL;
 char *ld = NULL;
 
@@ -39,14 +40,14 @@ char *ld = NULL;
         free(cmd);                                                          \
     } while (0)
 
-#define link_executable(exe_file, obj_file)                                                           \
-    do {                                                                                              \
-        char *cmd =                                                                                   \
-            compiler == msvc                                                                          \
-                ? concat(ld, " /out:", exe_file, " ", obj_file, " ", lib_file)                        \
-                : concat(ld, " -o ", exe_file, " ", obj_file, " -L", bin_dir, " -l:", dll_file_name); \
-        async(cmd);                                                                                   \
-        free(cmd);                                                                                    \
+#define link_executable(exe_file, obj_file)                                                                     \
+    do {                                                                                                        \
+        char *cmd =                                                                                             \
+            compiler == msvc                                                                                    \
+                ? concat(ld, " /nodefaultlib /out:", exe_file, " ", obj_file, " ", lib_file, msvc_nodefaultlib) \
+                : concat(ld, " -o ", exe_file, " ", obj_file, " -L", bin_dir, " -l:", dll_file_name);           \
+        async(cmd);                                                                                             \
+        free(cmd);                                                                                              \
     } while (0)
 
 #define e(__arg_base) (bin_dir __arg_base exeext)
@@ -76,7 +77,7 @@ void build() {
     if (mtime(dll_file_path) < mtime(o("js-common"), o("js-data"), o("js-vm"), o("js-syntax"))) {
         char *objs = join(" ", o("js-common"), o("js-data"), o("js-vm"), o("js-syntax"));
         char *cmd = compiler == msvc
-                        ? concat(ld, " /dll /out:", dll_file_path, " ", objs)
+                        ? concat(ld, " /nodefaultlib /dll /out:", dll_file_path, " ", objs, msvc_nodefaultlib)
                         : concat(ld, " -shared -o ", dll_file_path, " ", objs);
         async(cmd);
         free(cmd);
@@ -101,21 +102,28 @@ void cleanup(const char *dir, const char *base, const char *ext) {
     }
 }
 
-#define cc_msvc "cl /nologo /c /W3 /MD /Zp /utf-8 /std:clatest" // "/Zp" means #pragma pack(1)
-#define cc_gcc "gcc -c -Wall" // "-fpack-struct" also means #pragma pack(1), but will cause lot's of "taking address of packed member may result in an unaligned pointer value" warning
-#define ld_msvc "link /nologo /incremental:no" // LINK : xxx not found or not built by the last incremental link; performing full link
-#define ld_gcc "gcc -fvisibility=hidden -fvisibility-inlines-hidden -static -static-libgcc"
+#if compiler == msvc
+    #define cc_debug "cl /nologo /c /W3 /MD /Zp /utf-8 /std:clatest" // "/Zp" means #pragma pack(1)
+    #define cc_release cc_debug " /O2 /DNOLOGINFO /DNOTEST"
+    #define ld_release "link /nologo /incremental:no" // LINK : xxx not found or not built by the last incremental link; performing full link
+    #define ld_debug ld_release " /debug"
+#else
+    #define cc_debug "gcc -c -Wall" // "-fpack-struct" also means #pragma pack(1), but will cause lot's of "taking address of packed member may result in an unaligned pointer value" warning
+    #define cc_release cc_debug " -O3 -DNOLOGINFO -DNOTEST"
+    #define ld_debug "gcc -fvisibility=hidden -fvisibility-inlines-hidden -static -static-libgcc"
+    #define ld_release ld_debug " -s -Wl,--exclude-all-symbols"
+#endif
 
 int main(int argc, char **argv) {
     if (argc == 1 || (argc == 2 && equals(argv[1], "debug"))) {
-        cc = compiler == msvc ? cc_msvc : cc_gcc;
-        ld = compiler == msvc ? ld_msvc " /debug" : ld_gcc;
+        cc = cc_debug;
+        ld = ld_debug;
         build();
         return EXIT_SUCCESS;
     } else if (argc == 2) {
         if (equals(argv[1], "release")) {
-            cc = compiler == msvc ? cc_msvc " /O2 /DNOLOGINFO /DNOTEST" : cc_gcc " -O3 -DNOLOGINFO -DNOTEST";
-            ld = compiler == msvc ? ld_msvc : ld_gcc " -s -Wl,--exclude-all-symbols";
+            cc = cc_release;
+            ld = ld_release;
             build();
             return EXIT_SUCCESS;
         } else if (equals(argv[1], "clean")) {

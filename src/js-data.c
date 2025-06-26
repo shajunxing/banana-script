@@ -15,14 +15,14 @@ You should have received a copy of the GNU General Public License along with thi
 static const char *const _value_type_names[] = {js_value_type_list};
 #undef X
 
-// void js_map_dump(struct js_kv_pair *base, size_t length, size_t capacity) {
-//     size_t i;
-//     printf("length=%zu capacity=%zu\n", length, capacity);
-//     for (i = 0; i < capacity; i++) {
-//         struct js_kv_pair *node = base + i;
-//         printf("    %zu %.*s %s\n", i, (int)node->key.length, node->key.base, _value_type_names[node->value.type]);
-//     }
-// }
+void js_map_dump(struct js_kv_pair *base, size_t length, size_t capacity) {
+    size_t i;
+    printf("length=%zu capacity=%zu\n", length, capacity);
+    for (i = 0; i < capacity; i++) {
+        struct js_kv_pair *node = base + i;
+        printf("    %zu %.*s %s\n", i, (int)node->key.length, node->key.base, _value_type_names[node->value.type]);
+    }
+}
 
 static size_t _first_hash(const char *string, uint16_t length, size_t mask) {
     size_t hash = 0;
@@ -647,6 +647,19 @@ int js_string_compare(struct js_value *lhs, struct js_value *rhs) {
     return strncmp(pl, pr, max(ll, lr));
 }
 
+struct js_result js_add(struct js_heap *heap, struct js_value *lhs, struct js_value *rhs) {
+    struct js_value value;
+    if (lhs->type == vt_number && rhs->type == vt_number) {
+        return (struct js_result){.success = true, .value = js_number(lhs->number + rhs->number)};
+    } else if (js_is_string(lhs) && js_is_string(rhs)) {
+        value = js_string(heap, js_string_base(lhs), js_string_length(lhs));
+        string_buffer_append(value.managed->string.base, value.managed->string.length, value.managed->string.capacity, js_string_base(rhs), js_string_length(rhs));
+        return (struct js_result){.success = true, .value = value};
+    } else {
+        return (struct js_result){.success = false, .value = js_scripture_sz("Add operand must be number or string")};
+    }
+}
+
 #ifndef NOTEST
 
 int test_data_structure_size(int argc, char *argv[]) {
@@ -841,19 +854,6 @@ int test_js_string_family(int argc, char *argv[]) {
             printf("%s %s %.*s\n", js_is_string(&str) ? "true" : "false", _value_type_names[vt], (int)js_string_length(&str), js_string_base(&str));
             js_sweep(&heap);
         }
-    }
-}
-
-struct js_result js_add(struct js_heap *heap, struct js_value *lhs, struct js_value *rhs) {
-    struct js_value value;
-    if (lhs->type == vt_number && rhs->type == vt_number) {
-        return (struct js_result){.success = true, .value = js_number(lhs->number + rhs->number)};
-    } else if (js_is_string(lhs) && js_is_string(rhs)) {
-        value = js_string(heap, js_string_base(lhs), js_string_length(lhs));
-        string_buffer_append(value.managed->string.base, value.managed->string.length, value.managed->string.capacity, js_string_base(rhs), js_string_length(rhs));
-        return (struct js_result){.success = true, .value = value};
-    } else {
-        return (struct js_result){.success = false, .value = js_scripture_sz("Add operand must be number or string")};
     }
 }
 

@@ -131,6 +131,7 @@ struct js_result {
         }                                                                                         \
     })
 
+shared void js_map_dump(struct js_kv_pair *, size_t, size_t);
 shared void js_map_put_internal(struct js_kv_pair **, size_t *, size_t *, const char *, uint16_t, struct js_value);
 // remove '*' prefix, and fit for any type of 'length' 'capacity'
 #define js_map_put(__arg_base, __arg_length, __arg_capacity, __arg_key, __arg_key_length, __arg_value) \

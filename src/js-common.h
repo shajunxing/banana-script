@@ -8,8 +8,8 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef JS_BASE_H
-#define JS_BASE_H
+#ifndef JS_COMMON_H
+#define JS_COMMON_H
 
 #ifdef _MSC_VER
     #pragma warning(disable : 4996) // such as "'strcpy' unsafe" or "'rmdir' deprecated"

@@ -127,6 +127,10 @@ static void _freadln(FILE *fp, struct js_source *line) {
     }
 }
 
+#ifdef _MSC_VER
+    #define strdup _strdup
+#endif
+
 static char *_make_filename(char *source_filename, const char *ext, char *binary_filename) {
     if (binary_filename) {
         return strdup(binary_filename);
@@ -396,6 +400,7 @@ int main(int argc, char *argv[]) {
             _fread(source_filenames.base[i], "r", source.base, source.length, source.capacity);
         }
         // TODO: add optimization
+        (void)optimize;
         if (!js_compile(&source, &token, &(vm.bytecode), &(vm.cross_reference))) {
             return EXIT_FAILURE;
         }
