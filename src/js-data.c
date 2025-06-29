@@ -665,7 +665,10 @@ struct js_result js_add(struct js_heap *heap, struct js_value *lhs, struct js_va
 int test_data_structure_size(int argc, char *argv[]) {
     print_result(sizeof(struct js_value), "%zu");
     print_result(sizeof(struct js_kv_pair), "%zu");
+    print_result(sizeof(struct js_variable_map), "%zu");
     print_result(sizeof(struct js_managed_value), "%zu");
+    print_result(sizeof(struct js_heap), "%zu");
+    print_result(sizeof(struct js_result), "%zu");
     return EXIT_SUCCESS;
 }
 
@@ -828,9 +831,9 @@ int test_js_value_bug(int argc, char *argv[]) {
     // REPRODUCE BUG:
     struct js_heap heap = {0};
     const char *bug_keys[] = {"b",
-                              "CVUcQn5KYZkjKSa1eJAsg0nUQsnZBdSNquxXsYnwIoNTEAtZBOt",
-                              "Swy4fCH8h03lkwQwW9BxW7O3dH9EReeng80wiI37Jwid6RXMwQ0cgiPn",
-                              "EFvi653FKJKm04nqvfux6YzKZhmukC7biyUhulH9eLPxZUX"};
+        "CVUcQn5KYZkjKSa1eJAsg0nUQsnZBdSNquxXsYnwIoNTEAtZBOt",
+        "Swy4fCH8h03lkwQwW9BxW7O3dH9EReeng80wiI37Jwid6RXMwQ0cgiPn",
+        "EFvi653FKJKm04nqvfux6YzKZhmukC7biyUhulH9eLPxZUX"};
     for (int i = 0; i < countof(bug_keys); i++) {
         const char *k = bug_keys[i];
         size_t fh = _first_hash(k, (uint16_t)strlen(k), 0b01);

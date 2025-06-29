@@ -15,101 +15,106 @@ You should have received a copy of the GNU General Public License along with thi
 
 // opcodes order is my programming implementation order
 // first implement hardest function call and exception handling
-#define js_opcode_list                                                                       \
-    X(op_nop) /* 0 */                                                                        \
-    X(op_stack_push) /* vary, frame_type, ... */                                             \
-    X(op_stack_pop) /* 1, uint8 */                                                           \
-    X(op_variable_declare) /* 1, inscription */                                              \
-    X(op_variable_delete) /* 1, inscription */                                               \
-    X(op_variable_put) /* 1, inscription */                                                  \
-    X(op_variable_get) /* 1, inscription */                                                  \
-    X(op_jump) /* 1, uint32 */                                                               \
-    X(op_parameter_append) /* 0 */                                                           \
-    X(op_call) /* 0. callee is function/c_function value on stack top */                     \
-    X(op_return) /* 0 */                                                                     \
-    /* parameter's default value may be expression, so cannot be put into operand */         \
-    X(op_parameter_first) /* 0 */                                                            \
-    X(op_parameter_get_next) /* 1, inscription */                                            \
-    X(op_catch) /* 2, inscription, uint32 */                                                 \
-    X(op_throw) /* 0 */                                                                      \
-    X(op_member_put) /* 0 */                                                                 \
-    X(op_member_get) /* 0 */                                                                 \
-    X(op_array_append) /* 0 */                                                               \
-    X(op_array_spread) /* 0 */                                                               \
-    X(op_object_optional) /* 0 */                                                            \
-    X(op_parameter_spread) /* 0 */                                                           \
-    X(op_parameter_get_rest) /* 1, inscription */                                            \
-    X(op_add) /* 0 */                                                                        \
-    X(op_sub) /* 0 */                                                                        \
-    X(op_mul) /* 0 */                                                                        \
-    X(op_pow) /* 0 */                                                                        \
-    X(op_div) /* 0 */                                                                        \
-    X(op_mod) /* 0 */                                                                        \
-    X(op_eq) /* 0 */                                                                         \
-    X(op_ne) /* 0 */                                                                         \
-    X(op_lt) /* 0 */                                                                         \
-    X(op_le) /* 0 */                                                                         \
-    X(op_gt) /* 0 */                                                                         \
-    X(op_ge) /* 0 */                                                                         \
-    X(op_and) /* 0 */                                                                        \
-    X(op_or) /* 0 */                                                                         \
-    X(op_not) /* 0 */                                                                        \
-    X(op_ternary) /* 0 */                                                                    \
-    X(op_typeof) /* 0 */                                                                     \
+#define js_opcode_list \
+    X(op_nop) /* 0 */ \
+    X(op_stack_push) /* vary, frame_type, ... */ \
+    X(op_stack_pop) /* 1, uint8 */ \
+    X(op_variable_declare) /* 1, inscription */ \
+    X(op_variable_delete) /* 1, inscription */ \
+    X(op_variable_put) /* 1, inscription */ \
+    X(op_variable_get) /* 1, inscription */ \
+    X(op_jump) /* 1, uint32 */ \
+    X(op_parameter_append) /* 0 */ \
+    X(op_call) /* 0. callee is function/c_function value on stack top */ \
+    X(op_return) /* 0 */ \
+    /* parameter's default value may be expression, so cannot be put into operand */ \
+    X(op_parameter_first) /* 0 */ \
+    X(op_parameter_get_next) /* 1, inscription */ \
+    X(op_catch) /* 2, inscription, uint32 */ \
+    X(op_throw) /* 0 */ \
+    X(op_member_put) /* 0 */ \
+    X(op_member_get) /* 0 */ \
+    X(op_array_append) /* 0 */ \
+    X(op_array_spread) /* 0 */ \
+    X(op_object_optional) /* 0 */ \
+    X(op_parameter_spread) /* 0 */ \
+    X(op_parameter_get_rest) /* 1, inscription */ \
+    X(op_add) /* 0 */ \
+    X(op_sub) /* 0 */ \
+    X(op_mul) /* 0 */ \
+    X(op_pow) /* 0 */ \
+    X(op_div) /* 0 */ \
+    X(op_mod) /* 0 */ \
+    X(op_eq) /* 0 */ \
+    X(op_ne) /* 0 */ \
+    X(op_lt) /* 0 */ \
+    X(op_le) /* 0 */ \
+    X(op_gt) /* 0 */ \
+    X(op_ge) /* 0 */ \
+    X(op_and) /* 0 */ \
+    X(op_or) /* 0 */ \
+    X(op_not) /* 0 */ \
+    X(op_ternary) /* 0 */ \
+    X(op_typeof) /* 0 */ \
     X(op_stack_duplicate_value) /* 1, uint8, number is relative position from top to down */ \
-    X(op_jump_if_false) /* 1, uint32 */                                                      \
-    X(op_jump_if_true) /* 1, uint32 */                                                       \
-    X(op_break) /* 0 */                                                                      \
-    X(op_continue) /* 0 */                                                                   \
-    X(op_for_in_next) /* 1, uint32 */                                                        \
+    X(op_jump_if_false) /* 1, uint32 */ \
+    X(op_jump_if_true) /* 1, uint32 */ \
+    X(op_break) /* 0 */ \
+    X(op_continue) /* 0 */ \
+    X(op_for_in_next) /* 1, uint32 */ \
     X(op_for_of_next) /* 1, uint32 */
 
 #define X(name) name,
 enum js_opcode { js_opcode_list };
 #undef X
 
-#define js_operand_type_list                                                   \
-    X(opd_undefined) /* 0 byte, internal use, for default exception value */   \
-    X(opd_null) /* 0 byte */                                                   \
-    X(opd_empty_array) /* 0 byte */                                            \
-    X(opd_empty_object) /* 0 byte */                                           \
-    X(opd_boolean) /* 1 byte */                                                \
-    X(opd_uint8) /* internal use, for some enums */                            \
-    X(opd_uint16) /* internal use */                                           \
-    X(opd_uint32) /* internal use */                                           \
+#define js_operand_type_list \
+    X(opd_undefined) /* 0 byte, internal use, for default exception value */ \
+    X(opd_null) /* 0 byte */ \
+    X(opd_empty_array) /* 0 byte */ \
+    X(opd_empty_object) /* 0 byte */ \
+    X(opd_boolean) /* 1 byte */ \
+    X(opd_uint8) /* internal use, for some enums */ \
+    X(opd_uint16) /* internal use */ \
+    X(opd_uint32) /* internal use */ \
     X(opd_double) /* in msvc "long double" is also 64 bit, so not supported */ \
-    X(opd_inscription) /* length(u32), ...bytes */                             \
+    X(opd_inscription) /* length(u32), ...bytes */ \
     X(opd_function) /* ingress(u32) */
 
 #define X(name) name,
 enum js_operand_type { js_operand_type_list };
 #undef X
 
+#pragma pack(push, 1)
 struct js_bytecode {
     uint8_t *base;
     uint32_t length;
     uint32_t capacity;
 };
+#pragma pack(pop)
 
+#pragma pack(push, 1)
 struct js_cross_reference { // source line -> instruction offset, may be NULL if direct run from bytecode
     uint32_t *base;
     uint32_t length;
     uint32_t capacity;
 };
+#pragma pack(pop)
 
 // merge call stack and eval stack together
 // sf_loop is to fit all loops' 'break' 'continue' and 'for' loop's 'let' local scope
 #define js_stack_frame_type_list \
-    X(sf_value)                  \
-    X(sf_function)               \
-    X(sf_try)                    \
-    X(sf_block)                  \
+    X(sf_value) \
+    X(sf_function) \
+    X(sf_try) \
+    X(sf_block) \
     X(sf_loop)
 
 #define X(name) name,
 enum js_stack_frame_type { js_stack_frame_type_list };
 #undef X
 
+#pragma pack(push, 1)
 struct js_stack_frame {
     uint8_t type;
     union {
@@ -137,8 +142,10 @@ struct js_stack_frame {
         };
     };
 };
+#pragma pack(pop)
 
 // DON'T seperate bytecode and cross_reference outside this structure, because exception handling need these informations
+#pragma pack(push, 1)
 struct js_vm {
     struct js_bytecode bytecode;
     struct js_cross_reference cross_reference;
@@ -161,6 +168,7 @@ struct js_vm {
     } stack;
     uint32_t pc; // program counter, next instruction offset
 };
+#pragma pack(pop)
 
 shared void js_put_instruction(struct js_bytecode *, uint32_t *, uint8_t, uint8_t, ...);
 shared void js_add_instruction(struct js_bytecode *, uint8_t, uint8_t, ...);

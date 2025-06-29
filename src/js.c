@@ -89,29 +89,29 @@ static void _add_globals(struct js_vm *vm) {
     js_variable_declare_sz(vm, "length", js_c_function(_length));
 }
 
-#define _fread(__arg_fname, __arg_mode, __arg_base, __arg_len, __arg_cap)                \
-    do {                                                                                 \
-        FILE *__fp = fopen(__arg_fname, __arg_mode);                                     \
-        if (__fp == NULL) {                                                              \
-            fatal("Cannot open \"%s\"", __arg_fname);                                    \
-        }                                                                                \
-        fseek(__fp, 0, SEEK_END);                                                        \
-        typeof(__arg_len) __fsize = (typeof(__arg_len))ftell(__fp);                      \
-        enforce(__fsize >= 0);                                                           \
-        fseek(__fp, 0, SEEK_SET);                                                        \
-        buffer_alloc(__arg_base, __arg_len, __arg_cap, __arg_len + __fsize);             \
+#define _fread(__arg_fname, __arg_mode, __arg_base, __arg_len, __arg_cap) \
+    do { \
+        FILE *__fp = fopen(__arg_fname, __arg_mode); \
+        if (__fp == NULL) { \
+            fatal("Cannot open \"%s\"", __arg_fname); \
+        } \
+        fseek(__fp, 0, SEEK_END); \
+        typeof(__arg_len) __fsize = (typeof(__arg_len))ftell(__fp); \
+        enforce(__fsize >= 0); \
+        fseek(__fp, 0, SEEK_SET); \
+        buffer_alloc(__arg_base, __arg_len, __arg_cap, __arg_len + __fsize); \
         __arg_len += (typeof(__arg_len))fread(__arg_base + __arg_len, 1, __fsize, __fp); \
-        fclose(__fp);                                                                    \
+        fclose(__fp); \
     } while (0)
 
 #define _fwrite(__arg_fname, __arg_mode, __arg_base, __arg_len, __arg_cap) \
-    do {                                                                   \
-        FILE *__fp = fopen(__arg_fname, __arg_mode);                       \
-        if (__fp == NULL) {                                                \
-            fatal("Cannot open \"%s\"", __arg_fname);                      \
-        }                                                                  \
-        fwrite(__arg_base, 1, __arg_len, __fp);                            \
-        fclose(__fp);                                                      \
+    do { \
+        FILE *__fp = fopen(__arg_fname, __arg_mode); \
+        if (__fp == NULL) { \
+            fatal("Cannot open \"%s\"", __arg_fname); \
+        } \
+        fwrite(__arg_base, 1, __arg_len, __fp); \
+        fclose(__fp); \
     } while (0)
 
 static void _freadln(FILE *fp, struct js_source *line) {
@@ -274,25 +274,25 @@ int _help(char *arg_0) {
 
 #ifndef NOTEST
 
-    #define test_function_list      \
-        X(test_random_sz)           \
-        X(test_random_double)       \
-        X(test_buffer)              \
-        X(test_string_buffer)       \
-        X(test_string_buffer_loop)  \
-        X(test_memmove)             \
+    #define test_function_list \
+        X(test_random_sz) \
+        X(test_random_double) \
+        X(test_buffer) \
+        X(test_string_buffer) \
+        X(test_string_buffer_loop) \
+        X(test_memmove) \
         X(test_data_structure_size) \
-        X(test_js_map)              \
-        X(test_js_map_loop)         \
-        X(test_js_value)            \
-        X(test_js_value_loop)       \
-        X(test_js_value_bug)        \
-        X(test_js_string_family)    \
-        X(test_vm_structure_size)   \
+        X(test_js_map) \
+        X(test_js_map_loop) \
+        X(test_js_value) \
+        X(test_js_value_loop) \
+        X(test_js_value_bug) \
+        X(test_js_string_family) \
+        X(test_vm_structure_size) \
         X(test_instruction_get_put) \
-        X(test_vm_run)              \
-        X(test_lexer)               \
-        X(test_parser)              \
+        X(test_vm_run) \
+        X(test_lexer) \
+        X(test_parser) \
         X(test_c_function)
 
     #define X(name) #name,
@@ -336,8 +336,8 @@ int main(int argc, char *argv[]) {
         return _repl();
     }
     enum { t_bytecode,
-           t_source,
-           t_xref
+        t_source,
+        t_xref
     } file_type = t_source;
     struct {
         char **base;
@@ -347,8 +347,8 @@ int main(int argc, char *argv[]) {
     char *bytecode_filename = NULL;
     char *xref_filename = NULL;
     enum { a_compile,
-           a_run,
-           a_unassemble
+        a_run,
+        a_unassemble
     } action = a_run;
     bool optimize = false;
     for (int i = 1; i < argc; i++) {

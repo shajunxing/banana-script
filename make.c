@@ -40,14 +40,16 @@ char *ld = NULL;
         free(cmd);                                                          \
     } while (0)
 
-#define link_executable(exe_file, obj_file)                                                                     \
-    do {                                                                                                        \
-        char *cmd =                                                                                             \
-            compiler == msvc                                                                                    \
-                ? concat(ld, " /nodefaultlib /out:", exe_file, " ", obj_file, " ", lib_file, msvc_nodefaultlib) \
-                : concat(ld, " -o ", exe_file, " ", obj_file, " -L", bin_dir, " -l:", dll_file_name);           \
-        async(cmd);                                                                                             \
-        free(cmd);                                                                                              \
+#define link_executable(exe_file, obj_file)                                   \
+    do {                                                                      \
+        char *cmd =                                                           \
+            compiler == msvc                                                  \
+                ? concat(ld, " /nodefaultlib /out:", exe_file, " ", obj_file, \
+                         " ", lib_file, msvc_nodefaultlib)                    \
+                : concat(ld, " -o ", exe_file, " ", obj_file,                 \
+                         " -L", bin_dir, " -l:", dll_file_name);              \
+        async(cmd);                                                           \
+        free(cmd);                                                            \
     } while (0)
 
 #define e(__arg_base) (bin_dir __arg_base exeext)
@@ -102,8 +104,9 @@ void cleanup(const char *dir, const char *base, const char *ext) {
     }
 }
 
+// DON'T use global pack option such as '/Zp', see banana-ui's make.c for explanation
 #if compiler == msvc
-    #define cc_debug "cl /nologo /c /W3 /MD /Zp /utf-8 /std:clatest" // "/Zp" means #pragma pack(1)
+    #define cc_debug "cl /nologo /c /W3 /MD /utf-8 /std:clatest" // "/Zp" means #pragma pack(1), DON'T use it
     #define cc_release cc_debug " /O2 /DNOLOGINFO /DNOTEST"
     #define ld_release "link /nologo /incremental:no" // LINK : xxx not found or not built by the last incremental link; performing full link
     #define ld_debug ld_release " /debug"

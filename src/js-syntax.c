@@ -64,14 +64,14 @@ static enum js_token_state _match_keyword(const char *identitier, size_t identif
     return ts_identifier;
 }
 
-#define _return_false(__arg_source, __arg_token, __arg_message)                                \
-    do {                                                                                       \
+#define _return_false(__arg_source, __arg_token, __arg_message) \
+    do { \
         log_warning("%u-%u:%u-%u:%s:%.*s: %s", __arg_token->head_line, __arg_token->tail_line, \
-                    __arg_token->head_offset, __arg_token->tail_offset,                        \
-                    _token_state_names[__arg_token->state],                                    \
-                    _token_length(__arg_token), _token_head(__arg_source, __arg_token),        \
-                    __arg_message);                                                            \
-        return false;                                                                          \
+            __arg_token->head_offset, __arg_token->tail_offset, \
+            _token_state_names[__arg_token->state], \
+            _token_length(__arg_token), _token_head(__arg_source, __arg_token), \
+            __arg_message); \
+        return false; \
     } while (0)
 
 static bool _get_token_unfiltered(struct js_source *source, struct js_token *token /* out */) {
@@ -79,32 +79,32 @@ static bool _get_token_unfiltered(struct js_source *source, struct js_token *tok
     ((__arg_ch >= 'a' && __arg_ch <= 'z') || (__arg_ch >= 'A' && __arg_ch <= 'Z') || (__arg_ch == '_'))
 #define __is_identifier_rest_characters(__arg_ch) \
     (__is_identifier_first_character(__arg_ch) || (__arg_ch >= '0' && __arg_ch <= '9'))
-#define __reset_token_number()       \
-    do {                             \
-        token->integer = 0;          \
-        token->fraction = 0;         \
+#define __reset_token_number() \
+    do { \
+        token->integer = 0; \
+        token->fraction = 0; \
         token->fraction_depth = 0.1; \
-        token->exponent_sign = 1;    \
-        token->exponent = 0;         \
+        token->exponent_sign = 1; \
+        token->exponent = 0; \
     } while (0)
 #define __char_to_digit(__arg_ch) (__arg_ch - '0')
-#define __accumulate_token_number_integer(__arg_ch)                       \
-    do {                                                                  \
+#define __accumulate_token_number_integer(__arg_ch) \
+    do { \
         token->integer = token->integer * 10 + __char_to_digit(__arg_ch); \
     } while (0)
-#define __accumulate_token_number_fraction(__arg_ch)                                           \
-    do {                                                                                       \
+#define __accumulate_token_number_fraction(__arg_ch) \
+    do { \
         token->fraction = token->fraction + __char_to_digit(__arg_ch) * token->fraction_depth; \
-        token->fraction_depth *= 0.1;                                                          \
+        token->fraction_depth *= 0.1; \
     } while (0)
-#define __accumulate_token_number_exponent(__arg_ch)                        \
-    do {                                                                    \
+#define __accumulate_token_number_exponent(__arg_ch) \
+    do { \
         token->exponent = token->exponent * 10 + __char_to_digit(__arg_ch); \
     } while (0)
 // must include math.h, or pow() result is 0
-#define __calculate_token_number()                                                                  \
-    do {                                                                                            \
-        token->number =                                                                             \
+#define __calculate_token_number() \
+    do { \
+        token->number = \
             (token->integer + token->fraction) * pow(10.0, token->exponent_sign * token->exponent); \
     } while (0)
     // use DFA because fit my thinking habits, is simple for me
@@ -587,34 +587,34 @@ static bool _get_token_filtered(struct js_source *source, struct js_token *token
     return success;
 }
 
-#define _try(__arg_expression)     \
-    do {                           \
+#define _try(__arg_expression) \
+    do { \
         if (!(__arg_expression)) { \
-            return false;          \
-        }                          \
+            return false; \
+        } \
     } while (0);
 
-#define _next_token(__arg_source, __arg_token)              \
-    do {                                                    \
-        typeof(__arg_token) __token = (__arg_token);        \
+#define _next_token(__arg_source, __arg_token) \
+    do { \
+        typeof(__arg_token) __token = (__arg_token); \
         _try(_get_token_filtered((__arg_source), __token)); \
     } while (0)
 
 // use macro instead of  function, to correctly record error position
-#define _expect(__arg_source, __arg_token, __arg_state)                   \
-    do {                                                                  \
-        typeof(__arg_token) __token = (__arg_token);                      \
-        if (__token->state == (__arg_state)) {                            \
-            _next_token(__arg_source, __arg_token);                       \
-        } else {                                                          \
+#define _expect(__arg_source, __arg_token, __arg_state) \
+    do { \
+        typeof(__arg_token) __token = (__arg_token); \
+        if (__token->state == (__arg_state)) { \
+            _next_token(__arg_source, __arg_token); \
+        } else { \
             _return_false(__arg_source, __token, "Expect " #__arg_state); \
-        }                                                                 \
+        } \
     } while (0)
 
-#define _add_instruction(token, bytecode, xref, ...)                      \
-    do {                                                                  \
+#define _add_instruction(token, bytecode, xref, ...) \
+    do { \
         js_add_cross_reference(xref, token->head_line, bytecode->length); \
-        js_add_instruction(bytecode, ##__VA_ARGS__);                      \
+        js_add_instruction(bytecode, ##__VA_ARGS__); \
     } while (0)
 
 static bool _parse_statement(struct js_source *, struct js_token *, struct js_bytecode *, struct js_cross_reference *, uint32_t, uint32_t);
@@ -780,20 +780,22 @@ static bool _parse_value(struct js_source *source, struct js_token *token, struc
 }
 
 #define _accessor_type_list \
-    X(at_value)             \
-    X(at_identifier)        \
-    X(at_member_access)     \
+    X(at_value) \
+    X(at_identifier) \
+    X(at_member_access) \
     X(at_optional_chaining)
 
 #define X(name) name,
 enum _accessor_type { _accessor_type_list };
 #undef X
 
+#pragma pack(push, 1)
 struct _accessor {
     enum _accessor_type type;
     char *identifier_head;
     uint32_t identifier_length;
 };
+#pragma pack(pop)
 
 static bool _accessor_put(struct js_source *source, struct js_token *token, struct js_bytecode *bytecode, struct js_cross_reference *xref, struct _accessor acc) {
     switch (acc.type) {
@@ -1182,8 +1184,8 @@ static bool _parse_statement(struct js_source *source, struct js_token *token, s
     uint32_t d0, d1, d2, d3, d4, d5, d6, d7;
     // struct _parser_state s0, s1;
     enum { classic_for,
-           for_in,
-           for_of } for_type;
+        for_in,
+        for_of } for_type;
     struct _accessor acc;
     // log_info("%u:%u:%.*s", token->head_line, token->tail_line, _token_length(token), _token_head(source, token));
     if (token->state == ts_semicolon) {

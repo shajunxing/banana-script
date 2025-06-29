@@ -84,120 +84,120 @@ You should have received a copy of the GNU General Public License along with thi
         printf("ERROR %s:%d:%s: " __arg_format "\n", __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 #endif
 
-#define fatal(__arg_format, ...)                                \
-    do {                                                        \
+#define fatal(__arg_format, ...) \
+    do { \
         log_error("Fatal error: " __arg_format, ##__VA_ARGS__); \
-        exit(EXIT_FAILURE);                                     \
+        exit(EXIT_FAILURE); \
     } while (0)
 
-#define enforce(__arg_condition)                               \
-    do {                                                       \
-        if (!(__arg_condition)) {                              \
+#define enforce(__arg_condition) \
+    do { \
+        if (!(__arg_condition)) { \
             fatal("Enforcement failed: %s", #__arg_condition); \
-        }                                                      \
+        } \
     } while (0)
 
 #define alloc(__arg_type, __arg_length) ((__arg_type *)calloc((__arg_length), sizeof(__arg_type)))
 
 // buffer's capacity is always pow of 2
-#define buffer_alloc(__arg_base, __arg_length, __arg_capacity, __arg_required_capacity)                                    \
-    do {                                                                                                                   \
-        typeof(__arg_required_capacity) __reqcap = (__arg_required_capacity);                                              \
-        if (__reqcap > (__arg_capacity)) {                                                                                 \
-            typeof(__arg_capacity) __newcap = 1;                                                                           \
-            for (__newcap = (__arg_capacity) == 0 ? 1 : (__arg_capacity); __reqcap > __newcap; __newcap <<= 1) {           \
-                enforce(__newcap > 0);                                                                                     \
-            }                                                                                                              \
-            if (__arg_base) {                                                                                              \
-                (__arg_base) = (typeof(__arg_base))realloc((__arg_base), __newcap * sizeof(typeof(*(__arg_base))));        \
-                enforce((__arg_base) != NULL);                                                                             \
+#define buffer_alloc(__arg_base, __arg_length, __arg_capacity, __arg_required_capacity) \
+    do { \
+        typeof(__arg_required_capacity) __reqcap = (__arg_required_capacity); \
+        if (__reqcap > (__arg_capacity)) { \
+            typeof(__arg_capacity) __newcap = 1; \
+            for (__newcap = (__arg_capacity) == 0 ? 1 : (__arg_capacity); __reqcap > __newcap; __newcap <<= 1) { \
+                enforce(__newcap > 0); \
+            } \
+            if (__arg_base) { \
+                (__arg_base) = (typeof(__arg_base))realloc((__arg_base), __newcap * sizeof(typeof(*(__arg_base)))); \
+                enforce((__arg_base) != NULL); \
                 memset((__arg_base) + (__arg_capacity), 0, (__newcap - (__arg_capacity)) * sizeof(typeof(*(__arg_base)))); \
-            } else {                                                                                                       \
-                (__arg_base) = (typeof(__arg_base))alloc(typeof(*(__arg_base)), __newcap);                                 \
-                enforce((__arg_base) != NULL);                                                                             \
-            }                                                                                                              \
-            (__arg_capacity) = __newcap;                                                                                   \
-        }                                                                                                                  \
+            } else { \
+                (__arg_base) = (typeof(__arg_base))alloc(typeof(*(__arg_base)), __newcap); \
+                enforce((__arg_base) != NULL); \
+            } \
+            (__arg_capacity) = __newcap; \
+        } \
     } while (0)
 
 // NULL pointer can be safely passed to free()
 // https://en.cppreference.com/w/c/memory/free
 #define buffer_free(__arg_base, __arg_length, __arg_capacity) \
-    do {                                                      \
-        free(__arg_base);                                     \
-        (__arg_base) = NULL;                                  \
-        (__arg_length) = 0;                                   \
-        (__arg_capacity) = 0;                                 \
+    do { \
+        free(__arg_base); \
+        (__arg_base) = NULL; \
+        (__arg_length) = 0; \
+        (__arg_capacity) = 0; \
     } while (0)
 
 // DON'T surround '__arg_type' with parentheses, or will get "syntax error : ')'"
-#define buffer_push(__arg_base, __arg_length, __arg_capacity, __arg_value)      \
-    do {                                                                        \
-        typeof(__arg_length) __newlen = (__arg_length) + 1;                     \
+#define buffer_push(__arg_base, __arg_length, __arg_capacity, __arg_value) \
+    do { \
+        typeof(__arg_length) __newlen = (__arg_length) + 1; \
         buffer_alloc((__arg_base), (__arg_length), (__arg_capacity), __newlen); \
-        (__arg_base)[(__arg_length)] = __arg_value;                             \
-        (__arg_length) = __newlen;                                              \
+        (__arg_base)[(__arg_length)] = __arg_value; \
+        (__arg_length) = __newlen; \
     } while (0)
 
 #define buffer_put(__arg_base, __arg_length, __arg_capacity, __arg_index, __arg_value) \
-    do {                                                                               \
-        typeof(__arg_index) __newlen = (__arg_index) + 1;                              \
-        if (__newlen > (__arg_length)) {                                               \
-            buffer_alloc((__arg_base), (__arg_length), (__arg_capacity), __newlen);    \
-            (__arg_length) = __newlen;                                                 \
-        }                                                                              \
-        (__arg_base)[(__arg_index)] = __arg_value;                                     \
+    do { \
+        typeof(__arg_index) __newlen = (__arg_index) + 1; \
+        if (__newlen > (__arg_length)) { \
+            buffer_alloc((__arg_base), (__arg_length), (__arg_capacity), __newlen); \
+            (__arg_length) = __newlen; \
+        } \
+        (__arg_base)[(__arg_index)] = __arg_value; \
     } while (0)
 
 // use "clear" instead of "empty", to avoid conflit meaning "is empty", refer C++ string
-#define buffer_clear(__arg_base, __arg_length, __arg_capacity)                     \
-    do {                                                                           \
+#define buffer_clear(__arg_base, __arg_length, __arg_capacity) \
+    do { \
         memset((__arg_base), 0, (__arg_capacity) * sizeof(typeof(*(__arg_base)))); \
-        (__arg_length) = 0;                                                        \
+        (__arg_length) = 0; \
     } while (0)
 
 // https://stackoverflow.com/questions/2524611/how-can-one-print-a-size-t-variable-portably-using-the-printf-family
-#define buffer_dump(__arg_base, __arg_length, __arg_capacity)                     \
-    do {                                                                          \
-        typeof(__arg_base) __base = (__arg_base);                                 \
-        typeof(__arg_length) __len = (__arg_length);                              \
-        typeof(__arg_capacity) __cap = (__arg_capacity);                          \
+#define buffer_dump(__arg_base, __arg_length, __arg_capacity) \
+    do { \
+        typeof(__arg_base) __base = (__arg_base); \
+        typeof(__arg_length) __len = (__arg_length); \
+        typeof(__arg_capacity) __cap = (__arg_capacity); \
         printf(#__arg_base "=%p " #__arg_length "=%zu " #__arg_capacity "=%zu\n", \
-               __base, (uint64_t)__len, (uint64_t)__cap);                         \
-        print_hex(__base, __len * sizeof(typeof(*(__arg_base))));                 \
+            __base, (uint64_t)__len, (uint64_t)__cap); \
+        print_hex(__base, __len * sizeof(typeof(*(__arg_base)))); \
     } while (0)
 
 #define buffer_for_each(__arg_base, __arg_length, __arg_capacity, __arg_i, __arg_v, __arg_block) \
-    do {                                                                                         \
-        typeof(__arg_base) __base = (__arg_base);                                                \
-        typeof(__arg_length) __len = (__arg_length);                                             \
-        for (typeof(__len) __arg_i = 0; __arg_i < __len; __arg_i++) {                            \
-            typeof(__arg_base) __arg_v = __base + __arg_i;                                       \
-            __arg_block;                                                                         \
-        }                                                                                        \
+    do { \
+        typeof(__arg_base) __base = (__arg_base); \
+        typeof(__arg_length) __len = (__arg_length); \
+        for (typeof(__len) __arg_i = 0; __arg_i < __len; __arg_i++) { \
+            typeof(__arg_base) __arg_v = __base + __arg_i; \
+            __arg_block; \
+        } \
     } while (0)
 
 #define string_buffer_clear(__arg_base, __arg_length, __arg_capacity) buffer_clear((__arg_base), (__arg_length), (__arg_capacity))
 
-#define string_buffer_append(__arg_base, __arg_length, __arg_capacity, __arg_str, __arg_len)       \
-    do {                                                                                           \
-        typeof(__arg_length) __len = (__arg_length);                                               \
-        typeof(__arg_length) __newlen = __len + (typeof(__arg_length))(__arg_len);                 \
+#define string_buffer_append(__arg_base, __arg_length, __arg_capacity, __arg_str, __arg_len) \
+    do { \
+        typeof(__arg_length) __len = (__arg_length); \
+        typeof(__arg_length) __newlen = __len + (typeof(__arg_length))(__arg_len); \
         /* TODO: Is it necessary to add 1 zero byte in the end? to support no length functions? */ \
-        buffer_alloc((__arg_base), __len, (__arg_capacity), __newlen + 1);                         \
-        memcpy((__arg_base) + __len, (__arg_str), (__arg_len));                                    \
-        (__arg_length) = __newlen;                                                                 \
+        buffer_alloc((__arg_base), __len, (__arg_capacity), __newlen + 1); \
+        memcpy((__arg_base) + __len, (__arg_str), (__arg_len)); \
+        (__arg_length) = __newlen; \
     } while (0)
 
-#define string_buffer_append_sz(__arg_base, __arg_length, __arg_capacity, __arg_str)                \
-    do {                                                                                            \
-        const char *__str = (__arg_str);                                                            \
+#define string_buffer_append_sz(__arg_base, __arg_length, __arg_capacity, __arg_str) \
+    do { \
+        const char *__str = (__arg_str); \
         string_buffer_append((__arg_base), (__arg_length), (__arg_capacity), __str, strlen(__str)); \
     } while (0)
 
-#define string_buffer_append_ch(__arg_base, __arg_length, __arg_capacity, __arg_ch)     \
-    do {                                                                                \
-        char __ch = (__arg_ch);                                                         \
+#define string_buffer_append_ch(__arg_base, __arg_length, __arg_capacity, __arg_ch) \
+    do { \
+        char __ch = (__arg_ch); \
         string_buffer_append((__arg_base), (__arg_length), (__arg_capacity), &__ch, 1); \
     } while (0)
 
