@@ -33,7 +33,6 @@
 // let v = !true;
 // let w = typeof null;
 // let x = typeof w; // vt_scripture
-// let y = typeof k; // vt_inscription
 // let z = typeof j; // vt_string
 // let complex_expr1 = 1 + 2 * 3 < -(-((1 + 2) * 3)) && (!false);
 // let complex_expr2 = 1 + 2 * 3 ** 2 ** 2;
@@ -46,7 +45,11 @@
 // let complex_obj = {"foo" : [ null, true, false, {hello : [ obj, -2, k1 + k2, k3 * 1.1 * 3, -4.4, 5e2, -6e-2, 7.7e3, -8.8e-4, !false ]} ]};
 
 // test accessor
-let acc_1 = [ {foo : {"bar" : "hello"}} ];
-let acc_2 = [ {foo : {}}, 3 ];
-acc_2[0]["foo"].bar = acc_1[0]["foo"]?.bar;
-acc_2[1] **= 3;
+// let acc_1 = [ {foo : {"bar" : "hello"}} ];
+// let acc_2 = [ {foo : {}}, 3 ];
+// acc_2[0]["foo"].bar = acc_1[0]["foo"]?.bar;
+// acc_2[1] **= 3;
+
+// test op_ternary wrongly run both sides of ':'
+let a = null;
+print(a == null ? "Hello" : "Hello, " + a);

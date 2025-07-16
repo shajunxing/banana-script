@@ -20,7 +20,7 @@
 
 变量声明使用 `let`，所有变量都是局部变量，不支持 `const`，因为一切都必须可删除。访问未声明的变量会引发错误，访问数组/对象不存在的成员会返回 `null`，写入`null`则为删除对应成员。
 
-函数定义支持默认参数 `param = value` 和剩余参数 `...params`。数组字面量和函数调用支持展开语法 `...`，不会跳过`null`成员。函数中没有 预定义的成员比如`this` `arguments`。`return` 如果在函数外部，意为退出虚拟机。
+函数定义支持默认参数 `param = value` 和剩余参数 `...args`。数组字面量和函数调用支持展开语法 `...`，不会跳过`null`成员。函数中没有 预定义的成员比如`this` `arguments`。`return` 如果在函数外部，意为退出虚拟机。
 
 运算符遵循严格规则，没有隐式转换。只有布尔值可以进行逻辑运算。`== !=` 是严格意义上的比较，可以应用于所有类型。字符串支持所有关系运算符和 `+`。数字支持所有关系和数值运算符。运算符的优先级从低到高为：
 
@@ -60,22 +60,25 @@
 项目遵循“最小依赖”原则，只包含必须的头文件，且模块之间只有单向引用，没有循环引用。模块的功能和依赖关系如下：
 
 ```
-    js-common   js-data     js-vm       js-syntax
+    js-common   js-data     js-vm       js-syntax   js-std
         <-----------
-                    <-----------
-                                <-----------
         <-----------------------
+                    <-----------
         <-----------------------------------
+                                <-----------
+        <-----------------------------------------------
+                                <-----------------------
 ```
 
 - `js-common`： 项目通用的常量、宏定义和函数，例如日志打印、内存读写
 - `js-data`：数值类型和垃圾回收，你甚至可以在C项目里单独使用该模块操作带GC功能的高级数据结构，参见 <https://github.com/shajunxing/banana-cvar>
 - `js-vm`：字节码虚拟机，单独编译可得到不带源代码解析功能的最小足迹的解释器
 - `js-syntax`：词法解析和语法解析，将源代码转化为字节码
+- `js-std`：一些常用标准函数的参考实现，注意只是用作编写C函数的参考，不保证将来会变，具体用法可参考我的另一个项目 <https://github.com/shajunxing/view-comic-here>
 
 所有值都是 `struct js_value` 类型，你可以通过 `js_xxx()` 函数创建，`xxx` 是值类型，你可以直接从这个结构体中读取 C 值，参见 `js_data.h` 中的定义。创建的值遵循垃圾回收规则。不要直接修改它们，如果你想得到不同的值，就创建新值。复合类型 `array` `object` 可以通过 `js_array_xxx()` `js_object_xxx()` 函数进行操作。
 
-C 函数必须是 `struct js_result (*)(struct js_vm *)` 格式，使用 `js_c_function()` 来创建 C 函数值，是的，当然它们都是值，可以放在任何地方，例如，如果使用 `js_variable_declare()` 放在堆栈根上，它们就是全局的。`struct js_result` 有两个成员，如果 `.success` 是 true, `.value` 就是返回值, 如果 false, `.value` 将会被 `catch` 接收，如果 `try catch` 存在的话。C函数同样也可以使用 `js_call()`调用脚本函数。在C函数内部，使用`js_parameter_base()` `js_parameter_length()` `js_parameter_get()`函数获取传入参数。
+C 函数必须是 `struct js_result (*)(struct js_vm *)` 格式，使用 `js_c_function()` 来创建 C 函数值，是的，当然它们都是值，可以放在任何地方，例如，如果使用 `js_declare_variable()` 放在堆栈根上，它们就是全局的。`struct js_result` 有两个成员，如果 `.success` 是 true, `.value` 就是返回值, 如果 false, `.value` 将会被 `catch` 接收，如果 `try catch` 存在的话。C函数同样也可以使用 `js_call()`调用脚本函数。在C函数内部，使用`js_get_arguments_base()` `js_get_arguments_length()` `js_get_argument()`函数获取传入参数。
 
 ## 其它详见英文版
 

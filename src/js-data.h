@@ -11,23 +11,22 @@ You should have received a copy of the GNU General Public License along with thi
 #ifndef JS_DATA_H
 #define JS_DATA_H
 
-#include <stdbool.h>
-#include <stdint.h>
 #include "js-common.h"
 
 // vt_undefined is used to distinguish between variable not exists and it's value is null, never return to user
+// remove 'inscription' string type, which is harmful, useless complexity, and i wan't strings always null terminated, or so many stdlib functions require null terminated string as argument will need to extra duplication and free operations, too complicated.
 #define js_value_type_list \
     X(vt_undefined) /* 0 always means empty initial state  */ \
     X(vt_null) \
     X(vt_boolean) \
     X(vt_number) \
-    X(vt_scripture) /* constant string from c string literal, permently exists */ \
-    X(vt_inscription) /* constant string from js source code, identifier or string literal */ \
+    X(vt_scripture) /* c string literal, always exists and null terminated */ \
     X(vt_string) /*managed  */ \
     X(vt_array) /* managed */ \
     X(vt_object) /* managed */ \
     X(vt_function) /* managed */ \
-    X(vt_c_function)
+    X(vt_c_function) \
+    X(vt_c_value) /* managed */
 
 #define X(name) name,
 enum js_value_type { js_value_type_list };
@@ -45,13 +44,8 @@ struct js_value {
             char *base;
             uint32_t length;
         } scripture;
-        struct {
-            uint8_t **base; // may be reallocated, so store pointer address
-            uint32_t offset; // may be reallocated, so store offset
-            uint32_t length;
-        } inscription;
         struct js_managed_value *managed; // string, array, object, function
-        void *c_function; // for module isolation, DON'T typedef here
+        void *c_function; // for source code module isolation, DON'T typedef
     };
 };
 #pragma pack(pop)
@@ -68,7 +62,7 @@ struct js_kv_pair {
 #pragma pack(pop)
 
 #pragma pack(push, 1)
-struct js_variable_map { // for globals, locals, parameters, closure, use uint16_t instead of size_t
+struct js_variable_map { // for globals, locals, arguments, closure, use uint16_t instead of size_t
     struct js_kv_pair *base;
     uint16_t length;
     uint16_t capacity;
@@ -94,11 +88,16 @@ struct js_managed_value {
             struct js_kv_pair *base;
             size_t length;
             size_t capacity;
-        } object; // TODO: Add "last visited"? or in higher level such as js_variable_get?
+        } object; // TODO: Add "last visited"? or in higher level such as js_get_variable?
         struct {
             uint32_t ingress; // Caution: egress is NOT fixed
             struct js_variable_map closure;
         } function;
+        struct {
+            void *data;
+            void (*mark)(void *); // this function pointer can also be used to verify data type
+            void (*sweep)(void *); // this function pointer can also be used to verify data type
+        } c_value;
     };
 };
 #pragma pack(pop)
@@ -169,14 +168,14 @@ shared struct js_value js_map_get_sz(struct js_kv_pair *, size_t, size_t, const 
         } \
         buffer_free(__arg_base, __arg_length, __arg_capacity); \
     } while (0)
+// TODO: unify all js_value * parameters to js_value? is it necessary?
 shared struct js_value js_null();
 shared struct js_value js_boolean(bool);
 shared struct js_value js_number(double);
-shared struct js_value js_scripture(const char *, uint32_t);
 shared struct js_value js_scripture_sz(const char *);
-shared struct js_value js_inscription(uint8_t **, uint32_t, uint32_t);
 shared struct js_value js_string(struct js_heap *, const char *, size_t);
 shared struct js_value js_string_sz(struct js_heap *, const char *);
+shared struct js_value js_string_f(struct js_heap *, const char *, ...);
 shared struct js_value js_array(struct js_heap *);
 shared void js_array_push(struct js_value *, struct js_value);
 shared void js_array_put(struct js_value *, size_t, struct js_value);
@@ -187,27 +186,40 @@ shared void js_object_put_sz(struct js_value *, const char *, struct js_value);
 shared struct js_value js_object_get(struct js_value *, const char *, uint16_t);
 shared struct js_value js_object_get_sz(struct js_value *, const char *);
 shared struct js_value js_function(struct js_heap *, uint32_t);
-shared struct js_value js_c_function(void *);
+shared bool js_is_function(struct js_value *);
+shared struct js_value js_c_value(struct js_heap *, void *, void (*)(void *), void (*)(void *));
 shared void js_mark(struct js_value *);
 shared void js_sweep(struct js_heap *);
 shared void js_managed_value_dump(struct js_managed_value *);
 shared void js_value_dump(struct js_value *);
 shared void js_value_print(struct js_value *);
 shared bool js_is_string(struct js_value *);
-shared char *js_string_base(struct js_value *);
+shared char *js_string_base(struct js_value *); // Caution: No guarantee it ends with 0
 shared size_t js_string_length(struct js_value *);
 shared int js_string_compare(struct js_value *, struct js_value *);
+// Caution: '()' must be added in following macros
+#define js_return(__arg_value) \
+    return ((struct js_result){.success = true, .value = (__arg_value)})
+#define js_throw(__arg_value) \
+    return ((struct js_result){.success = false, .value = (__arg_value)})
+#define js_assert(__arg_expr) \
+    do { \
+        if (!(__arg_expr)) { \
+            js_throw(js_scripture_sz("Assertion failed: " #__arg_expr)); \
+        } \
+    } while (0)
 shared struct js_result js_add(struct js_heap *, struct js_value *, struct js_value *);
 
-#ifndef NOTEST
+#ifdef DEBUG
 
-shared int test_data_structure_size(int, char *[]);
-shared int test_js_map(int, char *[]);
-shared int test_js_map_loop(int, char *[]);
-shared int test_js_value(int, char *[]);
-shared int test_js_value_loop(int, char *[]);
-shared int test_js_value_bug(int, char *[]);
-shared int test_js_string_family(int, char *[]);
+shared void test_data_structure_size();
+shared void test_js_map();
+shared void test_js_map_loop();
+shared void test_js_value();
+shared void test_js_value_loop();
+shared void test_js_value_bug();
+shared void test_js_string_family();
+shared void test_js_string_f();
 
 #endif
 

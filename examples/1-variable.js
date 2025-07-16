@@ -17,4 +17,18 @@
 // delete b;
 
 // test unexisted identifier
-leti;
+// leti;
+
+// test variable scope
+// {
+//     if (true)
+//         let i = 10;
+//     console.log(i);
+// }
+
+// test string escape
+print("\'\"\?\\\a\b\f\n\r\t\v\u1234");
+let o = {"\'\"\?\\\a\b\f\n\r\t\v\u1234": "Hi"};
+for (let k in o) {
+    print(k, o[k]);
+}

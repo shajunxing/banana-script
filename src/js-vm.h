@@ -13,32 +13,32 @@ You should have received a copy of the GNU General Public License along with thi
 
 #include "js-data.h"
 
-// opcodes order is my programming implementation order
+// sorted by my programming implementation order
 // first implement hardest function call and exception handling
 #define js_opcode_list \
     X(op_nop) /* 0 */ \
     X(op_stack_push) /* vary, frame_type, ... */ \
     X(op_stack_pop) /* 1, uint8 */ \
-    X(op_variable_declare) /* 1, inscription */ \
-    X(op_variable_delete) /* 1, inscription */ \
-    X(op_variable_put) /* 1, inscription */ \
-    X(op_variable_get) /* 1, inscription */ \
+    X(op_variable_declare) /* 1, string */ \
+    X(op_variable_delete) /* 1, string */ \
+    X(op_variable_put) /* 1, string */ \
+    X(op_variable_get) /* 1, string */ \
     X(op_jump) /* 1, uint32 */ \
-    X(op_parameter_append) /* 0 */ \
+    X(op_argument_append) /* 0 */ \
     X(op_call) /* 0. callee is function/c_function value on stack top */ \
     X(op_return) /* 0 */ \
     /* parameter's default value may be expression, so cannot be put into operand */ \
-    X(op_parameter_first) /* 0 */ \
-    X(op_parameter_get_next) /* 1, inscription */ \
-    X(op_catch) /* 2, inscription, uint32 */ \
+    X(op_argument_first) /* 0 */ \
+    X(op_argument_get_next) /* 1, string */ \
+    X(op_catch) /* 2, string, uint32 */ \
     X(op_throw) /* 0 */ \
     X(op_member_put) /* 0 */ \
     X(op_member_get) /* 0 */ \
     X(op_array_append) /* 0 */ \
     X(op_array_spread) /* 0 */ \
     X(op_object_optional) /* 0 */ \
-    X(op_parameter_spread) /* 0 */ \
-    X(op_parameter_get_rest) /* 1, inscription */ \
+    X(op_argument_spread) /* 0 */ \
+    X(op_argument_get_rest) /* 1, string */ \
     X(op_add) /* 0 */ \
     X(op_sub) /* 0 */ \
     X(op_mul) /* 0 */ \
@@ -54,9 +54,9 @@ You should have received a copy of the GNU General Public License along with thi
     X(op_and) /* 0 */ \
     X(op_or) /* 0 */ \
     X(op_not) /* 0 */ \
-    X(op_ternary) /* 0 */ \
+    /* X(op_ternary) 0 */ \
     X(op_typeof) /* 0 */ \
-    X(op_stack_duplicate_value) /* 1, uint8, number is relative position from top to down */ \
+    X(op_stack_dupe) /* 1, uint8, number is relative position from top to down */ \
     X(op_jump_if_false) /* 1, uint32 */ \
     X(op_jump_if_true) /* 1, uint32 */ \
     X(op_break) /* 0 */ \
@@ -78,7 +78,7 @@ enum js_opcode { js_opcode_list };
     X(opd_uint16) /* internal use */ \
     X(opd_uint32) /* internal use */ \
     X(opd_double) /* in msvc "long double" is also 64 bit, so not supported */ \
-    X(opd_inscription) /* length(u32), ...bytes */ \
+    X(opd_string) /* length(u32), ...bytes */ \
     X(opd_function) /* ingress(u32) */
 
 #define X(name) name,
@@ -127,16 +127,16 @@ struct js_stack_frame {
                 struct {
                     // for function and c_function
                     // if function, read ingress and closure from *function
-                    // if c_function, only use parameters. egress and *function won't be filled
-                    // due to parameters support spread syntax, number of them cannot be determined at compile time, so hard to put into stack
-                    // TODO: what if number of rest parameters exceeds UINT16MAX?
+                    // if c_function, only use arguments. egress and *function won't be filled
+                    // due to arguments support spread syntax, number of them cannot be determined at compile time, so hard to put into stack
+                    // TODO: what if number of rest arguments exceeds UINT16MAX?
                     struct js_managed_value *function;
                     struct {
                         struct js_value *base;
                         uint16_t length;
                         uint16_t capacity;
                         uint16_t index; // for parameter's getter operations
-                    } parameters;
+                    } arguments;
                 };
             };
         };
@@ -174,28 +174,32 @@ shared void js_put_instruction(struct js_bytecode *, uint32_t *, uint8_t, uint8_
 shared void js_add_instruction(struct js_bytecode *, uint8_t, uint8_t, ...);
 shared void js_add_cross_reference(struct js_cross_reference *, uint32_t, uint32_t);
 shared void js_bytecode_dump(struct js_bytecode *);
-shared void js_vm_dump(struct js_vm *);
-shared void js_variable_declare(struct js_vm *, const char *, uint16_t, struct js_value);
-shared void js_variable_declare_sz(struct js_vm *, const char *, struct js_value);
-shared void js_variable_delete(struct js_vm *, const char *, uint16_t);
-shared void js_variable_delete_sz(struct js_vm *, const char *);
-shared void js_variable_put(struct js_vm *, const char *, uint16_t, struct js_value);
-shared void js_variable_put_sz(struct js_vm *, const char *, struct js_value);
-shared struct js_value js_variable_get(struct js_vm *, const char *, uint16_t);
-shared struct js_value js_variable_get_sz(struct js_vm *, const char *);
-shared struct js_value *js_parameter_base(struct js_vm *);
-shared uint16_t js_parameter_length(struct js_vm *);
-shared struct js_value js_parameter_get(struct js_vm *, uint16_t);
+shared struct js_result js_vm_dump(struct js_vm *);
+shared struct js_result js_declare_variable(struct js_vm *, const char *, uint16_t, struct js_value);
+shared struct js_result js_declare_variable_sz(struct js_vm *, const char *, struct js_value);
+shared struct js_result js_delete_variable(struct js_vm *, const char *, uint16_t);
+shared struct js_result js_delete_variable_sz(struct js_vm *, const char *);
+shared struct js_result js_put_variable(struct js_vm *, const char *, uint16_t, struct js_value);
+shared struct js_result js_put_variable_sz(struct js_vm *, const char *, struct js_value);
+shared struct js_result js_get_variable(struct js_vm *, const char *, uint16_t);
+shared struct js_result js_get_variable_sz(struct js_vm *, const char *);
+shared struct js_value *js_get_arguments_base(struct js_vm *);
+shared uint16_t js_get_arguments_length(struct js_vm *);
+shared struct js_value js_get_argument(struct js_vm *, uint16_t);
 shared struct js_result js_run(struct js_vm *);
-shared void js_collect_garbage(struct js_vm *);
-shared struct js_result js_call(struct js_vm *, const char *, uint16_t, struct js_value *, uint16_t);
-shared struct js_result js_call_sz(struct js_vm *, const char *, struct js_value *, uint16_t);
+shared struct js_result js_collect_garbage(struct js_vm *);
+shared struct js_result js_call(struct js_vm *, struct js_value, struct js_value *, uint16_t);
+shared struct js_result js_call_by_name(struct js_vm *, const char *, uint16_t, struct js_value *, uint16_t);
+shared struct js_result js_call_by_name_sz(struct js_vm *, const char *, struct js_value *, uint16_t);
+typedef struct js_result (*js_c_function_pointer_type)(struct js_vm *);
+shared struct js_value js_c_function(js_c_function_pointer_type); // move from js-data to clarify function type
+shared void js_free_vm(struct js_vm *);
 
-#ifndef NOTEST
+#ifdef DEBUG
 
-shared int test_vm_structure_size(int, char *[]);
-shared int test_instruction_get_put(int, char *[]);
-shared int test_vm_run(int, char *[]);
+shared void test_vm_structure_size();
+shared void test_instruction_get_put();
+shared void test_vm_run();
 
 #endif
 

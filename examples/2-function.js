@@ -1,4 +1,4 @@
-// test op_parameter_get_next ...
+// test op_argument_get_next ...
 // let params;
 // function foo(a, b = 2, c, d = "?", e = 5, f, ...g) {
 //     params = {"a" : a, "b" : b, "c" : c, "d" : d, "e" : e, "f" : f, "g" : g};
@@ -8,7 +8,7 @@
 // let bar = foo(null, null, ...arr);
 // return 3;
 
-// test null parameter and spread caused undefined
+// test null argument and spread caused undefined
 // print(null, 1, ...[null, 2, null, 3, null], 4, null, 5, null);
 
 // test undefined array hole correctly converted to null
@@ -103,46 +103,73 @@ in banana script, for better performence, only strings, arrays, objects, functio
 // let qux = (function(a = 1) {let b = 2; return foo; })();
 // let quxx = (function(a = 1) {let b = 2; return bar; })();
 
-// test builtin functions
-print(length("foo"));
-print(length([ 1, 2, 3 ]));
-try {
-    print(length());
-} catch (err) {
-    print(err);
-}
-try {
-    print(length(null, true, false));
-} catch (err) {
-    print(err);
-}
-try {
-    print(length(1.2));
-} catch (err) {
-    print(err);
-}
-let obj = {"foo": true, "bar": false};
-print(length(obj));
-obj.qux = 1;
-print(length(obj));
-obj.foo = null;
-print(length(obj));
-obj.bar = null;
-print(length(obj));
-obj.qux = null;
-print(length(obj));
-try {
-    print(input("a", "b", "c", "d"));
-} catch(err) {
-    print(err);
-}
-try {
-    print(input(123));
-} catch(err) {
-    print(err);
-}
-try {
-    print(input("prompt: "));
-} catch(err) {
-    print(err);
-}
+// print(function(a){return a;}(10));
+
+// let b = function(a){return a;};
+// print(b(10));
+
+// https://zhuanlan.zhihu.com/p/1920601495604278753
+// function createFib() {
+//     return function(n, g) {
+//         if (n <= 2)
+//             return 1;
+//         return g(n - 1, g) + g(n - 2, g);
+//     };
+// }
+// let fib = createFib();
+// print(fib(10, fib));
+
+// Variable "fibB" not found
+// function createFib() {
+//     function fibA(n) {
+//         if (n <= 2)
+//             return 1;
+//         return fibB(n - 1) + fibB(n - 2);
+//     }
+//     function fibB(n) {
+//         if (n <= 2)
+//             return 1;
+//         return fibA(n - 1) + fibA(n - 2);
+//     }
+//     return fibA;
+// }
+// let fib = createFib();
+// print(fib(36));
+
+// function createFib() {
+//     let fibs = [];
+//     fibs[0] = function(n) {
+//         if (n <= 2)
+//             return 1;
+//         return fibs[1](n - 1) + fibs[1](n - 2);
+//     };
+//     fibs[1] = function(n) {
+//         if (n <= 2)
+//             return 1;
+//         return fibs[0](n - 1) + fibs[0](n - 2);
+//     };
+//     return fibs[0];
+// }
+// let fib = createFib();
+// console.log(fib(36));
+
+// test whether anonymous function will be gced while in use
+// function foo(f) {
+//     f();
+// }
+// foo(function(){
+//     dump();
+//     gc();
+//     dump();
+// });
+// gc();
+// dump();
+// transponder(function(...args) {
+//     transponder(function(...args) {
+//         print(...args);
+//         dump();
+//         gc();
+//         dump();
+//     }, ...args);
+// }, null, true, 3.14, "hello");
+

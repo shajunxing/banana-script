@@ -145,11 +145,13 @@ struct js_token {
 
 shared bool js_compile(struct js_source *, struct js_token *, struct js_bytecode *, struct js_cross_reference *);
 
-#ifndef NOTEST
+#ifdef DEBUG
 
-shared int test_lexer(int, char *[]);
-shared int test_parser(int, char *[]);
-shared int test_c_function(int, char *[]);
+shared void test_lexer();
+shared void test_parser();
+shared void test_c_function();
+shared void test_unescape_string();
+shared void test_free_vm();
 
 #endif
 

@@ -8,7 +8,6 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <stdlib.h>
 #include "js-data.h"
 
 #define X(name) #name,
@@ -160,7 +159,7 @@ void js_map_put_internal(struct js_kv_pair **base, size_t *length, size_t *capac
     // js_map_dump(*base, *length, *capacity);
     // printf("key=%.*s, value=%s\n", key_length, key, _value_type_names[value.type]);
     bool next_stage = false;
-    struct js_kv_pair *recorded;
+    struct js_kv_pair *recorded = NULL;
     if (!*base) { // first allocate
         buffer_alloc(*base, *length, *capacity, 2);
     }
@@ -280,7 +279,7 @@ struct js_value js_map_get(struct js_kv_pair *base, size_t length, size_t capaci
             return node->value;
         }
     }
-    // log_info("Whole loop ended");
+    // log_debug("Whole loop ended");
     return (struct js_value){0};
 }
 
@@ -310,22 +309,19 @@ struct js_value js_number(double number) {
     return (struct js_value){.type = vt_number, .number = number};
 }
 
-struct js_value js_scripture(const char *base, uint32_t length) {
-    return (struct js_value){.type = vt_scripture, .scripture.base = (char *)base, .scripture.length = length};
-}
-
 struct js_value js_scripture_sz(const char *sz) {
-    return js_scripture(sz, (uint32_t)strlen(sz));
-}
-
-struct js_value js_inscription(uint8_t **base, uint32_t offset, uint32_t length) {
-    return (struct js_value){.type = vt_inscription, .inscription.base = base, .inscription.offset = offset, .inscription.length = length};
+    return (struct js_value){.type = vt_scripture,
+        .scripture.base = (char *)sz,
+        .scripture.length = (uint32_t)strlen(sz)};
 }
 
 struct js_value js_string(struct js_heap *heap, const char *str, size_t slen) {
     struct js_value ret = {.type = vt_string};
     ret.managed = alloc(struct js_managed_value, 1);
     ret.managed->type = vt_string;
+    // make sure string is always not NULL, or in some C lib functions, will cause error
+    ret.managed->string.base = alloc(char, 1);
+    ret.managed->string.capacity = 1;
     string_buffer_append(ret.managed->string.base, ret.managed->string.length, ret.managed->string.capacity, str, slen);
     buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
     return ret;
@@ -333,6 +329,18 @@ struct js_value js_string(struct js_heap *heap, const char *str, size_t slen) {
 
 struct js_value js_string_sz(struct js_heap *heap, const char *str) {
     return js_string(heap, str, strlen(str));
+}
+
+struct js_value js_string_f(struct js_heap *heap, const char *fmt, ...) {
+    struct js_value ret = {.type = vt_string};
+    ret.managed = alloc(struct js_managed_value, 1);
+    ret.managed->type = vt_string;
+    va_list args;
+    va_start(args, fmt);
+    string_buffer_append_fv(ret.managed->string.base, ret.managed->string.length, ret.managed->string.capacity, fmt, args);
+    va_end(args);
+    buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
+    return ret;
 }
 
 struct js_value js_array(struct js_heap *heap) {
@@ -401,8 +409,19 @@ struct js_value js_function(struct js_heap *heap, uint32_t ingress) {
     return ret;
 }
 
-struct js_value js_c_function(void *c_function) {
-    return (struct js_value){.type = vt_c_function, .c_function = c_function};
+bool js_is_function(struct js_value *value) {
+    return value->type == vt_function || value->type == vt_c_function;
+}
+
+struct js_value js_c_value(struct js_heap *heap, void *data, void (*mark)(void *), void (*sweep)(void *)) {
+    struct js_value ret = {.type = vt_c_value};
+    ret.managed = alloc(struct js_managed_value, 1);
+    ret.managed->type = vt_c_value;
+    ret.managed->c_value.data = data;
+    ret.managed->c_value.mark = mark;
+    ret.managed->c_value.sweep = sweep;
+    buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
+    return ret;
 }
 
 void js_mark(struct js_value *value) {
@@ -443,6 +462,14 @@ void js_mark(struct js_value *value) {
             });
         }
         break;
+    case vt_c_value:
+        if (!value->managed->in_use) {
+            value->managed->in_use = 1;
+            if (value->managed->c_value.mark) {
+                value->managed->c_value.mark(value->managed->c_value.data);
+            }
+        }
+        break;
     default:
         // puts("skip");
         break;
@@ -466,6 +493,13 @@ void _free_managed(struct js_managed_value *managed) {
     }
     case vt_function: {
         js_map_free(managed->function.closure.base, managed->function.closure.length, managed->function.closure.capacity);
+        free(managed);
+        break;
+    }
+    case vt_c_value: {
+        if (managed->c_value.sweep) {
+            managed->c_value.sweep(managed->c_value.data);
+        }
         free(managed);
         break;
     }
@@ -525,6 +559,9 @@ void js_managed_value_dump(struct js_managed_value *managed) { // also used by h
         });
         printf("}>");
         break;
+    case vt_c_value:
+        printf("<c_value %p %p %p>", managed->c_value.data, managed->c_value.mark, managed->c_value.sweep);
+        break;
     default:
         fatal("Unknown managed value type %d", managed->type);
     }
@@ -547,17 +584,15 @@ void js_value_dump(struct js_value *value) {
     case vt_scripture:
         printf("'''%.*s'''", (int)js_string_length(value), js_string_base(value));
         break;
-    case vt_inscription:
-        printf("''%.*s''", (int)js_string_length(value), js_string_base(value));
+    case vt_c_function:
+        printf("<c_function %p>", value->c_function);
         break;
     case vt_string:
     case vt_array:
     case vt_object:
     case vt_function:
+    case vt_c_value:
         js_managed_value_dump(value->managed);
-        break;
-    case vt_c_function:
-        printf("<c_function %p>", value->c_function);
         break;
     default:
         fatal("Unknown value type %d", value->type);
@@ -566,6 +601,9 @@ void js_value_dump(struct js_value *value) {
 
 void js_value_print(struct js_value *value) {
     switch (value->type) {
+    case vt_undefined:
+        printf("undefined");
+        break;
     case vt_null:
         printf("null");
         break;
@@ -576,7 +614,6 @@ void js_value_print(struct js_value *value) {
         printf("%lg", value->number);
         break;
     case vt_scripture:
-    case vt_inscription:
     case vt_string:
         printf("%.*s", (int)js_string_length(value), js_string_base(value));
         break;
@@ -604,21 +641,22 @@ void js_value_print(struct js_value *value) {
     case vt_c_function:
         printf("<c_function>");
         break;
+    case vt_c_value:
+        printf("<c_value>");
+        break;
     default:
         fatal("Unknown value type %d", value->type);
     }
 }
 
 bool js_is_string(struct js_value *value) {
-    return value->type == vt_scripture || value->type == vt_inscription || value->type == vt_string;
+    return value->type == vt_scripture || value->type == vt_string;
 }
 
 char *js_string_base(struct js_value *value) {
     switch (value->type) {
     case vt_scripture:
         return value->scripture.base;
-    case vt_inscription:
-        return (char *)(*(value->inscription.base) + value->inscription.offset);
     case vt_string:
         return value->managed->string.base;
     default:
@@ -630,8 +668,6 @@ size_t js_string_length(struct js_value *value) {
     switch (value->type) {
     case vt_scripture:
         return value->scripture.length;
-    case vt_inscription:
-        return value->inscription.length;
     case vt_string:
         return value->managed->string.length;
     default:
@@ -650,29 +686,28 @@ int js_string_compare(struct js_value *lhs, struct js_value *rhs) {
 struct js_result js_add(struct js_heap *heap, struct js_value *lhs, struct js_value *rhs) {
     struct js_value value;
     if (lhs->type == vt_number && rhs->type == vt_number) {
-        return (struct js_result){.success = true, .value = js_number(lhs->number + rhs->number)};
+        js_return(js_number(lhs->number + rhs->number));
     } else if (js_is_string(lhs) && js_is_string(rhs)) {
         value = js_string(heap, js_string_base(lhs), js_string_length(lhs));
         string_buffer_append(value.managed->string.base, value.managed->string.length, value.managed->string.capacity, js_string_base(rhs), js_string_length(rhs));
-        return (struct js_result){.success = true, .value = value};
+        js_return(value);
     } else {
-        return (struct js_result){.success = false, .value = js_scripture_sz("Add operand must be number or string")};
+        js_throw(js_scripture_sz("Add operand must be number or string"));
     }
 }
 
-#ifndef NOTEST
+#ifdef DEBUG
 
-int test_data_structure_size(int argc, char *argv[]) {
-    print_result(sizeof(struct js_value), "%zu");
-    print_result(sizeof(struct js_kv_pair), "%zu");
-    print_result(sizeof(struct js_variable_map), "%zu");
-    print_result(sizeof(struct js_managed_value), "%zu");
-    print_result(sizeof(struct js_heap), "%zu");
-    print_result(sizeof(struct js_result), "%zu");
-    return EXIT_SUCCESS;
+void test_data_structure_size() {
+    log_expression("%zu", sizeof(struct js_value));
+    log_expression("%zu", sizeof(struct js_kv_pair));
+    log_expression("%zu", sizeof(struct js_variable_map));
+    log_expression("%zu", sizeof(struct js_managed_value));
+    log_expression("%zu", sizeof(struct js_heap));
+    log_expression("%zu", sizeof(struct js_result));
 }
 
-int test_js_map(int argc, char *argv[]) {
+void test_js_map() {
     struct js_kv_pair *p = NULL;
     size_t len = 0;
     size_t cap = 0;
@@ -691,10 +726,9 @@ int test_js_map(int argc, char *argv[]) {
         printf("%.*s %g\n", (int)klen, key, val->number);
     });
     js_map_free(p, len, cap);
-    return EXIT_SUCCESS;
 }
 
-int test_js_map_loop(int argc, char *argv[]) {
+void test_js_map_loop() {
     struct js_kv_pair *p = NULL;
     size_t len = 0;
     size_t cap = 0;
@@ -715,7 +749,6 @@ int test_js_map_loop(int argc, char *argv[]) {
         js_map_free(p, len, cap);
         // js_map_free_internal(&p, &len, &cap);
     }
-    return EXIT_SUCCESS;
 }
 
 static enum js_value_type _random_js_value_type() {
@@ -744,10 +777,6 @@ static struct js_value _random_js_value(struct js_heap *heap, enum js_value_type
         "9. Philippians 4:6 - Do not be anxious about anything, but in everything, by prayer and petition, with thanksgiving, present your requests to God.",
         "10. Matthew 28:19 - Therefore go and make disciples of all nations, baptizing them in the name of the Father and of the Son and of the Holy Spirit.",
     };
-    static struct tablet tablet = {
-        .s = "A Sample Inscription",
-    };
-    static struct tablet *ptablet = &tablet;
     struct js_value ret;
     int i;
     if (depth >= 10) {
@@ -762,8 +791,6 @@ static struct js_value _random_js_value(struct js_heap *heap, enum js_value_type
         return js_number(random_double());
     case vt_scripture:
         return js_scripture_sz(scriptures[rand() % countof(scriptures)]);
-    case vt_inscription:
-        return js_inscription((uint8_t **)&ptablet, (uint32_t)offsetof(struct tablet, s), (uint32_t)strlen(tablet.s));
     case vt_string:
         return js_string_sz(heap, random_sz_static(NULL));
     case vt_array:
@@ -792,13 +819,15 @@ static struct js_value _random_js_value(struct js_heap *heap, enum js_value_type
         }
         return ret;
     case vt_c_function:
-        return js_c_function((void *)(intptr_t)rand());
+        return (struct js_value){.type = vt_c_function, .c_function = (void *)(intptr_t)rand()};
+    case vt_c_value:
+        return js_c_value(heap, random_sz_dynamic(), NULL, free);
     default:
         fatal("Unknown value type %u", type);
     }
 }
 
-int test_js_value(int argc, char *argv[]) {
+void test_js_value() {
     struct js_heap heap = {0};
     for (enum js_value_type type = 1; type < countof(_value_type_names); type++) {
         struct js_value val = _random_js_value(&heap, type, 0);
@@ -808,10 +837,9 @@ int test_js_value(int argc, char *argv[]) {
     }
     js_sweep(&heap);
     buffer_free(heap.base, heap.length, heap.capacity);
-    return EXIT_SUCCESS;
 }
 
-int test_js_value_loop(int argc, char *argv[]) {
+void test_js_value_loop() {
     struct js_heap heap = {0};
     for (;;) {
         for (int i = 0; i < 10000; i++) {
@@ -827,7 +855,7 @@ int test_js_value_loop(int argc, char *argv[]) {
     }
 }
 
-int test_js_value_bug(int argc, char *argv[]) {
+void test_js_value_bug() {
     // REPRODUCE BUG:
     struct js_heap heap = {0};
     const char *bug_keys[] = {"b",
@@ -846,10 +874,9 @@ int test_js_value_bug(int argc, char *argv[]) {
     js_object_put_sz(&obj, bug_keys[2], js_boolean(true));
     js_object_put_sz(&obj, bug_keys[1], js_boolean(true));
     js_object_put_sz(&obj, bug_keys[3], js_boolean(true));
-    return EXIT_SUCCESS;
 }
 
-int test_js_string_family(int argc, char *argv[]) {
+void test_js_string_family() {
     struct js_heap heap = {0};
     for (;;) {
         for (uint8_t vt = vt_scripture; vt <= vt_string; vt++) {
@@ -857,6 +884,14 @@ int test_js_string_family(int argc, char *argv[]) {
             printf("%s %s %.*s\n", js_is_string(&str) ? "true" : "false", _value_type_names[vt], (int)js_string_length(&str), js_string_base(&str));
             js_sweep(&heap);
         }
+    }
+}
+
+void test_js_string_f() {
+    struct js_heap heap = {0};
+    for (;;) {
+        js_string_f(&heap, "/%g/%s", 3.14, "hello");
+        js_sweep(&heap);
     }
 }
 

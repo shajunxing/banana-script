@@ -8,132 +8,17 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <time.h>
-#include "js-syntax.h"
-
-static struct js_result _dump(struct js_vm *vm) {
-    js_vm_dump(vm);
-    return (struct js_result){.success = true, .value = js_null()};
-}
-
-static struct js_result _print(struct js_vm *vm) {
-    for (uint16_t i = 0; i < js_parameter_length(vm); i++) {
-        js_value_print(js_parameter_base(vm) + i);
-        printf(" ");
-    }
-    printf("\n");
-    return (struct js_result){.success = true, .value = js_null()};
-}
-
-static struct js_result _clock(struct js_vm *vm) {
-    return (struct js_result){.success = true, .value = js_number(clock() * 1.0 / CLOCKS_PER_SEC)};
-}
-
-static struct js_result _gc(struct js_vm *vm) {
-    js_collect_garbage(vm);
-    return (struct js_result){.success = true, .value = js_null()};
-}
-
-static struct js_result _input(struct js_vm *vm) {
-    uint16_t num_params = js_parameter_length(vm);
-    if (num_params > 1) {
-        return (struct js_result){.success = false, .value = js_scripture_sz("Too many parameters")};
-    }
-    if (num_params == 1) {
-        struct js_value *param = js_parameter_base(vm);
-        if (!js_is_string(param)) {
-            return (struct js_result){.success = false, .value = js_scripture_sz("Prompt must be string")};
-        }
-        js_value_print(param);
-    }
-    struct js_value line = js_string(&(vm->heap), NULL, 0);
-    for (;;) {
-        int ch = fgetc(stdin);
-        if (ch == EOF || ch == '\n') {
-            break;
-        }
-        string_buffer_append_ch(line.managed->string.base, line.managed->string.length, line.managed->string.capacity, ch);
-    }
-    return (struct js_result){.success = true, .value = line};
-}
-
-static struct js_result _length(struct js_vm *vm) {
-    if (js_parameter_length(vm) != 1) {
-        return (struct js_result){.success = false, .value = js_scripture_sz("Require exactly one parameter")};
-    }
-    struct js_value *param = js_parameter_base(vm);
-    if (param->type == vt_array) {
-        return (struct js_result){.success = true, .value = js_number((double)param->managed->array.length)};
-    } else if (param->type == vt_object) {
-        return (struct js_result){.success = true, .value = js_number((double)param->managed->object.length)};
-    } else if (js_is_string(param)) {
-        return (struct js_result){.success = true, .value = js_number((double)js_string_length(param))};
-    } else {
-        return (struct js_result){.success = false, .value = js_scripture_sz("Only string, array and object have length")};
-    }
-}
-
-static void _add_globals(struct js_vm *vm) {
-    js_variable_declare_sz(vm, "dump", js_c_function(_dump));
-    struct js_value console = js_object(&(vm->heap));
-    struct js_value print = js_c_function(_print);
-    js_object_put_sz(&console, "log", print);
-    js_variable_declare_sz(vm, "console", console);
-    js_variable_declare_sz(vm, "print", print);
-    js_variable_declare_sz(vm, "clock", js_c_function(_clock));
-    js_variable_declare_sz(vm, "gc", js_c_function(_gc));
-    js_variable_declare_sz(vm, "input", js_c_function(_input));
-    js_variable_declare_sz(vm, "length", js_c_function(_length));
-}
-
-#define _fread(__arg_fname, __arg_mode, __arg_base, __arg_len, __arg_cap) \
-    do { \
-        FILE *__fp = fopen(__arg_fname, __arg_mode); \
-        if (__fp == NULL) { \
-            fatal("Cannot open \"%s\"", __arg_fname); \
-        } \
-        fseek(__fp, 0, SEEK_END); \
-        typeof(__arg_len) __fsize = (typeof(__arg_len))ftell(__fp); \
-        enforce(__fsize >= 0); \
-        fseek(__fp, 0, SEEK_SET); \
-        buffer_alloc(__arg_base, __arg_len, __arg_cap, __arg_len + __fsize); \
-        __arg_len += (typeof(__arg_len))fread(__arg_base + __arg_len, 1, __fsize, __fp); \
-        fclose(__fp); \
-    } while (0)
-
-#define _fwrite(__arg_fname, __arg_mode, __arg_base, __arg_len, __arg_cap) \
-    do { \
-        FILE *__fp = fopen(__arg_fname, __arg_mode); \
-        if (__fp == NULL) { \
-            fatal("Cannot open \"%s\"", __arg_fname); \
-        } \
-        fwrite(__arg_base, 1, __arg_len, __fp); \
-        fclose(__fp); \
-    } while (0)
-
-static void _freadln(FILE *fp, struct js_source *line) {
-    enforce(line->base == NULL);
-    enforce(line->length == 0);
-    enforce(line->capacity == 0);
-    for (;;) {
-        int ch = fgetc(fp);
-        if (ch == EOF || ch == '\n') {
-            break;
-        }
-        string_buffer_append_ch(line->base, line->length, line->capacity, ch);
-    }
-}
-
-#ifdef _MSC_VER
-    #define strdup _strdup
+#ifndef _WIN32
+    #include <readline/readline.h>
+    #include <readline/history.h>
 #endif
+#include "js-syntax.h"
+#include "js-std.h"
 
 static char *_make_filename(char *source_filename, const char *ext, char *binary_filename) {
     if (binary_filename) {
-        return strdup(binary_filename);
+        return string_dupe_sz(binary_filename);
     } else {
         char *dot = strrchr(source_filename, '.');
         if (dot) {
@@ -150,25 +35,38 @@ static void _write_binary(struct js_vm *vm, char *source_filename, char *bytecod
     // if bytecode_filename or xref_filename is NULL, default is source filename base + extension
     char *fname;
     fname = _make_filename(source_filename, ".bin", bytecode_filename);
-    _fwrite(fname, "wb", vm->bytecode.base, vm->bytecode.length, vm->bytecode.capacity);
+    write_file(fname, "wb", vm->bytecode.base, vm->bytecode.length, vm->bytecode.capacity);
     printf("Bytecode written to: %s\n", fname);
     free(fname);
     fname = _make_filename(source_filename, ".xref", xref_filename);
-    _fwrite(fname, "wb", vm->cross_reference.base, vm->cross_reference.length, vm->cross_reference.capacity);
+    write_file(fname, "wb", vm->cross_reference.base, vm->cross_reference.length, vm->cross_reference.capacity);
     printf("Cross reference written to: %s\n", fname);
     free(fname);
 }
 
-static int _repl() {
+static int _repl(int argc, char *argv[]) {
     struct js_source source = {0}, line = {0};
     struct js_token token = {0};
     struct js_vm vm = {0};
-    _add_globals(&vm);
+    js_declare_std_functions(&vm, argc, argv);
+#ifndef _WIN32
+    // disable filename completion
+    rl_bind_key('\t', rl_insert);
+#endif
     printf("Banana Script REPL environment. Copyright (C) 2024-2025 ShaJunXing\n");
     printf("Type '/?' for more information.\n\n");
     for (;;) {
+#ifdef _WIN32
         printf("> ");
-        _freadln(stdin, &line);
+        read_line(stdin, line.base, line.length, line.capacity);
+#else
+        char *s = readline("> ");
+        string_buffer_append_sz(line.base, line.length, line.capacity, s);
+        free(s);
+        if (line.length > 0) {
+            add_history(line.base);
+        }
+#endif
         // buffer_dump(line.base, line.length, line.capacity);
         if (line.length > 0) {
             if (line.base[0] == '/') {
@@ -185,7 +83,7 @@ static int _repl() {
                     buffer_dump(vm.bytecode.base, vm.bytecode.length, vm.bytecode.capacity);
                     js_vm_dump(&vm);
                 } else if (__line_eq("/q")) {
-                    printf("Bye.\n");
+                    printf("Bye.\n\n");
                     exit(EXIT_SUCCESS);
                 } else if (__line_eq("/u")) {
                     js_bytecode_dump(&(vm.bytecode));
@@ -193,7 +91,7 @@ static int _repl() {
                     time_t now = time(NULL);
                     char source_filename[64] = {0};
                     strftime(source_filename, sizeof(source_filename), "%Y-%m-%d-%H-%M-%S.js", localtime(&now));
-                    _fwrite(source_filename, "w", source.base, source.length, source.capacity);
+                    write_file(source_filename, "w", source.base, source.length, source.capacity);
                     printf("Source written to: %s\n", source_filename);
                     _write_binary(&vm, source_filename, NULL, NULL);
                 } else {
@@ -213,7 +111,7 @@ static int _repl() {
                 // if runtime error happens, for example, if happens inside a function with no return value need to process, for example, print(...), after op_call there is an op_stack_pop, next statement will continue run at following op_stack_pop will failed because stack has been cleared. there are 2 solution: 1. move vm->pc to the end, 2. rollback
                 bool rollback = false;
                 if (js_compile(&source, &token, &(vm.bytecode), &(vm.cross_reference))) {
-                    // log_info("OK, %u,%u-%u,%u", token.head_line, token.head_offset, token.tail_line, token.tail_offset);
+                    // log_debug("OK, %u,%u-%u,%u", token.head_line, token.head_offset, token.tail_line, token.tail_offset);
                     struct js_result result = js_run(&vm);
                     if (!result.success) {
                         printf("Runtime Error: ");
@@ -225,7 +123,7 @@ static int _repl() {
                     rollback = true;
                 }
                 if (rollback) {
-                    // log_info("Failed");
+                    // log_debug("Failed");
                     source.length = src_len_bak;
                     token = tok_bak;
                     vm.bytecode.length = bc_len_bak;
@@ -239,7 +137,7 @@ static int _repl() {
     return EXIT_SUCCESS;
 }
 
-int _help(char *arg_0) {
+static int _help(char *arg_0) {
     printf("Usage: %s [filenames] [options]\n", arg_0);
     printf("\n");
     printf("If both options and filenames are not specified, enter repl environment.\n");
@@ -250,7 +148,7 @@ int _help(char *arg_0) {
     printf("  -h, --help               show help\n");
     printf("  -o, --optimize           optimize for code generation\n");
     printf("  -r, --run                run source or bytecode\n");
-#ifndef NOTEST
+#ifdef DEBUG
     printf("  -t, --test               run test suit\n");
 #endif
     printf("  -u, --unassemble         show disassembly only\n");
@@ -272,7 +170,7 @@ int _help(char *arg_0) {
     return EXIT_SUCCESS;
 }
 
-#ifndef NOTEST
+#ifdef DEBUG
 
     #define test_function_list \
         X(test_random_sz) \
@@ -280,7 +178,12 @@ int _help(char *arg_0) {
         X(test_buffer) \
         X(test_string_buffer) \
         X(test_string_buffer_loop) \
+        X(test_string_buffer_append_f) \
         X(test_memmove) \
+        X(test_string_dupe) \
+        X(test_read_file) \
+        X(test_read_line) \
+        X(test_natural_compare) \
         X(test_data_structure_size) \
         X(test_js_map) \
         X(test_js_map_loop) \
@@ -288,22 +191,25 @@ int _help(char *arg_0) {
         X(test_js_value_loop) \
         X(test_js_value_bug) \
         X(test_js_string_family) \
+        X(test_js_string_f) \
         X(test_vm_structure_size) \
         X(test_instruction_get_put) \
         X(test_vm_run) \
         X(test_lexer) \
         X(test_parser) \
-        X(test_c_function)
+        X(test_c_function) \
+        X(test_unescape_string) \
+        X(test_free_vm)
 
     #define X(name) #name,
 static const char *test_function_names[] = {test_function_list};
     #undef X
 
     #define X(name) name,
-static const int (*test_functions[])(int, char *[]) = {test_function_list};
+static const void (*test_functions[])() = {test_function_list};
     #undef X
 
-int _test(char *arg_0, int argc, char *argv[]) {
+static int _test(char *arg_0, int argc, char *argv[]) {
     int selected_id = argc > 0 ? atoi(argv[0]) : -1;
     int id;
     for (id = 0; id < countof(test_functions); id++) {
@@ -322,18 +228,26 @@ int _test(char *arg_0, int argc, char *argv[]) {
     if (selected_id >= 0 && selected_id < countof(test_functions)) {
         srand((unsigned)time(NULL));
         printf("\n");
-        return test_functions[selected_id](argc - 1, argv + 1);
+        test_functions[selected_id]();
+        return EXIT_SUCCESS;
     } else {
-        printf("Usage: %s -t,--test <id> ...args, id must be one of the above\n", arg_0);
+        printf("Usage: %s -t,--test <id>, id must be one of the above\n", arg_0);
         return EXIT_FAILURE;
     }
 }
 
 #endif
 
+// #ifdef _WIN32
+//     #include <windows.h>
+// #endif
+
 int main(int argc, char *argv[]) {
+    // #ifdef _WIN32
+    //     SetConsoleOutputCP(65001);
+    // #endif
     if (argc == 1) { // no arguments, enter repl
-        return _repl();
+        return _repl(argc, argv);
     }
     enum { t_bytecode,
         t_source,
@@ -369,14 +283,15 @@ int main(int argc, char *argv[]) {
                 optimize = true;
             } else if (__arg_eq("-r") || __arg_eq("--run")) {
                 action = a_run;
-#ifndef NOTEST
+#ifdef DEBUG
             } else if (__arg_eq("-t") || __arg_eq("--test")) {
                 return _test(argv[0], argc - i - 1, argv + i + 1);
 #endif
             } else if (__arg_eq("-u") || __arg_eq("--unassemble")) {
                 action = a_unassemble;
             } else {
-                fatal("Unknown option: %s", arg);
+                // rest arguments are handled by script, shouldn't fatal
+                // fatal("Unknown option: %s", arg);
             }
         } else {
             // handle file names
@@ -394,10 +309,10 @@ int main(int argc, char *argv[]) {
     struct js_source source = {0};
     struct js_token token = {0};
     struct js_vm vm = {0};
-    _add_globals(&vm);
+    js_declare_std_functions(&vm, argc, argv);
     if (source_filenames.base != NULL) {
         for (size_t i = 0; i < source_filenames.length; i++) {
-            _fread(source_filenames.base[i], "r", source.base, source.length, source.capacity);
+            read_text_file(source_filenames.base[i], source.base, source.length, source.capacity);
         }
         // TODO: add optimization
         (void)optimize;
@@ -411,14 +326,15 @@ int main(int argc, char *argv[]) {
         }
         _write_binary(&vm, source_filenames.base[source_filenames.length - 1], bytecode_filename, xref_filename);
     } else {
-        if (source.base == NULL) {
+        // source.base may be NULL if source file size == 0, so use source_filenames.base to check
+        if (source_filenames.base == NULL) {
             if (bytecode_filename == NULL) {
                 fatal("If no source files specified, bytecode file is required");
             } else {
-                _fread(bytecode_filename, "rb", vm.bytecode.base, vm.bytecode.length, vm.bytecode.capacity);
+                read_binary_file(bytecode_filename, vm.bytecode.base, vm.bytecode.length, vm.bytecode.capacity);
             }
             if (xref_filename != NULL) {
-                _fread(xref_filename, "rb", vm.cross_reference.base, vm.cross_reference.length, vm.cross_reference.capacity);
+                read_binary_file(xref_filename, vm.cross_reference.base, vm.cross_reference.length, vm.cross_reference.capacity);
             }
         }
         if (action == a_run) {

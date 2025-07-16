@@ -8,7 +8,7 @@ Project Address: <https://github.com/shajunxing/banana-script>
 
 ![REPL](screenshot1.png "REPL")
 
-![Command line parameters](screenshot2.png "Command line parameters")
+![Command line arguments](screenshot2.png "Command line arguments")
 
 ## Introduction
 
@@ -20,7 +20,7 @@ Data types are `null` `boolean` `number` `string` `array` `object` `function`, r
 
 Variable declaraction use `let`, all variables are local, `const` is not supported because all must be deletable. Access undeclared variables will cause error, access array/object's unexisting members will get `null`, and put `null` will delete corresponding member.
 
-Function definition supports default parameter `param = value` and rest parameter `...params`. Array literal and function call support spread syntax `...`, which will not skip `null` members. No predefined members such as `this` `arguments` in function. If `return` is outside function, means exit vm.
+Function definition supports default argument `param = value` and rest argument `...args`. Array literal and function call support spread syntax `...`, which will not skip `null` members. No predefined members such as `this` `arguments` in function. If `return` is outside function, means exit vm.
 
 Operators follow strict rule, no implicit conversion. Only boolean can do logical operations. `== !=` are strict meaning, and can be done by all types. Strings can do all relational operations and `+`. Numbers can do all relational and numerical operations. Operator precedence from low to high is:
 
@@ -72,16 +72,17 @@ js-common   js-data     js-vm       js-syntax
 - `js-data`: Data types and garbage collection, you can even use this module separately in C projects to manipulate high-level data structures with GC functionality, see <https://github.com/shajunxing/banana-cvar>
 - `js-vm`: Bytecode Virtual Machine, compiled separately to get an interpreter with minimal footprint without source code parsing
 - `js-syntax`: Lexical parsing and syntax parsing, which converts source code into bytecode
+- `js-std`: A reference implementation of some commonly used standard functions. Note that it's just for reference when writing C functions and doesn't guarantee it will change in future. For specific usage, check out my other project <https://github.com/shajunxing/view-comic-here>
 
 All values are `struct js_value` type, you can create by `js_xxx()` functions, `xxx` is value type, and you can read c values direct from this struct, see definition in `js_data.h`. Created values follow garbage collecting rules. DON'T directly modify their content, if you want to get different values, create new one. Compound types `array` `object` can be operated by `js_array_xxx()` `js_object_xxx()` functions.
 
-C functions must be `struct js_result (*)(struct js_vm *)` format, use `js_c_function()` to create c function value, yes of course they are all values and can be put anywhere, for example, if put on stack root using `js_variable_declare()`, they will be global. `struct js_result` has two members, if `.success` is true, `.value` is return value, if false, `.value` is received by `catch` if there are `try catch`. c function can also call script function using `js_call()`. Inside C function, use `js_parameter_base()` `js_parameter_length()` `js_parameter_get()` to get passed in parameters.
+C functions must be `struct js_result (*)(struct js_vm *)` format, use `js_c_function()` to create c function value, yes of course they are all values and can be put anywhere, for example, if put on stack root using `js_declare_variable()`, they will be global. `struct js_result` has two members, if `.success` is true, `.value` is return value, if false, `.value` is received by `catch` if there are `try catch`. c function can also call script function using `js_call()`. Inside C function, use `js_get_arguments_base()` `js_get_arguments_length()` `js_get_argument()` to get passed in arguments.
 
-There are three types of string: `vt_scripture` means immuable `const char *` written in engine c source code, eg. `typeof` result, `vt_inscription` means immuable string loaded from javascript source code such as variable identifier, string literals, they are stored in engine context's `tablet`, and `vt_string` are mutable. These three string types can be used for futher optimization, for example, string split can be optimized for `vt_scripture` and `vt_inscription`.
+There are 2 types of string: `vt_scripture` means immutable c string literal in engine c source code, eg. `typeof` result, and `vt_string` are mutable. They are all null terminated. They can be used for futher optimization.
 
 Value types `vt_string`, `vt_array`, `vt_object` and `vt_function` are hang on engine context's `heap`, and managed by garbage collector. Why `vt_function` is managed is because it has closure.
 
-Variable scope is combined into call stack. Call stack has following types: `cs_root` is root stack, which is unique and not deletable, `cs_block` means block statement scope, `cs_loop` is loop scope to fit `break` and specially to fit `let` in `for` loop, `cs_function` is function scope and in which `params` and `jmp_addr` are available.
+Variable scope is combined into call stack. Call stack has following types: `cs_root` is root stack, which is unique and not deletable, `cs_block` means block statement scope, `cs_loop` is loop scope to fit `break` and specially to fit `let` in `for` loop, `cs_function` is function scope and in which `args` and `jmp_addr` are available.
 
 Hashmap operation `js_map_put`'s algorithm:
 
@@ -157,7 +158,7 @@ https://lark-parser.readthedocs.io/en/latest/json_tutorial.html
 
 object key can be identifier, which means string, NOT identifier corresponding value
 
-function rest parameter support:
+function rest argument support:
 https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/rest_parameters
 spread syntax support:
 https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Spread_syntax
@@ -300,7 +301,7 @@ Length limits for some fields (if not specified, will be 'size_t'):
 |||
 |-|-|
 |uint8_t|some types|
-|uint16_t|number of globals, locals, parameters, closure. object key, stack length|
+|uint16_t|number of globals, locals, arguments, closure. object key, stack length|
 |uint32_t|scripture, source, bytecode length|
 
 Variable scope:
@@ -312,7 +313,7 @@ function parameters are not standalone scope, they will be merged into locals, s
 Before op_call, stack layout is shown below, just fit accessor model:
 
     (* top *)
-    sf_function(egress, parameters, ...)
+    sf_function(egress, arguments, ...)
     sf_value(function/c_function)
     (* bottom *)
 
@@ -365,7 +366,7 @@ Add '::' after using AST, have to use AST, top-down mechanism cannot pass lvalue
     function foo(a = z, b, ...c) { // parameter default value can be an expression, so it is not fixed
         console.log(c);
     }
-    bar(1, 2, ...arr); // number of parameters cannot be determined at compile time
+    bar(1, 2, ...arr); // number of arguments cannot be determined at compile time
     function foo() {
         let a = 1;
         let bar = function (b) {
@@ -378,3 +379,7 @@ Add '::' after using AST, have to use AST, top-down mechanism cannot pass lvalue
         dump();
     }
     foo(...[null, null, 3]);
+
+    TODO: better remove 'delete' operator, because it's variable modification action is at runtime, "if (...) { delete ...; }", but variable creating is at compile time? or runtime? "if (...) { let ...; }", if using AST to change variables visitation from hashmap to array?
+
+    C functions have no closure, because they are always static, not dynamically created, so they don't have creation scope, unlike lua, lua's purpose is only for saving data across function call.

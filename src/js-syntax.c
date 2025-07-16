@@ -10,7 +10,6 @@ You should have received a copy of the GNU General Public License along with thi
 
 #include <ctype.h>
 #include <math.h>
-#include <stdlib.h>
 #include "js-syntax.h"
 
 // if extern const array, sizeof is not useable anymore
@@ -587,9 +586,58 @@ static bool _get_token_filtered(struct js_source *source, struct js_token *token
     return success;
 }
 
-#define _try(__arg_expression) \
+static struct js_source _unescape_string(char *base, uint32_t length) {
+    struct js_source ret = {0};
+    bool matching_control = false;
+    for (char *p = base; p < (base + length); p++) {
+        if (matching_control) {
+            // following c escaping rules https://en.cppreference.com/w/c/language/escape.html
+            // compared to json, add '\a' '\v'
+            if (*p == 'u') {
+                string_buffer_append_sz(ret.base, ret.length, ret.capacity, "\\u");
+            } else {
+                char c;
+                switch (*p) {
+                case 'a':
+                    c = '\a';
+                    break;
+                case 'b':
+                    c = '\b';
+                    break;
+                case 'f':
+                    c = '\f';
+                    break;
+                case 'n':
+                    c = '\n';
+                    break;
+                case 'r':
+                    c = '\r';
+                    break;
+                case 't':
+                    c = '\t';
+                    break;
+                case 'v':
+                    c = '\v';
+                    break;
+                default:
+                    c = *p;
+                    break;
+                }
+                string_buffer_append_ch(ret.base, ret.length, ret.capacity, c);
+            }
+            matching_control = false;
+        } else if (*p == '\\') {
+            matching_control = true;
+        } else {
+            string_buffer_append_ch(ret.base, ret.length, ret.capacity, *p);
+        }
+    }
+    return ret;
+}
+
+#define _try(__arg_expr) \
     do { \
-        if (!(__arg_expression)) { \
+        if (!(__arg_expr)) { \
             return false; \
         } \
     } while (0);
@@ -613,6 +661,7 @@ static bool _get_token_filtered(struct js_source *source, struct js_token *token
 
 #define _add_instruction(token, bytecode, xref, ...) \
     do { \
+        /* log_debug("js_add_cross_reference %lu %lu", token->head_line, bytecode->length); */ \
         js_add_cross_reference(xref, token->head_line, bytecode->length); \
         js_add_instruction(bytecode, ##__VA_ARGS__); \
     } while (0)
@@ -634,15 +683,15 @@ static bool _parse_function(struct js_source *source, struct js_token *token, st
     if (token->state == ts_right_parenthesis) {
         _next_token(source, token);
     } else {
-        _add_instruction(token, bytecode, xref, op_parameter_first, 0);
+        _add_instruction(token, bytecode, xref, op_argument_first, 0);
         for (;;) {
             if (token->state == ts_spread) {
                 _next_token(source, token);
                 if (token->state != ts_identifier) {
                     _return_false(source, token, "Expect parameter name");
                 }
-                // _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_inscription, sf_value, _token_length(token), _token_head(source, token));
-                _add_instruction(token, bytecode, xref, op_parameter_get_rest, 1, opd_inscription, _token_length(token), _token_head(source, token));
+                // _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_string, sf_value, _token_length(token), _token_head(source, token));
+                _add_instruction(token, bytecode, xref, op_argument_get_rest, 1, opd_string, _token_length(token), _token_head(source, token));
                 i++;
                 _next_token(source, token);
                 _expect(source, token, ts_right_parenthesis);
@@ -651,7 +700,7 @@ static bool _parse_function(struct js_source *source, struct js_token *token, st
                 if (token->state != ts_identifier) {
                     _return_false(source, token, "Expect parameter name");
                 }
-                // _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_inscription, sf_value, _token_length(token), _token_head(source, token));
+                // _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_string, sf_value, _token_length(token), _token_head(source, token));
                 identifier_head = _token_head(source, token);
                 identifier_length = _token_length(token);
                 i++;
@@ -662,7 +711,7 @@ static bool _parse_function(struct js_source *source, struct js_token *token, st
                 } else {
                     // _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_null, sf_value);
                 }
-                _add_instruction(token, bytecode, xref, op_parameter_get_next, 1, opd_inscription, identifier_length, identifier_head);
+                _add_instruction(token, bytecode, xref, op_argument_get_next, 1, opd_string, identifier_length, identifier_head);
                 i++;
                 if (token->state == ts_comma) {
                     _next_token(source, token);
@@ -676,7 +725,7 @@ static bool _parse_function(struct js_source *source, struct js_token *token, st
             }
         }
     }
-    // _add_instruction(token, bytecode, xref, op_parameter_get, 1, opd_uint16, i);
+    // _add_instruction(token, bytecode, xref, op_argument_get, 1, opd_uint16, i);
     _expect(source, token, ts_left_brace);
     while (token->state != ts_right_brace) {
         _try(_parse_statement(source, token, bytecode, xref, UINT32_MAX, UINT32_MAX));
@@ -691,6 +740,7 @@ static bool _parse_function(struct js_source *source, struct js_token *token, st
 }
 
 static bool _parse_value(struct js_source *source, struct js_token *token, struct js_bytecode *bytecode, struct js_cross_reference *xref) {
+    struct js_source unescaped = {0};
     switch (token->state) {
     case ts_null:
         _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_null, sf_value);
@@ -709,7 +759,10 @@ static bool _parse_value(struct js_source *source, struct js_token *token, struc
         _next_token(source, token);
         break;
     case ts_string:
-        _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_inscription, sf_value, _token_string_length(token), _token_string_head(source, token));
+        unescaped = _unescape_string(_token_string_head(source, token), _token_string_length(token));
+        _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_string,
+            sf_value, unescaped.length, unescaped.base);
+        buffer_free(unescaped.base, unescaped.length, unescaped.capacity);
         _next_token(source, token);
         break;
     case ts_left_bracket:
@@ -747,9 +800,12 @@ static bool _parse_value(struct js_source *source, struct js_token *token, struc
         } else {
             for (;;) {
                 if (token->state == ts_string) {
-                    _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_inscription, sf_value, _token_string_length(token), _token_string_head(source, token));
+                    unescaped = _unescape_string(_token_string_head(source, token), _token_string_length(token));
+                    _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_string,
+                        sf_value, unescaped.length, unescaped.base);
+                    buffer_free(unescaped.base, unescaped.length, unescaped.capacity);
                 } else if (token->state == ts_identifier) {
-                    _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_inscription, sf_value, _token_length(token), _token_head(source, token));
+                    _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_string, sf_value, _token_length(token), _token_head(source, token));
                 } else {
                     _return_false(source, token, "Expect string or identifier");
                 }
@@ -800,7 +856,7 @@ struct _accessor {
 static bool _accessor_put(struct js_source *source, struct js_token *token, struct js_bytecode *bytecode, struct js_cross_reference *xref, struct _accessor acc) {
     switch (acc.type) {
     case at_identifier:
-        _add_instruction(token, bytecode, xref, op_variable_put, 1, opd_inscription, acc.identifier_length, acc.identifier_head);
+        _add_instruction(token, bytecode, xref, op_variable_put, 1, opd_string, acc.identifier_length, acc.identifier_head);
         break;
     case at_member_access:
         _add_instruction(token, bytecode, xref, op_member_put, 0);
@@ -815,7 +871,7 @@ static bool _accessor_put(struct js_source *source, struct js_token *token, stru
 static bool _accessor_get(struct js_source *source, struct js_token *token, struct js_bytecode *bytecode, struct js_cross_reference *xref, struct _accessor acc) {
     switch (acc.type) {
     case at_identifier:
-        _add_instruction(token, bytecode, xref, op_variable_get, 1, opd_inscription, acc.identifier_length, acc.identifier_head);
+        _add_instruction(token, bytecode, xref, op_variable_get, 1, opd_string, acc.identifier_length, acc.identifier_head);
         break;
     case at_member_access:
         _add_instruction(token, bytecode, xref, op_member_get, 0);
@@ -858,7 +914,7 @@ static bool _parse_accessor(struct js_source *source, struct js_token *token, st
             _next_token(source, token);
             _try(_accessor_get(source, token, bytecode, xref, *acc));
             if (token->state == ts_identifier) {
-                _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_inscription, sf_value, _token_length(token), _token_head(source, token));
+                _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_string, sf_value, _token_length(token), _token_head(source, token));
                 _next_token(source, token);
                 acc->type = at_member_access;
             } else {
@@ -868,7 +924,7 @@ static bool _parse_accessor(struct js_source *source, struct js_token *token, st
             _next_token(source, token);
             _try(_accessor_get(source, token, bytecode, xref, *acc));
             if (token->state == ts_identifier) {
-                _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_inscription, sf_value, _token_length(token), _token_head(source, token));
+                _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_string, sf_value, _token_length(token), _token_head(source, token));
                 _next_token(source, token);
                 acc->type = at_optional_chaining;
             } else {
@@ -886,10 +942,10 @@ static bool _parse_accessor(struct js_source *source, struct js_token *token, st
                     if (token->state == ts_spread) {
                         _next_token(source, token);
                         _try(_parse_expression(source, token, bytecode, xref));
-                        _add_instruction(token, bytecode, xref, op_parameter_spread, 0);
+                        _add_instruction(token, bytecode, xref, op_argument_spread, 0);
                     } else {
                         _try(_parse_expression(source, token, bytecode, xref));
-                        _add_instruction(token, bytecode, xref, op_parameter_append, 0);
+                        _add_instruction(token, bytecode, xref, op_argument_append, 0);
                     }
                     if (token->state == ts_comma) {
                         _next_token(source, token);
@@ -1060,13 +1116,28 @@ static bool _parse_logical_or_expression(struct js_source *source, struct js_tok
 
 // ternary expression as root
 static bool _parse_expression(struct js_source *source, struct js_token *token, struct js_bytecode *bytecode, struct js_cross_reference *xref) {
+    uint32_t d0, d1, d2, d3;
     _try(_parse_logical_or_expression(source, token, bytecode, xref));
     if (token->state == ts_question) {
+        // op_ternary wrongly run both sides of ':', for example, 'a == null ? "Hello" : "Hello, " + a' will failed if a is null, now op_ternary removed and replaced with op_jump family
+        // _next_token(source, token);
+        // _try(_parse_logical_or_expression(source, token, bytecode, xref));
+        // _expect(source, token, ts_colon);
+        // _try(_parse_logical_or_expression(source, token, bytecode, xref));
+        // _add_instruction(token, bytecode, xref, op_ternary, 0);
+        d0 = bytecode->length;
+        _add_instruction(token, bytecode, xref, op_jump_if_false, 1, opd_uint32, 0); // jmp_f to right side of ':'
         _next_token(source, token);
         _try(_parse_logical_or_expression(source, token, bytecode, xref));
+        d1 = bytecode->length;
+        _add_instruction(token, bytecode, xref, op_jump, 1, opd_uint32, 0); // jmp tp last instruction + 1
+        d2 = bytecode->length;
         _expect(source, token, ts_colon);
         _try(_parse_logical_or_expression(source, token, bytecode, xref));
-        _add_instruction(token, bytecode, xref, op_ternary, 0);
+        d3 = bytecode->length; // last instruction + 1
+        // printf("d0=%d, d1=%d, d2=%d\n", d0, d1, d2);
+        js_put_instruction(bytecode, &d0, op_jump_if_false, 1, opd_uint32, d2);
+        js_put_instruction(bytecode, &d1, op_jump, 1, opd_uint32, d3);
     }
     return true;
 }
@@ -1089,8 +1160,8 @@ static bool _parse_assignment_expression(struct js_source *source, struct js_tok
         }
         // first, get value
         if (acc.type == at_member_access) {
-            _add_instruction(token, bytecode, xref, op_stack_duplicate_value, 1, opd_uint8, 1);
-            _add_instruction(token, bytecode, xref, op_stack_duplicate_value, 1, opd_uint8, 1);
+            _add_instruction(token, bytecode, xref, op_stack_dupe, 1, opd_uint8, 1);
+            _add_instruction(token, bytecode, xref, op_stack_dupe, 1, opd_uint8, 1);
         }
         _try(_accessor_get(source, token, bytecode, xref, acc));
         _next_token(source, token);
@@ -1164,7 +1235,7 @@ static bool _parse_declaration_expression(struct js_source *source, struct js_to
         } else {
             _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_null, sf_value);
         }
-        _add_instruction(token, bytecode, xref, op_variable_declare, 1, opd_inscription, identifier_length, identifier_head);
+        _add_instruction(token, bytecode, xref, op_variable_declare, 1, opd_string, identifier_length, identifier_head);
         if (token->state == ts_comma) {
             _next_token(source, token);
             continue;
@@ -1187,7 +1258,7 @@ static bool _parse_statement(struct js_source *source, struct js_token *token, s
         for_in,
         for_of } for_type;
     struct _accessor acc;
-    // log_info("%u:%u:%.*s", token->head_line, token->tail_line, _token_length(token), _token_head(source, token));
+    // log_debug("%u:%u:%.*s", token->head_line, token->tail_line, _token_length(token), _token_head(source, token));
     if (token->state == ts_semicolon) {
         _next_token(source, token);
     } else if (token->state == ts_left_brace) { // DONT use _accept, _stack_forward will record token
@@ -1265,13 +1336,13 @@ static bool _parse_statement(struct js_source *source, struct js_token *token, s
             if (token->state == ts_assignment) {
                 _next_token(source, token);
                 _try(_parse_expression(source, token, bytecode, xref));
-                _add_instruction(token, bytecode, xref, op_variable_declare, 1, opd_inscription, identifier_length, identifier_head);
+                _add_instruction(token, bytecode, xref, op_variable_declare, 1, opd_string, identifier_length, identifier_head);
                 _expect(source, token, ts_semicolon);
                 for_type = classic_for;
             } else if (token->state == ts_in) {
                 _next_token(source, token);
                 _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_null, sf_value);
-                _add_instruction(token, bytecode, xref, op_variable_declare, 1, opd_inscription, identifier_length, identifier_head);
+                _add_instruction(token, bytecode, xref, op_variable_declare, 1, opd_string, identifier_length, identifier_head);
                 acc.type = at_identifier;
                 acc.identifier_head = identifier_head;
                 acc.identifier_length = identifier_length;
@@ -1279,7 +1350,7 @@ static bool _parse_statement(struct js_source *source, struct js_token *token, s
             } else if (token->state == ts_of) {
                 _next_token(source, token);
                 _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_null, sf_value);
-                _add_instruction(token, bytecode, xref, op_variable_declare, 1, opd_inscription, identifier_length, identifier_head);
+                _add_instruction(token, bytecode, xref, op_variable_declare, 1, opd_string, identifier_length, identifier_head);
                 acc.type = at_identifier;
                 acc.identifier_head = identifier_head;
                 acc.identifier_length = identifier_length;
@@ -1347,9 +1418,9 @@ static bool _parse_statement(struct js_source *source, struct js_token *token, s
             if (acc.type == at_identifier) {
                 _try(_accessor_put(source, token, bytecode, xref, acc));
             } else {
-                _add_instruction(token, bytecode, xref, op_stack_duplicate_value, 1, opd_uint8, 4);
-                _add_instruction(token, bytecode, xref, op_stack_duplicate_value, 1, opd_uint8, 4);
-                _add_instruction(token, bytecode, xref, op_stack_duplicate_value, 1, opd_uint8, 2);
+                _add_instruction(token, bytecode, xref, op_stack_dupe, 1, opd_uint8, 4);
+                _add_instruction(token, bytecode, xref, op_stack_dupe, 1, opd_uint8, 4);
+                _add_instruction(token, bytecode, xref, op_stack_dupe, 1, opd_uint8, 2);
                 _try(_accessor_put(source, token, bytecode, xref, acc));
                 _add_instruction(token, bytecode, xref, op_stack_pop, 1, opd_uint8, 1);
             }
@@ -1386,7 +1457,7 @@ static bool _parse_statement(struct js_source *source, struct js_token *token, s
         identifier_length = _token_length(token);
         _next_token(source, token);
         _try(_parse_function(source, token, bytecode, xref));
-        _add_instruction(token, bytecode, xref, op_variable_declare, 1, opd_inscription, identifier_length, identifier_head);
+        _add_instruction(token, bytecode, xref, op_variable_declare, 1, opd_string, identifier_length, identifier_head);
     } else if (token->state == ts_return) {
         _next_token(source, token);
         if (token->state == ts_semicolon) {
@@ -1401,7 +1472,7 @@ static bool _parse_statement(struct js_source *source, struct js_token *token, s
         if (token->state == ts_identifier) {
             identifier_head = _token_head(source, token);
             identifier_length = _token_length(token);
-            _add_instruction(token, bytecode, xref, op_variable_delete, 1, opd_inscription, identifier_length, identifier_head);
+            _add_instruction(token, bytecode, xref, op_variable_delete, 1, opd_string, identifier_length, identifier_head);
         } else {
             _return_false(source, token, "Expect identifier");
         }
@@ -1432,13 +1503,13 @@ static bool _parse_statement(struct js_source *source, struct js_token *token, s
         _expect(source, token, ts_right_parenthesis);
         _expect(source, token, ts_left_brace);
         d0 = bytecode->length;
-        _add_instruction(token, bytecode, xref, op_catch, 2, opd_inscription, opd_uint32, identifier_length, identifier_head, 0);
+        _add_instruction(token, bytecode, xref, op_catch, 2, opd_string, opd_uint32, identifier_length, identifier_head, 0);
         while (token->state != ts_right_brace) {
             _try(_parse_statement(source, token, bytecode, xref, break_pos, continue_pos));
         }
         _add_instruction(token, bytecode, xref, op_stack_pop, 1, opd_uint8, 1);
         d1 = bytecode->length;
-        js_put_instruction(bytecode, &d0, op_catch, 2, opd_inscription, opd_uint32, identifier_length, identifier_head, d1);
+        js_put_instruction(bytecode, &d0, op_catch, 2, opd_string, opd_uint32, identifier_length, identifier_head, d1);
         _next_token(source, token);
     } else if (token->state == ts_throw) {
         _next_token(source, token);
@@ -1472,9 +1543,9 @@ bool js_compile(struct js_source *source, struct js_token *token, struct js_byte
     return true;
 }
 
-#ifndef NOTEST
+#ifdef DEBUG
 
-int test_lexer(int argc, char *argv[]) {
+void test_lexer() {
     char tokens[] =
         "//ss\n"
         "//2\n"
@@ -1511,10 +1582,10 @@ int test_lexer(int argc, char *argv[]) {
     for (;;) {
         bool success = _get_token_filtered(&source, &token);
         if (token.state == ts_end_of_file) {
-            return EXIT_SUCCESS;
+            return;
         }
         if (!success) {
-            return EXIT_FAILURE;
+            return;
         }
         const char *t_name = _token_state_names[token.state];
         switch (token.state) {
@@ -1530,10 +1601,9 @@ int test_lexer(int argc, char *argv[]) {
             break;
         }
     }
-    return EXIT_SUCCESS;
 }
 
-int test_parser(int argc, char *argv[]) {
+void test_parser() {
     // test token error or unexpected end inside parser for _next_token macro:
     // "& null false & true 12.3e-4 \"Hello\"\n"
     // "& null false \0 true 12.3e-4 \"Hello\"\n"
@@ -1557,32 +1627,60 @@ int test_parser(int argc, char *argv[]) {
         // buffer_dump(xref.base, xref.length, xref.capacity);
         putchar('\n');
     }
-    return EXIT_SUCCESS;
 }
 
 static struct js_result f_native(struct js_vm *vm) {
-    return js_call_sz(vm, "f_managed", (struct js_value[]){js_scripture_sz("Hello, "), js_scripture_sz("World.")}, 2);
+    // struct js_result ret = js_call_by_name_sz(vm, "f_managed", (struct js_value[]){js_scripture_sz("Hello, "), js_scripture_sz("World, ")}, 2);
+    struct js_result ret = {.success = false, .value = js_number(3.14)};
+    js_vm_dump(vm);
+    return ret;
 }
 
-int test_c_function(int argc, char *argv[]) {
+void test_c_function() {
     struct js_source source = {0};
     struct js_token token = {0};
     struct js_vm vm = {0};
-    js_variable_declare_sz(&vm, "f_native", js_c_function(f_native));
+    js_declare_variable_sz(&vm, "dump", js_c_function(js_vm_dump));
+    js_declare_variable_sz(&vm, "f_native", js_c_function(f_native));
     js_vm_dump(&vm);
-    string_buffer_append_sz(
-        source.base, source.length, source.capacity,
-        "try { function f_managed(a, b) {throw a + b;} let a = f_native(); } catch(ex) {}");
+    // Test interoperability between C function and Script function, transitivity and closure
+    // const char *test = "try { let f_managed = function(){ let c = \"Folks!\"; return function(a, b) {throw a + b + c;}; }(); let a = f_native(); } catch(ex) { dump(); }";
+    const char *test = "function f_managed(){throw 3.14;} try { let a = f_native(); } catch(ex) { dump(); }";
+    string_buffer_append_sz(source.base, source.length, source.capacity, test);
     if (js_compile(&source, &token, &(vm.bytecode), &(vm.cross_reference))) {
+        js_bytecode_dump(&(vm.bytecode));
         struct js_result result = js_run(&vm);
         printf("result is: %s, ", result.success ? "true" : "false");
         js_value_dump(&(result.value));
         printf("\n\n");
     }
     // buffer_dump(vm.bytecode.base, vm.bytecode.length, vm.bytecode.capacity);
-    js_bytecode_dump(&(vm.bytecode));
     js_vm_dump(&vm);
-    return EXIT_SUCCESS;
+}
+
+void test_unescape_string() {
+    for (;;) {
+        char *in = "\\a\\b\\f\\n\\r\\t\\v-\\'-\\\"-\\?-\\\\-\\u1234";
+        struct js_source out = _unescape_string(in, (uint32_t)strlen(in));
+        // buffer_dump(out.base, out.length, out.capacity);
+        buffer_free(out.base, out.length, out.capacity);
+    }
+}
+
+void test_free_vm() {
+    struct js_source source = {0};
+    struct js_token token = {0};
+    struct js_vm vm = {0};
+    const char *src = "function foo() {let b = \"world\"; return function(a){return a + b;};} let a = \"hello\"; foo()(a);";
+    for (;;) {
+        string_buffer_append_sz(source.base, source.length, source.capacity, src);
+        if (js_compile(&source, &token, &(vm.bytecode), &(vm.cross_reference))) {
+            js_run(&vm);
+        }
+        js_free_vm(&vm);
+        token = (struct js_token){0};
+        buffer_free(source.base, source.length, source.capacity);
+    }
 }
 
 #endif

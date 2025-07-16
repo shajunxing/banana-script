@@ -9,11 +9,6 @@ You should have received a copy of the GNU General Public License along with thi
 */
 
 #include <math.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
 #include "js-vm.h"
 
 #define X(name) #name,
@@ -33,7 +28,7 @@ struct _operand {
         struct {
             uint32_t offset;
             uint32_t length;
-        } value_inscription;
+        } value_string;
         struct {
             uint32_t ingress;
         } value_function;
@@ -95,10 +90,10 @@ static bool _get_instruction(struct js_bytecode *bytecode, uint32_t *offset /* i
         case opd_double:
             __safe_forward(8, instruction->operands[i].value_double = *((double *)__current_position));
             break;
-        case opd_inscription:
-            __safe_forward(4, instruction->operands[i].value_inscription.length = *((uint32_t *)__current_position));
-            instruction->operands[i].value_inscription.offset = *offset;
-            __safe_forward(instruction->operands[i].value_inscription.length, );
+        case opd_string:
+            __safe_forward(4, instruction->operands[i].value_string.length = *((uint32_t *)__current_position));
+            instruction->operands[i].value_string.offset = *offset;
+            __safe_forward(instruction->operands[i].value_string.length, );
             break;
         case opd_function:
             __safe_forward(4, instruction->operands[i].value_function.ingress = *((uint32_t *)__current_position));
@@ -160,7 +155,7 @@ static void _put_instruction(struct js_bytecode *bytecode /* in,out */, uint32_t
         case opd_double:
             __safe_forward(8, *((double *)__current_position) = va_arg(args, double));
             break;
-        case opd_inscription:
+        case opd_string:
             uint32_t slen = va_arg(args, uint32_t);
             __safe_forward(4, *((uint32_t *)__current_position) = slen);
             const char *s = va_arg(args, const char *);
@@ -239,8 +234,8 @@ static void _instruction_dump(uint8_t *base, struct _instruction *instruction) {
         case opd_double:
             n += printf("%g", instruction->operands[i].value_double);
             break;
-        case opd_inscription:
-            n += printf("''%.*s''", instruction->operands[i].value_inscription.length, base + instruction->operands[i].value_inscription.offset);
+        case opd_string:
+            n += printf("''%.*s''", instruction->operands[i].value_string.length, base + instruction->operands[i].value_string.offset);
             break;
         case opd_function:
             n += printf("<function %u>", instruction->operands[i].value_function.ingress);
@@ -275,19 +270,19 @@ void js_bytecode_dump(struct js_bytecode *bytecode) {
     printf("\n");
 }
 
-void js_vm_dump(struct js_vm *vm) {
+struct js_result js_vm_dump(struct js_vm *vm) {
     printf("heap base=%p length=%zu capacity=%zu\n", vm->heap.base, vm->heap.length, vm->heap.capacity);
     buffer_for_each(vm->heap.base, vm->heap.length, vm->heap.capacity, i, v, {
         printf("    %zu. ", i);
         js_managed_value_dump(*v);
         printf("\n");
     });
-    printf("globals base=%p length=%u capacity=%u\n", vm->globals.base, vm->globals.length, vm->globals.capacity);
-    js_map_for_each(vm->globals.base, _, vm->globals.capacity, k, kl, v, {
-        printf("    %.*s = ", (int)kl, k);
-        js_value_dump(v);
-        printf("\n");
-    });
+    // printf("globals base=%p length=%u capacity=%u\n", vm->globals.base, vm->globals.length, vm->globals.capacity);
+    // js_map_for_each(vm->globals.base, _, vm->globals.capacity, k, kl, v, {
+    //     printf("    %.*s = ", (int)kl, k);
+    //     js_value_dump(v);
+    //     printf("\n");
+    // });
     printf("stack base=%p length=%u capacity=%u\n", vm->stack.base, vm->stack.length, vm->stack.capacity);
     for (uint16_t depth = 0; depth < vm->stack.length; depth++) {
         struct js_stack_frame *frame = vm->stack.base + depth;
@@ -316,8 +311,8 @@ void js_vm_dump(struct js_vm *vm) {
                     js_managed_value_dump(frame->function);
                 }
                 printf("\n");
-                printf("        parameters: base=%p length=%u capacity=%u index=%u\n", frame->parameters.base, frame->parameters.length, frame->parameters.capacity, frame->parameters.index);
-                buffer_for_each(frame->parameters.base, frame->parameters.length, frame->parameters.capacity, i, v, {
+                printf("        arguments: base=%p length=%u capacity=%u index=%u\n", frame->arguments.base, frame->arguments.length, frame->arguments.capacity, frame->arguments.index);
+                buffer_for_each(frame->arguments.base, frame->arguments.length, frame->arguments.capacity, i, v, {
                     printf("            %u. ", i);
                     js_value_dump(v);
                     printf("\n");
@@ -333,6 +328,7 @@ void js_vm_dump(struct js_vm *vm) {
     }
     printf("pc=%u\n", vm->pc);
     printf("\n");
+    js_return(js_null());
 }
 
 // reverse order, from top to down
@@ -358,60 +354,64 @@ static struct js_variable_map *_get_current_scope(struct js_vm *vm) {
     return &(vm->globals);
 }
 
-// TODO: convert to runtime error
-void js_variable_declare(struct js_vm *vm, const char *name, uint16_t name_length, struct js_value value) {
+struct js_result js_declare_variable(struct js_vm *vm, const char *name, uint16_t name_length, struct js_value value) {
     struct js_variable_map *scope = _get_current_scope(vm);
     if (js_map_get(scope->base, scope->length, scope->capacity, name, name_length).type != 0) {
-        fatal("Variable \"%.*s\" already exists", (int)name_length, name);
+        log_debug("Variable \"%.*s\" already exists", (int)name_length, name);
+        js_throw(js_scripture_sz("Variable already exists"));
     }
     js_map_put(scope->base, scope->length, scope->capacity, name, name_length, value);
+    js_return(js_null());
 }
 
-void js_variable_declare_sz(struct js_vm *vm, const char *name, struct js_value value) {
-    js_variable_declare(vm, name, (uint16_t)strlen(name), value);
+struct js_result js_declare_variable_sz(struct js_vm *vm, const char *name, struct js_value value) {
+    return js_declare_variable(vm, name, (uint16_t)strlen(name), value);
 }
 
-void js_variable_delete(struct js_vm *vm, const char *name, uint16_t name_length) {
+struct js_result js_delete_variable(struct js_vm *vm, const char *name, uint16_t name_length) {
     struct js_variable_map *scope = _get_current_scope(vm);
     if (js_map_get(scope->base, scope->length, scope->capacity, name, name_length).type == 0) {
-        fatal("Variable \"%.*s\" not found", (int)name_length, name);
+        log_debug("Variable \"%.*s\" not found", (int)name_length, name);
+        js_throw(js_scripture_sz("Variable not found"));
     }
     js_map_put(scope->base, scope->length, scope->capacity, name, name_length, (struct js_value){0});
+    js_return(js_null());
 }
 
-void js_variable_delete_sz(struct js_vm *vm, const char *name) {
-    js_variable_delete(vm, name, (uint16_t)strlen(name));
+struct js_result js_delete_variable_sz(struct js_vm *vm, const char *name) {
+    return js_delete_variable(vm, name, (uint16_t)strlen(name));
 }
 
-void js_variable_put(struct js_vm *vm, const char *name, uint16_t name_length, struct js_value value) {
+struct js_result js_put_variable(struct js_vm *vm, const char *name, uint16_t name_length, struct js_value value) {
     // first, check current stack variables
     // second, check current stack closure if is function
     // there may be multiple nested functions, so each stack should check closure
     _call_stack_for_each(vm, frame, {
         if (js_map_get(frame->locals.base, frame->locals.length, frame->locals.capacity, name, name_length).type != 0) {
             js_map_put(frame->locals.base, frame->locals.length, frame->locals.capacity, name, name_length, value);
-            return;
+            js_return(js_null());
         }
         if (frame->type == sf_function && frame->function != NULL) {
             if (js_map_get(frame->function->function.closure.base, frame->function->function.closure.length, frame->function->function.closure.capacity, name, name_length).type != 0) {
                 js_map_put(frame->function->function.closure.base, frame->function->function.closure.length, frame->function->function.closure.capacity, name, name_length, value);
-                return;
+                js_return(js_null());
             }
         }
     });
     // at last, check globals
     if (js_map_get(vm->globals.base, vm->globals.length, vm->globals.capacity, name, name_length).type != 0) {
         js_map_put(vm->globals.base, vm->globals.length, vm->globals.capacity, name, name_length, value);
-        return;
+        js_return(js_null());
     }
-    fatal("Variable \"%.*s\" not found", (int)name_length, name);
+    log_debug("Variable \"%.*s\" not found", (int)name_length, name);
+    js_throw(js_scripture_sz("Variable not found"));
 }
 
-void js_variable_put_sz(struct js_vm *vm, const char *name, struct js_value value) {
-    js_variable_put(vm, name, (uint16_t)strlen(name), value);
+struct js_result js_put_variable_sz(struct js_vm *vm, const char *name, struct js_value value) {
+    return js_put_variable(vm, name, (uint16_t)strlen(name), value);
 }
 
-struct js_value js_variable_get(struct js_vm *vm, const char *name, uint16_t name_length) {
+struct js_result js_get_variable(struct js_vm *vm, const char *name, uint16_t name_length) {
     // first, check current stack variables
     // second, check current stack closure if is function
     // there may be multiple nested functions, so each stack should check closure
@@ -419,25 +419,26 @@ struct js_value js_variable_get(struct js_vm *vm, const char *name, uint16_t nam
     _call_stack_for_each(vm, frame, {
         ret = js_map_get(frame->locals.base, frame->locals.length, frame->locals.capacity, name, name_length);
         if (ret.type != 0) {
-            return ret;
+            js_return(ret);
         }
         if (frame->type == sf_function && frame->function != NULL) {
             ret = js_map_get(frame->function->function.closure.base, frame->function->function.closure.length, frame->function->function.closure.capacity, name, name_length);
             if (ret.type != 0) {
-                return ret;
+                js_return(ret);
             }
         }
     });
     // at last, check globals
     ret = js_map_get(vm->globals.base, vm->globals.length, vm->globals.capacity, name, name_length);
     if (ret.type != 0) {
-        return ret;
+        js_return(ret);
     }
-    fatal("Variable \"%.*s\" not found", (int)name_length, name);
+    log_debug("Variable \"%.*s\" not found", (int)name_length, name);
+    js_throw(js_scripture_sz("Variable not found"));
 }
 
-struct js_value js_variable_get_sz(struct js_vm *vm, const char *name) {
-    return js_variable_get(vm, name, (uint16_t)strlen(name));
+struct js_result js_get_variable_sz(struct js_vm *vm, const char *name) {
+    return js_get_variable(vm, name, (uint16_t)strlen(name));
 }
 
 static void _stack_push(struct js_vm *vm, struct js_stack_frame frame) {
@@ -459,7 +460,7 @@ static void _stack_frame_free(struct js_stack_frame *frame) {
     if (frame->type != sf_value) {
         js_map_free(frame->locals.base, frame->locals.length, frame->locals.capacity);
         if (frame->type == sf_function) {
-            buffer_free(frame->parameters.base, frame->parameters.length, frame->parameters.capacity);
+            buffer_free(frame->arguments.base, frame->arguments.length, frame->arguments.capacity);
         }
     }
 }
@@ -500,32 +501,61 @@ static void _stack_push_value(struct js_vm *vm, struct js_value value) {
 
 static const char *const _typeof_table[] = {"undefined", "null", "boolean", "number", "string", "string", "string", "array", "object", "function", "function"};
 
-struct js_value *js_parameter_base(struct js_vm *vm) {
+struct js_value *js_get_arguments_base(struct js_vm *vm) {
     struct js_stack_frame *frame = _stack_peek(vm, 0);
     enforce(frame->type == sf_function);
-    return frame->parameters.base;
+    return frame->arguments.base;
 }
 
-uint16_t js_parameter_length(struct js_vm *vm) {
+uint16_t js_get_arguments_length(struct js_vm *vm) {
     struct js_stack_frame *frame = _stack_peek(vm, 0);
     enforce(frame->type == sf_function);
-    return frame->parameters.length;
+    return frame->arguments.length;
 }
 
-struct js_value js_parameter_get(struct js_vm *vm, uint16_t index) {
+struct js_value js_get_argument(struct js_vm *vm, uint16_t index) {
     struct js_stack_frame *frame = _stack_peek(vm, 0);
     enforce(frame->type == sf_function);
-    if (index < frame->parameters.length) {
-        return frame->parameters.base[index];
+    if (index < frame->arguments.length) {
+        return frame->arguments.base[index];
     } else {
         return js_null();
     }
 }
 
-static struct js_value js_error(struct js_vm *vm, struct js_value message) {
-    // TODO: calculate source line number and other information from vm->cross_reference, vm->stack
+static struct js_value js_error(struct js_vm *vm, uint32_t curr_offset, struct js_value message) {
     // see https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Error
-    return message;
+    /*
+        A special case:
+
+        //...
+        //...
+        //...
+        throw greetings;
+
+        throws variable not found error at curr_offset=0, but there are many lines corresponding to offset 0, because these 0 are array holes during buffer_put, so line will wrongly break at first 0;
+    */
+    if (vm->cross_reference.base) {
+        struct js_value error = js_object(&(vm->heap));
+        js_object_put_sz(&error, "message", message);
+        // for (uint32_t line = 0; line < vm->cross_reference.length; line++) {
+        //     log_debug("line=%lu, offset=%lu, curr_offset=%lu", line, vm->cross_reference.base[line], curr_offset);
+        // }
+        for (uint32_t line = 0; line < vm->cross_reference.length; line++) {
+            uint32_t offset = vm->cross_reference.base[line];
+            if (curr_offset == 0 && offset == 0) {
+                continue;
+            }
+            if (curr_offset <= offset) {
+                // log_debug("line=%lu, break", line);
+                js_object_put_sz(&error, "line", js_number(line + 1));
+                break;
+            }
+        }
+        return error;
+    } else {
+        return message;
+    }
 }
 
 struct js_result js_run(struct js_vm *vm) {
@@ -535,45 +565,48 @@ struct js_result js_run(struct js_vm *vm) {
     struct js_result result;
     size_t index;
     bool yes;
+    uint32_t curr_offset;
 #define __debug() \
     do { \
         _instruction_dump(vm->bytecode.base, &instruction); \
         printf("\n"); \
         js_vm_dump(vm); \
     } while (0)
-#define __operand_0_offset() (char *)(vm->bytecode.base + instruction.operands[0].value_inscription.offset)
-#define __operand_0_length() (instruction.operands[0].value_inscription.length)
+#define __operand_offset(__arg_i) (char *)(vm->bytecode.base + instruction.operands[__arg_i].value_string.offset)
+#define __operand_length(__arg_i) (instruction.operands[__arg_i].value_string.length)
 #define __throw(__arg_message) \
     do { \
         /* side effect: if __arg_message is _stack_pop_value, it will disappear after _stack_pop_to */ \
-        typeof(__arg_message) __error = js_error(vm, __arg_message); \
+        typeof(__arg_message) __error = js_error(vm, curr_offset, __arg_message); \
         /* if is in c_function, must exit loop, for example, a 'try' 'c function' function' chain, \
         function 'throw's, stack will be emptied to 'try' and vm_run will return to c function, \
-        and stack is corrupted now*/ \
+        and stack is corrupted now */ \
         for (; vm->stack.length > 0; _stack_pop(vm, 1)) { \
             frame = _stack_peek(vm, 0); \
             if (frame->type == sf_try) { \
                 vm->pc = frame->egress; \
                 _stack_pop(vm, 1); \
                 _stack_push_value(vm, __error); \
-                goto tail; /* DON'T use 'break' because it may be in another loop */ \
+                goto end_of_while_loop; /* DON'T use 'break' because it may be in another loop */ \
+                /* function != NULL but egress == 0 means called by c function, see js_call() */ \
             } else if (frame->type == sf_function && frame->egress == 0) { \
-                return (struct js_result){.success = false, .value = __error}; \
+                js_throw(__error); \
             } \
         } \
         if (vm->stack.length == 0) { \
-            return (struct js_result){.success = false, .value = __error}; \
+            js_throw(__error); \
         } \
     } while (0)
-#define __do_try(__arg_expression) /* if using __try, clang_format will add new line after it */ \
+#define __do_try(__arg_expr) /* if using __try, clang_format will add new line after it */ \
     do { \
-        result = (__arg_expression); \
+        result = (__arg_expr); \
         if (!result.success) { \
             __throw(result.value); \
         } \
     } while (0);
 #define __lhs container
 #define __rhs selector
+    curr_offset = vm->pc;
     while (_get_instruction(&(vm->bytecode), &(vm->pc), &instruction)) {
         switch (instruction.opcode) {
         case op_nop:
@@ -604,8 +637,8 @@ struct js_result js_run(struct js_vm *vm) {
                 case opd_double:
                     _stack_push_value(vm, js_number(instruction.operands[1].value_double));
                     break;
-                case opd_inscription:
-                    _stack_push_value(vm, js_inscription(&(vm->bytecode.base), instruction.operands[1].value_inscription.offset, instruction.operands[1].value_inscription.length));
+                case opd_string:
+                    _stack_push_value(vm, js_string(&(vm->heap), __operand_offset(1), __operand_length(1)));
                     break;
                 case opd_function:
                     // closure must be added just before return, NOT here, because closure = local variables before return
@@ -684,34 +717,35 @@ struct js_result js_run(struct js_vm *vm) {
             break;
         case op_variable_declare:
             enforce(instruction.num_operands == 1);
-            enforce(instruction.operands[0].type == opd_inscription);
-            js_variable_declare(vm, __operand_0_offset(), __operand_0_length(), _stack_pop_value(vm));
+            enforce(instruction.operands[0].type == opd_string);
+            __do_try(js_declare_variable(vm, __operand_offset(0), __operand_length(0), _stack_pop_value(vm)));
             break;
         case op_variable_delete:
             enforce(instruction.num_operands == 1);
-            enforce(instruction.operands[0].type == opd_inscription);
-            js_variable_delete(vm, __operand_0_offset(), __operand_0_length());
+            enforce(instruction.operands[0].type == opd_string);
+            __do_try(js_delete_variable(vm, __operand_offset(0), __operand_length(0)));
             break;
         case op_variable_put:
             enforce(instruction.num_operands == 1);
-            enforce(instruction.operands[0].type == opd_inscription);
-            js_variable_put(vm, __operand_0_offset(), __operand_0_length(), _stack_pop_value(vm));
+            enforce(instruction.operands[0].type == opd_string);
+            __do_try(js_put_variable(vm, __operand_offset(0), __operand_length(0), _stack_pop_value(vm)));
             break;
         case op_variable_get:
             enforce(instruction.num_operands == 1);
-            enforce(instruction.operands[0].type == opd_inscription);
-            _stack_push_value(vm, js_variable_get(vm, __operand_0_offset(), __operand_0_length()));
+            enforce(instruction.operands[0].type == opd_string);
+            __do_try(js_get_variable(vm, __operand_offset(0), __operand_length(0)));
+            _stack_push_value(vm, result.value);
             break;
         case op_jump:
             enforce(instruction.num_operands == 1);
             enforce(instruction.operands[0].type == opd_uint32);
             vm->pc = instruction.operands[0].value_uint32;
             break;
-        case op_parameter_append:
+        case op_argument_append:
             value = _stack_pop_value(vm);
             frame = _stack_peek(vm, 0);
             enforce(frame->type == sf_function);
-            buffer_push(frame->parameters.base, frame->parameters.length, frame->parameters.capacity, value);
+            buffer_push(frame->arguments.base, frame->arguments.length, frame->arguments.capacity, value);
             break;
         case op_call:
             frame = _stack_peek(vm, 1);
@@ -726,14 +760,17 @@ struct js_result js_run(struct js_vm *vm) {
                 // __debug();
                 break;
             case vt_c_function:
-                result = ((struct js_result(*)(struct js_vm *))value.c_function)(vm);
-                if (result.success) {
-                    _stack_pop(vm, 2);
-                    _stack_push_value(vm, result.value);
-                } else {
-                    // exception handling
-                    __throw(result.value);
-                }
+                // result = ((js_c_function_pointer_type)value.c_function)(vm);
+                // if (result.success) {
+                //     _stack_pop(vm, 2);
+                //     _stack_push_value(vm, result.value);
+                // } else {
+                //     // exception handling
+                //     __throw(result.value);
+                // }
+                __do_try(((js_c_function_pointer_type)value.c_function)(vm));
+                _stack_pop(vm, 2);
+                _stack_push_value(vm, result.value);
                 // __debug();
                 break;
             default:
@@ -752,11 +789,11 @@ struct js_result js_run(struct js_vm *vm) {
             _stack_pop_to(vm, sf_function);
             if (vm->stack.length == 0) {
                 // if there are no stacks, which means 'return' outside function, exit loop
-                return (struct js_result){.success = true, .value = value};
+                js_return(value);
             } else if (_stack_peek(vm, 0)->egress == 0) {
-                // if function stack's egress == 0, which means is called by c function, exit loop
+                // is called by c function, exit loop
                 _stack_pop(vm, 2); // cleanup
-                return (struct js_result){.success = true, .value = value};
+                js_return(value);
             } else {
                 // else jump to function egress
                 vm->pc = _stack_peek(vm, 0)->egress;
@@ -765,36 +802,36 @@ struct js_result js_run(struct js_vm *vm) {
             }
             // __debug();
             break;
-        case op_parameter_first:
+        case op_argument_first:
             frame = _stack_peek(vm, 0);
             enforce(frame->type == sf_function);
-            frame->parameters.index = 0;
+            frame->arguments.index = 0;
             break;
-        case op_parameter_get_next:
+        case op_argument_get_next:
             enforce(instruction.num_operands == 1);
-            enforce(instruction.operands[0].type == opd_inscription);
+            enforce(instruction.operands[0].type == opd_string);
             // default value
             if (_stack_peek(vm, 0)->type == sf_value) {
                 __lhs = _stack_pop_value(vm);
             } else {
                 __lhs = js_null();
             }
-            __rhs = js_parameter_get(vm, _stack_peek(vm, 0)->parameters.index++);
+            __rhs = js_get_argument(vm, _stack_peek(vm, 0)->arguments.index++);
             if (__rhs.type != vt_null) {
                 __lhs = __rhs;
             }
-            js_variable_declare(vm, __operand_0_offset(), __operand_0_length(), __lhs);
+            __do_try(js_declare_variable(vm, __operand_offset(0), __operand_length(0), __lhs));
             break;
         case op_catch:
             enforce(instruction.num_operands == 2);
-            enforce(instruction.operands[0].type == opd_inscription);
+            enforce(instruction.operands[0].type == opd_string);
             enforce(instruction.operands[1].type == opd_uint32);
             value = _stack_pop_value(vm);
             if (value.type == 0) { // no exception
                 vm->pc = instruction.operands[1].value_uint32;
             } else {
                 _stack_push(vm, (struct js_stack_frame){.type = sf_block, .egress = instruction.operands[1].value_uint32});
-                js_variable_declare(vm, __operand_0_offset(), __operand_0_length(), value);
+                __do_try(js_declare_variable(vm, __operand_offset(0), __operand_length(0), value));
             }
             break;
         case op_throw:
@@ -862,7 +899,7 @@ struct js_result js_run(struct js_vm *vm) {
                 _stack_push_value(vm, js_null());
             }
             break;
-        case op_parameter_spread:
+        case op_argument_spread:
             value = _stack_pop_value(vm);
             frame = _stack_peek(vm, 0);
             enforce(frame->type == sf_function);
@@ -870,26 +907,26 @@ struct js_result js_run(struct js_vm *vm) {
                 __throw(js_scripture_sz("Parameter to be spreaded must be array"));
             }
             buffer_for_each(value.managed->array.base, value.managed->array.length, _, i, v, {
-                // parameters will be used by 3rd-party c functions, so special treat js_undefined here
-                buffer_push(frame->parameters.base, frame->parameters.length, frame->parameters.capacity, v->type == 0 ? js_null() : *v);
+                // arguments will be used by 3rd-party c functions, so special treat js_undefined here
+                buffer_push(frame->arguments.base, frame->arguments.length, frame->arguments.capacity, v->type == 0 ? js_null() : *v);
             });
             break;
-        case op_parameter_get_rest:
+        case op_argument_get_rest:
             enforce(instruction.num_operands == 1);
-            enforce(instruction.operands[0].type == opd_inscription);
+            enforce(instruction.operands[0].type == opd_string);
             value = js_array(&(vm->heap));
             frame = _stack_peek(vm, 0);
             enforce(frame->type == sf_function);
-            while (frame->parameters.index < frame->parameters.length) {
-                // special treat js_undefined come from parameter spread
-                if (frame->parameters.base[frame->parameters.index].type == 0) {
-                    js_array_push(&value, js_null());
-                    frame->parameters.index++;
-                } else {
-                    js_array_push(&value, frame->parameters.base[frame->parameters.index++]);
-                }
+            while (frame->arguments.index < frame->arguments.length) {
+                // special treat js_undefined come from argument spread
+                // if (frame->arguments.base[frame->arguments.index].type == 0) {
+                //     js_array_push(&value, js_null());
+                //     frame->arguments.index++;
+                // } else {
+                js_array_push(&value, frame->arguments.base[frame->arguments.index++]);
+                // }
             };
-            js_variable_declare(vm, __operand_0_offset(), __operand_0_length(), value);
+            __do_try(js_declare_variable(vm, __operand_offset(0), __operand_length(0), value));
             break;
         case op_add:
             __rhs = _stack_pop_value(vm);
@@ -1017,21 +1054,21 @@ struct js_result js_run(struct js_vm *vm) {
             __rhs.boolean = !__rhs.boolean;
             _stack_push_value(vm, __rhs);
             break;
-        case op_ternary:
-            __rhs = _stack_pop_value(vm);
-            __lhs = _stack_pop_value(vm);
-            value = _stack_pop_value(vm);
-            if (value.type != vt_boolean) {
-                __throw(js_scripture_sz("Ternary condition must be boolean"));
-            }
-            _stack_push_value(vm, value.boolean ? __lhs : __rhs);
-            break;
+        // case op_ternary:
+        //     __rhs = _stack_pop_value(vm);
+        //     __lhs = _stack_pop_value(vm);
+        //     value = _stack_pop_value(vm);
+        //     if (value.type != vt_boolean) {
+        //         __throw(js_scripture_sz("Ternary condition must be boolean"));
+        //     }
+        //     _stack_push_value(vm, value.boolean ? __lhs : __rhs);
+        //     break;
         case op_typeof:
             __rhs = _stack_pop_value(vm);
             enforce(__rhs.type < countof(_typeof_table));
             _stack_push_value(vm, js_scripture_sz(_typeof_table[__rhs.type]));
             break;
-        case op_stack_duplicate_value: // duplicate value from stack count from top to down
+        case op_stack_dupe: // duplicate value from stack count from top to down
             enforce(instruction.num_operands == 1);
             enforce(instruction.operands[0].type == opd_uint8);
             _stack_push_value(vm, _stack_peek_value(vm, instruction.operands[0].value_uint8));
@@ -1110,10 +1147,11 @@ struct js_result js_run(struct js_vm *vm) {
             fatal("Unknown opcode %u", instruction.opcode);
             break;
         }
-    tail:
-        (void)0;
+    end_of_while_loop:
+        // (void)0;
+        curr_offset = vm->pc;
     }
-    return (struct js_result){.success = true, .value = js_null()};
+    js_return(js_null());
 #undef __rhs
 #undef __lhs
 #undef __throw
@@ -1122,7 +1160,7 @@ struct js_result js_run(struct js_vm *vm) {
 #undef __debug
 }
 
-void js_collect_garbage(struct js_vm *vm) {
+struct js_result js_collect_garbage(struct js_vm *vm) {
 #define __mark_map(__arg_map) \
     js_map_for_each((__arg_map).base, (__arg_map).length, (__arg_map).capacity, k, kl, v, { \
         (void)k; \
@@ -1137,54 +1175,105 @@ void js_collect_garbage(struct js_vm *vm) {
     __mark_map(vm->globals);
     _call_stack_for_each(vm, frame, {
         __mark_map(frame->locals);
-        if (frame->type == sf_function && frame->function != NULL) { // c function is NULL
-            __mark_map(frame->function->function.closure); // some anonumous functions which are in use by callee
-            __mark_list(frame->parameters);
+        if (frame->type == sf_function) {
+            // some anonumous functions which are in use by callee
+            // c function's arguments must also be marked, for example, in an anonymous callback of c function, invoked gc(), this callback be sweeped, boom!
+            __mark_list(frame->arguments);
+            if (frame->function != NULL) {
+                __mark_map(frame->function->function.closure);
+            }
         }
     });
     js_sweep(&(vm->heap));
+    js_return(js_null());
 #undef __mark_list
 #undef __mark_map
 }
 
-struct js_result js_call(struct js_vm *vm, const char *name, uint16_t name_length, struct js_value *parameters, uint16_t num_parameters) {
-    // prepare stack
-    struct js_value f_managed = js_variable_get(vm, name, name_length);
-    enforce(f_managed.type == vt_function);
-    buffer_push(vm->stack.base, vm->stack.length, vm->stack.capacity,
-        ((struct js_stack_frame){.type = sf_value, .value = f_managed}));
-    struct js_stack_frame frame = (struct js_stack_frame){.type = sf_function, .egress = 0}; // 0 indicates called by c function
-    // prepare parameters
-    for (uint16_t i = 0; i < num_parameters; i++) {
-        buffer_push(frame.parameters.base, frame.parameters.length, frame.parameters.capacity, parameters[i]);
+struct js_result js_call(struct js_vm *vm, struct js_value fv, struct js_value *arguments, uint16_t num_arguments) {
+    if (fv.type == vt_function) {
+        // backup stack depth, in callee, may throw error, stack won't be cleaned up, if not cleaned here and return at upper vm's 'op_call', and '__do_try' will check stack and found leftover .egress=0 stack, and exit vm, this shouldn't happen
+        uint16_t stack_length_backup = vm->stack.length;
+        buffer_push(vm->stack.base, vm->stack.length, vm->stack.capacity,
+            ((struct js_stack_frame){.type = sf_value, .value = fv}));
+        struct js_stack_frame frame = (struct js_stack_frame){.type = sf_function, .function = fv.managed, .egress = 0}; // 0 indicates called by c function
+        // prepare arguments
+        for (uint16_t i = 0; i < num_arguments; i++) {
+            // js_value_dump(arguments + i);
+            // printf("\n");
+            // special treat for vt_undefined from such as array element passed to sort callback
+            struct js_value arg = arguments[i];
+            if (arg.type == 0) {
+                arg = js_null();
+            }
+            buffer_push(frame.arguments.base, frame.arguments.length, frame.arguments.capacity, arg);
+        }
+        buffer_push(vm->stack.base, vm->stack.length, vm->stack.capacity, frame);
+        // backup program counter, jump to function ingress, wait for function completion
+        uint32_t pc_backup = vm->pc;
+        vm->pc = fv.managed->function.ingress;
+        struct js_result result = js_run(vm);
+        vm->pc = pc_backup;
+        // restore to backuped stack depth
+        if (vm->stack.length > stack_length_backup) {
+            _stack_pop(vm, vm->stack.length - stack_length_backup);
+        }
+        return result;
+    } else if (fv.type == vt_c_function) {
+        buffer_push(vm->stack.base, vm->stack.length, vm->stack.capacity,
+            ((struct js_stack_frame){.type = sf_value, .value = fv}));
+        struct js_stack_frame frame = (struct js_stack_frame){.type = sf_function};
+        for (uint16_t i = 0; i < num_arguments; i++) {
+            // is it necessart to special treat for vt_undefined like above? maybe not, c_function can handle it
+            buffer_push(frame.arguments.base, frame.arguments.length, frame.arguments.capacity, arguments[i]);
+        }
+        buffer_push(vm->stack.base, vm->stack.length, vm->stack.capacity, frame);
+        struct js_result result = ((js_c_function_pointer_type)fv.c_function)(vm);
+        _stack_pop(vm, 2);
+        return result;
+    } else {
+        js_throw(js_scripture_sz("Not a function"));
     }
-    buffer_push(vm->stack.base, vm->stack.length, vm->stack.capacity, frame);
-    // backup program counter, jump to function ingress, wait for function completion
-    uint32_t pc_backup = vm->pc;
-    vm->pc = f_managed.managed->function.ingress;
-    struct js_result result = js_run(vm);
-    vm->pc = pc_backup;
-    return result;
 }
 
-struct js_result js_call_sz(struct js_vm *vm, const char *name, struct js_value *parameters, uint16_t num_parameters) {
-    return js_call(vm, name, (uint16_t)strlen(name), parameters, num_parameters);
+struct js_result js_call_by_name(struct js_vm *vm, const char *name, uint16_t name_length, struct js_value *arguments, uint16_t num_arguments) {
+    struct js_result result = js_get_variable(vm, name, name_length);
+    if (!result.success) {
+        return result;
+    }
+    return js_call(vm, result.value, arguments, num_arguments);
 }
 
-#ifndef NOTEST
-
-int test_vm_structure_size(int argc, char *argv[]) {
-    // print_result(sizeof(struct js_call_stack_frame), "%zu");
-    print_result(sizeof(struct js_bytecode), "%zu");
-    print_result(sizeof(struct js_cross_reference), "%zu");
-    print_result(sizeof(struct js_stack_frame), "%zu");
-    print_result(sizeof(struct js_vm), "%zu");
-    print_result(sizeof(struct _operand), "%zu");
-    print_result(sizeof(struct _instruction), "%zu");
-    return EXIT_SUCCESS;
+struct js_result js_call_by_name_sz(struct js_vm *vm, const char *name, struct js_value *arguments, uint16_t num_arguments) {
+    return js_call_by_name(vm, name, (uint16_t)strlen(name), arguments, num_arguments);
 }
 
-int test_instruction_get_put(int argc, char *argv[]) {
+struct js_value js_c_function(js_c_function_pointer_type c_function) {
+    return (struct js_value){.type = vt_c_function, .c_function = c_function};
+}
+
+void js_free_vm(struct js_vm *vm) {
+    buffer_free(vm->bytecode.base, vm->bytecode.length, vm->bytecode.capacity);
+    buffer_free(vm->cross_reference.base, vm->cross_reference.length, vm->cross_reference.capacity);
+    js_sweep(&(vm->heap));
+    js_sweep(&(vm->heap));
+    js_map_free(vm->globals.base, vm->globals.length, vm->globals.capacity);
+    _stack_pop(vm, vm->stack.length);
+}
+
+#ifdef DEBUG
+
+void test_vm_structure_size() {
+    // log_expression("%zu", sizeof(struct js_call_stack_frame));
+    log_expression("%zu", sizeof(struct js_bytecode));
+    log_expression("%zu", sizeof(struct js_cross_reference));
+    log_expression("%zu", sizeof(struct js_stack_frame));
+    log_expression("%zu", sizeof(struct js_vm));
+    log_expression("%zu", sizeof(struct _operand));
+    log_expression("%zu", sizeof(struct _instruction));
+}
+
+void test_instruction_get_put() {
     // {
     //     uint8_t base[] = {
     //         0b11000000, // nop, null, false, true
@@ -1244,26 +1333,24 @@ int test_instruction_get_put(int argc, char *argv[]) {
         js_put_instruction(&bytecode, &offset, op_nop, 1, opd_null);
         js_put_instruction(&bytecode, &offset, op_nop, 2, opd_boolean, opd_boolean, false, true);
         js_put_instruction(&bytecode, &offset, op_nop, 3, opd_uint8, opd_uint16, opd_uint32, UINT8_MAX, UINT16_MAX, UINT32_MAX);
-        js_put_instruction(&bytecode, &offset, op_nop, 3, opd_double, opd_inscription, opd_function, -0.123456, 12, "Hello,World!", 666);
+        js_put_instruction(&bytecode, &offset, op_nop, 3, opd_double, opd_string, opd_function, -0.123456, 12, "Hello,World!", 666);
         buffer_dump(bytecode.base, bytecode.length, bytecode.capacity);
         js_bytecode_dump(&bytecode);
     }
-    return EXIT_SUCCESS;
 }
 
-int test_vm_run(int argc, char *argv[]) {
+void test_vm_run() {
     struct js_vm vm = {};
     js_add_instruction(&(vm.bytecode), op_nop, 0);
     js_add_instruction(&(vm.bytecode), op_stack_push, 2, opd_uint8, opd_boolean, sf_value, false);
-    js_add_instruction(&(vm.bytecode), op_variable_declare, 1, opd_inscription, 3, "foo");
+    js_add_instruction(&(vm.bytecode), op_variable_declare, 1, opd_string, 3, "foo");
     js_add_instruction(&(vm.bytecode), op_stack_push, 2, opd_uint8, opd_double, sf_value, 1.23456);
-    js_add_instruction(&(vm.bytecode), op_variable_declare, 1, opd_inscription, 3, "bar");
-    js_add_instruction(&(vm.bytecode), op_stack_push, 2, opd_uint8, opd_inscription, sf_value, 5, "hello");
-    js_add_instruction(&(vm.bytecode), op_variable_declare, 1, opd_inscription, 3, "baz");
+    js_add_instruction(&(vm.bytecode), op_variable_declare, 1, opd_string, 3, "bar");
+    js_add_instruction(&(vm.bytecode), op_stack_push, 2, opd_uint8, opd_string, sf_value, 5, "hello");
+    js_add_instruction(&(vm.bytecode), op_variable_declare, 1, opd_string, 3, "baz");
     js_bytecode_dump(&(vm.bytecode));
     js_run(&vm);
     js_vm_dump(&vm);
-    return EXIT_SUCCESS;
 }
 
 #endif
