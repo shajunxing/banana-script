@@ -1,3 +1,17 @@
+# 2025-07-28
+
+Reconstructed dump/tostring/tojson functions. Added more std functions.
+
+Standalized some beginner's functions: asked chatgpt, took most popular names as possible `input`, `print`, `read`, `write`
+
+Standalized function naming rules.
+
+Now support posix shebang
+
+Added regular expression pattern matching
+
+Simplified bind operator
+
 # 2025-07-16
 
 Reconstructed `make.c`, now support static build, and you can combine `debug` `release` with `static` `shared` as you wish. Added a new value type `vt_c_value`, which is managed, and can be notified on garbage collection, in your C code you can handle your custom data with it, see <https://github.com/shajunxing/banana-ui> for example.
@@ -13,8 +27,6 @@ Finished string escape, except '\u', i think it is too complicated and useless, 
 Finished detailed error source line number by cross reference
 
 Linux build with readline library
-
-TODO: tostring, tojson
 
 # 2025-06-23
 

@@ -54,7 +54,7 @@ void print_hex(void *base, size_t length) {
 
 // strncpy will cause gcc warning: 'strncpy' output truncated before terminating nul copying as many bytes from a string as its length
 // use https://stackoverflow.com/questions/46013382/c-strndup-implicit-declaration instead
-char *string_dupe(const char *src, size_t maxlen) {
+char *dupe_s(const char *src, size_t maxlen) {
     size_t len;
     for (len = 0; len < maxlen && src[len] != '\0'; len++)
         ;
@@ -66,7 +66,7 @@ char *string_dupe(const char *src, size_t maxlen) {
     return dst;
 }
 
-char *string_dupe_sz(const char *src) {
+char *dupe_sz(const char *src) {
     size_t len = strlen(src);
     // log_expression("%zu", len);
     char *dst = calloc(len + 1, 1);
@@ -76,19 +76,19 @@ char *string_dupe_sz(const char *src) {
     return dst;
 }
 
-bool string_starts_with_sz(const char *str, const char *prefix) {
+bool starts_with_sz(const char *str, const char *prefix) {
     size_t len = strlen(str);
     size_t prefixlen = strlen(prefix);
     return prefixlen <= len && strncmp(str, prefix, prefixlen) == 0;
 }
 
-bool string_ends_with_sz(const char *str, const char *suffix) {
+bool ends_with_sz(const char *str, const char *suffix) {
     size_t len = strlen(str);
     size_t suffixlen = strlen(suffix);
     return suffixlen <= len && strncmp(str + len - suffixlen, suffix, suffixlen) == 0;
 }
 
-char *string_join_internal_sz(const char *sep, size_t nargs, ...) {
+char *join_sz_internal(const char *sep, size_t nargs, ...) {
     size_t i, len;
     char *ret;
     va_list args;
@@ -110,7 +110,7 @@ char *string_join_internal_sz(const char *sep, size_t nargs, ...) {
     return ret;
 }
 
-int string_natural_compare_sz(const char *x, const char *y) {
+int natural_compare_sz(const char *x, const char *y) {
     // string natural comparation "alphanum" algorithm
     // https://stackoverflow.com/questions/1601834/c-implementation-of-or-alternative-to-strcmplogicalw-in-shlwapi-dll
     // https://docs.microsoft.com/en-us/previous-versions/technet-magazine/hh475812(v=msdn.10)?redirectedfrom=MSDN
@@ -136,6 +136,301 @@ int string_natural_compare_sz(const char *x, const char *y) {
             return x[mx] > y[my] ? 1 : -1;
     }
     return lx > ly ? 1 : -1;
+}
+
+// "error C2099: initializer is not a constant" because stdout cannot be determined at compile time
+// struct print_stream stdout_stream = {.type = file_stream, .fp = stdout};
+
+void free_stream(struct print_stream *out) {
+    if (out->type == string_stream) {
+        buffer_free(out->base, out->length, out->capacity);
+    }
+}
+
+// printf family hardly returns negative, and no errno generated, so if negative, fatal
+// even if wrong fp or NULL, just no output or segment fault
+void vprintf_to_stream(struct print_stream *out, const char *format, va_list args) {
+    va_list args_copy;
+    int result;
+    if (out->type == file_stream) {
+        result = vfprintf(out->fp, format, args);
+        if (result < 0) {
+            fatal("vfprintf failed");
+        }
+    } else {
+        va_copy(args_copy, args);
+        result = vsnprintf(NULL, 0, format, args_copy);
+        va_end(args_copy);
+        if (result < 0) {
+            fatal("vsnprintf failed");
+        }
+        size_t new_length = out->length + (size_t)result;
+        buffer_alloc(out->base, out->length, out->capacity, new_length + 1);
+        result = vsnprintf(out->base + out->length, (size_t)result + 1, format, args);
+        if (result < 0) {
+            fatal("vsnprintf failed");
+        }
+        out->length = new_length;
+    }
+}
+
+void printf_to_stream(struct print_stream *out, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    vprintf_to_stream(out, format, args);
+    va_end(args);
+}
+
+void putc_to_stream(struct print_stream *out, char c) {
+    if (out->type == file_stream) {
+        fputc(c, out->fp);
+    } else {
+        string_buffer_append_ch(out->base, out->length, out->capacity, c);
+    }
+}
+
+void puts_to_stream(struct print_stream *out, const char *s, size_t len) {
+    if (out->type == file_stream) {
+        fprintf(out->fp, "%.*s", (int)len, s);
+    } else {
+        string_buffer_append(out->base, out->length, out->capacity, s, len);
+    }
+}
+
+void putsz_to_stream(struct print_stream *out, const char *s) {
+    if (out->type == file_stream) {
+        fputs(s, out->fp);
+    } else {
+        string_buffer_append_sz(out->base, out->length, out->capacity, s);
+    }
+}
+
+void escape_to_stream(struct print_stream *out, const char *base, size_t length) {
+    for (size_t i = 0; i < length; i++) {
+        char c = base[i];
+        char *s = NULL;
+        switch (c) { // https://en.cppreference.com/w/c/language/escape.html
+        case '\'':
+            s = "\\'";
+            break;
+        case '\"':
+            s = "\\\"";
+            break;
+        case '\?':
+            s = "\\?";
+            break;
+        case '\\':
+            s = "\\\\";
+            break;
+        case '\a':
+            s = "\\a";
+            break;
+        case '\b':
+            s = "\\b";
+            break;
+        case '\f':
+            s = "\\f";
+            break;
+        case '\n':
+            s = "\\n";
+            break;
+        case '\r':
+            s = "\\r";
+            break;
+        case '\t':
+            s = "\\t";
+            break;
+        case '\v':
+            s = "\\v";
+            break;
+        default:
+            break;
+        }
+        s ? putsz_to_stream(out, s) : putc_to_stream(out, c);
+    }
+}
+
+/*
+Less than 200 lines of C code implements regular expression matching with capture, escape, character class, and quantifier functions
+
+I like short, lean, clear and easy-to-read code, and I learned from classic example <https://www.cs.princeton.edu/courses/archive/spr09/cos333/beautiful.html> of master Rob Pike. Master's code looks elegant, but it has a huge problem: recursive layers are too deep, and risk of stack burst is high. And my implementation idea is:
+
+1. First of all, pay tribute to master's code, construct a basic `match` and `match_here` two-layer structure, which can correctly parse `^` `$`;
+2. Then use tree structure to achieve arbitrary depth nested `()`;
+3. Then implement pattern matching of a single character, abstract `match_char` function, in which `d` `s` `w` `[]`;
+4. Finally, add quantifier `*` ` `?`.
+
+Of course, traditional regular libraries are generally precompiled to AST because they support many functions, such as need for backscanning, etc., and my simple recursive descending code framework here can be regarded as implementing most common functions, which can be expanded with more escapes, character classes, and quantifiers.
+*/
+
+static void _start_capture(char *str, struct re_capture **cap) {
+#define __last_sub() ((*cap)->subs.base + (*cap)->subs.length - 1)
+    // printf("_start_capture\n");
+    if (cap && *cap) {
+        // un-successfully ended captures can be re-used
+        if (!(*cap)->subs.base || ((*cap)->subs.base && __last_sub()->head && __last_sub()->tail)) {
+            buffer_push((*cap)->subs.base, (*cap)->subs.length, (*cap)->subs.capacity,
+                (struct re_capture){.super = (*cap)});
+        }
+        (*cap) = __last_sub();
+        (*cap)->head = str;
+    }
+#undef __last_sub
+}
+
+static void _end_capture(char *str, struct re_capture **cap) {
+    // printf("_end_capture\n");
+    if (cap && *cap) {
+        (*cap)->tail = str;
+        (*cap) = (*cap)->super;
+    }
+}
+
+void re_free_capture(struct re_capture *cap) {
+    buffer_for_each(cap->subs.base, cap->subs.length, cap->subs.capacity, i, c, re_free_capture(c));
+    buffer_free(cap->subs.base, cap->subs.length, cap->subs.capacity);
+}
+
+static void _print_capture_recursively(struct re_capture *cap, int depth) {
+    if (!cap) {
+        printf("%*snull\n", depth * 4, "");
+        return;
+    }
+    if (cap->head && cap->tail) {
+        printf("%*s(%zu) \"%.*s\"\n", depth * 4, "", cap->subs.length, (int)(cap->tail - cap->head), cap->head);
+    } else {
+        printf("%*s(%zu) empty\n", depth * 4, "", cap->subs.length);
+    }
+    buffer_for_each(cap->subs.base, cap->subs.length, cap->subs.capacity,
+        i, c, _print_capture_recursively(c, depth + 1));
+}
+
+static void _print_capture(struct re_capture *cap) {
+    _print_capture_recursively(cap, 1);
+}
+
+// match single character, including escape pattern and class pattern
+static bool _match_char(char c, char *ph, char *pt) {
+    bool inv = false;
+#define __check_return(__arg_expr) \
+    do { \
+        if (inv ^ (__arg_expr)) { \
+            return true; \
+        } \
+    } while (0)
+    while (ph < pt) {
+        if (*ph == '^') {
+            inv = true;
+            ph++;
+        } else if (*ph == '\\') {
+            ph++;
+            if (*ph == 'd') {
+                __check_return(isdigit(c));
+            } else if (*ph == 's') {
+                __check_return(isspace(c));
+            } else if (*ph == 'w') {
+                __check_return(isalnum(c) || c == '_');
+            } else {
+                __check_return(c == *ph);
+            }
+            ph++;
+        } else if (*ph == '.') {
+            // including '\r' '\n'
+            __check_return(true);
+        } else if (*(ph + 1) == '-') {
+            __check_return(c >= *ph && c <= *(ph + 2));
+            ph += 3;
+        } else {
+            __check_return(c == *ph);
+            ph++;
+        }
+    }
+    return false;
+#undef __check_return
+}
+
+static bool _match_here(char *str, char *pat, struct re_capture *cap) {
+#define __set_capture_head() (cap ? (cap->head = str) : (void)0)
+#define __set_capture_tail() (cap ? (cap->tail = str) : (void)0)
+#define __start_capture() (cap ? _start_capture(str, &cap) : (void)0)
+#define __end_capture() (cap ? _end_capture(str, &cap) : (void)0)
+    __set_capture_head();
+    for (;;) {
+        // DON'T use "if (*pat == '(' && cap)", *pat must always be consumed
+        if (*pat == '(') {
+            __start_capture();
+            pat++;
+        } else if (*pat == ')') {
+            __end_capture();
+            pat++;
+        } else if (*pat == '\0') {
+            __set_capture_tail();
+            return true;
+        } else if (*pat == '$') {
+            bool ret = *str == '\0';
+            ret ? __set_capture_tail() : (void)0;
+            return ret;
+        } else if (*str == '\0') {
+            return false;
+        } else {
+            char *ph = pat;
+            if (*pat == '\\') {
+                pat++;
+            } else if (*pat == '[') {
+                do {
+                    pat++;
+                    if (*pat == '\0') {
+                        return false;
+                    }
+                } while (*pat != ']');
+            }
+            pat++;
+            // quantifiers
+            if (*pat == '?') {
+                // zero or one
+                if (_match_char(*str, ph, pat)) {
+                    str++;
+                }
+                pat++;
+            } else {
+                // '+' is combination of 'one' and 'zero or more'
+                if (*pat != '*') {
+                    // 'one': '+' and others
+                    char c = *str;
+                    str++;
+                    if (!_match_char(c, ph, pat)) {
+                        return false;
+                    }
+                }
+                if (*pat == '*' || *pat == '+') {
+                    // 'zero or more': '*' and '+'
+                    while (*str != '\0' && _match_char(*str, ph, pat)) {
+                        str++;
+                    }
+                    pat++;
+                }
+            }
+        }
+    }
+#undef __end_capture
+#undef __start_capture
+#undef __set_capture_tail
+#undef __set_capture_head
+}
+
+// string and pattern's current position cannot be put into context, because they will be re-entered in namy functions
+bool re_match(char *string, char *pattern, struct re_capture *capture) {
+    if (*pattern == '^') {
+        return _match_here(string, pattern + 1, capture);
+    }
+    for (;; string++) {
+        if (_match_here(string, pattern, capture)) {
+            return true;
+        }
+        if (*string == '\0') {
+            return false;
+        }
+    }
 }
 
 #ifdef DEBUG
@@ -244,26 +539,26 @@ void test_string_buffer_loop() {
     }
 }
 
-void _append_fv(char **base, size_t *length, size_t *capacity, const char *fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    string_buffer_append_fv(*base, *length, *capacity, fmt, args);
-    va_end(args);
-}
+// void _append_fv(char **base, size_t *length, size_t *capacity, const char *fmt, ...) {
+//     va_list args;
+//     va_start(args, fmt);
+//     string_buffer_append_fv(*base, *length, *capacity, fmt, args);
+//     va_end(args);
+// }
 
-void test_string_buffer_append_f() {
-    char *base = NULL;
-    size_t length = 0;
-    size_t capacity = 0;
-    string_buffer_append_f(base, length, capacity, "/%g/%s", 3.14, "hello");
-    buffer_dump(base, length, capacity);
-    string_buffer_append_f(base, length, capacity, "/%g/%s", 2.72, "world");
-    buffer_dump(base, length, capacity);
-    _append_fv(&base, &length, &capacity, "/%g/%s", 3.14, "hello");
-    buffer_dump(base, length, capacity);
-    _append_fv(&base, &length, &capacity, "/%g/%s", 2.72, "world");
-    buffer_dump(base, length, capacity);
-}
+// void test_string_buffer_append_f() {
+//     char *base = NULL;
+//     size_t length = 0;
+//     size_t capacity = 0;
+//     string_buffer_append_f(base, length, capacity, "/%g/%s", 3.14, "hello");
+//     buffer_dump(base, length, capacity);
+//     string_buffer_append_f(base, length, capacity, "/%g/%s", 2.72, "world");
+//     buffer_dump(base, length, capacity);
+//     _append_fv(&base, &length, &capacity, "/%g/%s", 3.14, "hello");
+//     buffer_dump(base, length, capacity);
+//     _append_fv(&base, &length, &capacity, "/%g/%s", 2.72, "world");
+//     buffer_dump(base, length, capacity);
+// }
 
 void test_memmove() {
     char mem[32] = {0};
@@ -277,40 +572,40 @@ void test_memmove() {
 
 void test_string_dupe() {
     const char *src = (const char *)test_string_dupe; // no end with 0
-    char *dst = string_dupe_sz(src);
+    char *dst = dupe_sz(src);
     puts(dst);
     free(dst);
-    dst = string_dupe(src, 3);
+    dst = dupe_s(src, 3);
     puts(dst);
     free(dst);
-    dst = string_dupe(src, 7);
+    dst = dupe_s(src, 7);
     puts(dst);
     free(dst);
-    dst = string_dupe(src, 100);
+    dst = dupe_s(src, 100);
     puts(dst);
     free(dst);
 }
 
-void test_read_file() {
-    const char *filename = "examples/power_of_2_length.txt";
-    char *base = NULL;
-    size_t length = 0;
-    size_t capacity = 0;
-    read_text_file(filename, base, length, capacity);
-    puts(base);
-    buffer_dump(base, length, capacity);
-    read_text_file(filename, base, length, capacity);
-    puts(base);
-    buffer_dump(base, length, capacity);
-    buffer_free(base, length, capacity);
-    read_binary_file(filename, base, length, capacity);
-    puts(base);
-    buffer_dump(base, length, capacity);
-    read_binary_file(filename, base, length, capacity);
-    puts(base);
-    buffer_dump(base, length, capacity);
-    buffer_free(base, length, capacity);
-}
+// void test_read_file() {
+//     const char *filename = "examples/power_of_2_length.txt";
+//     char *base = NULL;
+//     size_t length = 0;
+//     size_t capacity = 0;
+//     read_text_file(filename, base, length, capacity);
+//     puts(base);
+//     buffer_dump(base, length, capacity);
+//     read_text_file(filename, base, length, capacity);
+//     puts(base);
+//     buffer_dump(base, length, capacity);
+//     buffer_free(base, length, capacity);
+//     read_binary_file(filename, base, length, capacity);
+//     puts(base);
+//     buffer_dump(base, length, capacity);
+//     read_binary_file(filename, base, length, capacity);
+//     puts(base);
+//     buffer_dump(base, length, capacity);
+//     buffer_free(base, length, capacity);
+// }
 
 void test_read_line() {
     {
@@ -332,7 +627,7 @@ void test_read_line() {
 }
 
 static int _comp(const void *lhs, const void *rhs) {
-    return string_natural_compare_sz(*((char **)lhs), *((char **)rhs));
+    return natural_compare_sz(*((char **)lhs), *((char **)rhs));
 }
 
 static int _rev_comp(const void *lhs, const void *rhs) {
@@ -386,6 +681,87 @@ void test_natural_compare() {
     for (size_t i = 0; i < countof(list); i++) {
         puts(list[i]);
     }
+}
+
+void test_print_stream() {
+    {
+        struct print_stream out = {.type = file_stream, .fp = stdout};
+        printf_to_stream(&out, "-%c-%d-%g-%s-", 'A', 666, 3.14, "Hello");
+        printf_to_stream(&out, "-%c-%d-%g-%s-", 'A', 666, 3.14, "Hello");
+        char *esc_seqs = "\'\"\?\\\a\b\f\n\r\t\v";
+        escape_to_stream(&out, esc_seqs, strlen(esc_seqs));
+        out = (struct print_stream){.type = string_stream};
+        printf_to_stream(&out, "-%c-%d-%g-%s-", 'A', 666, 3.14, "Hello");
+        printf_to_stream(&out, "-%c-%d-%g-%s-", 'A', 666, 3.14, "Hello");
+        puts(out.base);
+        for (;;) {
+            printf_to_stream(&out, "-%c-%d-%g-%s-", 'A', 666, 3.14, "Hello");
+            printf_to_stream(&out, "-%c-%d-%g-%s-", 'A', 666, 3.14, "Hello");
+            buffer_free(out.base, out.length, out.capacity);
+        }
+    }
+    // for (;;) {
+    //     struct js_heap heap = {0};
+    //     struct js_value val = _random_js_value(&heap, vt_object, 2);
+    //     struct print_stream out = {.type = string_stream};
+    //     js_serialize_value(&out, dump_style, &val);
+    //     putsz_to_stream(&out, "\n\n");
+    //     js_serialize_value(&out, json_style, &val);
+    //     putsz_to_stream(&out, "\n\n");
+    //     js_serialize_value(&out, user_style, &val);
+    //     putsz_to_stream(&out, "\n\n\n\n");
+    //     // puts(out.base);
+    //     free_stream(&out);
+    //     js_sweep(&heap);
+    //     buffer_free(heap.base, heap.length, heap.capacity);
+    // }
+}
+
+void test_regex() {
+    char *samples[][2] = {
+        {"", ""},
+        {"abcdefghijklmnopqrstuvwxyz", ""},
+        {"", "abcdefghijklmnopqrstuvwxyz"},
+        {"abc", "abcdefghijklmnopqrstuvwxyz"},
+        {"opq", "abcdefghijklmnopqrstuvwxyz"},
+        {"xyz", "abcdefghijklmnopqrstuvwxyz"},
+        {"abcdefghijklmnopqrstuvwxyz", "^abc"},
+        {"abcdefghijklmnopqrstuvwxyz", "abc"},
+        {"abcdefghijklmnopqrstuvwxyz", "abc$"},
+        {"abcdefghijklmnopqrstuvwxyz", "^opq"},
+        {"abcdefghijklmnopqrstuvwxyz", "opq"},
+        {"abcdefghijklmnopqrstuvwxyz", "opq$"},
+        {"abcdefghijklmnopqrstuvwxyz", "^xyz"},
+        {"abcdefghijklmnopqrstuvwxyz", "xyz"},
+        {"abcdefghijklmnopqrstuvwxyz", "xyz$"},
+        {"abcdefghijklmnopqrstuvwxyz", "(d(e(fg)h)i(jk)l)mn(opq)"},
+        {"abcdefghijklmnopqrstuvwxyz", "mn(\\o\\p\\q)rst"},
+        {"abc123def456ghi789", "[^\\d\\o\\p\\q"},
+        {"abc123def456ghi789", "[3-5]"},
+        {"aaabbbccc", "b"},
+        {"aaabbbccc", "a*"},
+        {"aaabbbccc", "b*"},
+        {"aaabbbccc", "a+"},
+        {"aaabbbccc", "b+"},
+        {"bbbccc", "a?b"},
+        {"abbbccc", "a?b"},
+        {"aabbbccc", "a?b"},
+        {"Unknown-14886@noemail.invalid", "^([\\w\\.-]+)\\@([\\w-]+)\\.([a-zA-Z\\w]+)$"},
+        {"asdf", "a(sd)z"},
+    };
+    // for (;;) { // test memory leak
+    for (size_t i = 0; i < countof(samples); i++) {
+        int spaces[2] = {
+            30 - (int)strlen(samples[i][0]),
+            30 - (int)strlen(samples[i][1]),
+        };
+        struct re_capture capture = {0};
+        printf("\"%s\"%*s\"%s\"%*s%s\n", samples[i][0], spaces[0], "", samples[i][1], spaces[1], "",
+            re_match(samples[i][0], samples[i][1], &capture) ? "\x1b[32mtrue\x1b[0m" : "\x1b[31mfalse\x1b[0m");
+        _print_capture(&capture);
+        re_free_capture(&capture);
+    }
+    // }
 }
 
 #endif

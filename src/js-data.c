@@ -315,15 +315,26 @@ struct js_value js_scripture_sz(const char *sz) {
         .scripture.length = (uint32_t)strlen(sz)};
 }
 
-struct js_value js_string(struct js_heap *heap, const char *str, size_t slen) {
-    struct js_value ret = {.type = vt_string};
+// create an empty skeleton value of managed type, and hook it to heap
+struct js_value js_alloc_managed(struct js_heap *heap, enum js_value_type type) {
+    enforce(type == vt_string || type == vt_array || type == vt_object || type == vt_function || type == vt_c_value);
+    struct js_value ret = {.type = type};
     ret.managed = alloc(struct js_managed_value, 1);
-    ret.managed->type = vt_string;
+    ret.managed->type = type;
+    buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
+    return ret;
+}
+
+struct js_value js_string(struct js_heap *heap, const char *str, size_t slen) {
+    struct js_value ret = js_alloc_managed(heap, vt_string);
+    // struct js_value ret = {.type = vt_string};
+    // ret.managed = alloc(struct js_managed_value, 1);
+    // ret.managed->type = vt_string;
     // make sure string is always not NULL, or in some C lib functions, will cause error
     ret.managed->string.base = alloc(char, 1);
     ret.managed->string.capacity = 1;
     string_buffer_append(ret.managed->string.base, ret.managed->string.length, ret.managed->string.capacity, str, slen);
-    buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
+    // buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
     return ret;
 }
 
@@ -331,31 +342,43 @@ struct js_value js_string_sz(struct js_heap *heap, const char *str) {
     return js_string(heap, str, strlen(str));
 }
 
+// mostly for formatted error messages
 struct js_value js_string_f(struct js_heap *heap, const char *fmt, ...) {
-    struct js_value ret = {.type = vt_string};
-    ret.managed = alloc(struct js_managed_value, 1);
-    ret.managed->type = vt_string;
+//     struct js_value ret = {.type = vt_string};
+//     ret.managed = alloc(struct js_managed_value, 1);
+//     ret.managed->type = vt_string;
+//     va_list args;
+//     va_start(args, fmt);
+//     string_buffer_append_fv(ret.managed->string.base, ret.managed->string.length, ret.managed->string.capacity, fmt, args);
+//     va_end(args);
+//     buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
+//     return ret;
+    struct print_stream out = {.type = string_stream};
     va_list args;
     va_start(args, fmt);
-    string_buffer_append_fv(ret.managed->string.base, ret.managed->string.length, ret.managed->string.capacity, fmt, args);
+    vprintf_to_stream(&out, fmt, args);
     va_end(args);
-    buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
+    struct js_value ret = js_alloc_managed(heap, vt_string);
+    ret.managed->string.base = out.base;
+    ret.managed->string.length = out.length;
+    ret.managed->string.capacity = out.capacity;
     return ret;
 }
 
 struct js_value js_array(struct js_heap *heap) {
-    struct js_value ret = {.type = vt_array};
-    ret.managed = alloc(struct js_managed_value, 1);
-    ret.managed->type = vt_array;
-    buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
+    struct js_value ret = js_alloc_managed(heap, vt_array);
+    // struct js_value ret = {.type = vt_array};
+    // ret.managed = alloc(struct js_managed_value, 1);
+    // ret.managed->type = vt_array;
+    // buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
     return ret;
 }
 
-void js_array_push(struct js_value *container, struct js_value element) {
+void js_push_array_element(struct js_value *container, struct js_value element) {
     buffer_push(container->managed->array.base, container->managed->array.length, container->managed->array.capacity, element.type == vt_null ? (struct js_value){0} : element);
 }
 
-void js_array_put(struct js_value *container, size_t index, struct js_value element) {
+void js_put_array_element(struct js_value *container, size_t index, struct js_value element) {
     if (element.type == vt_null) { // special treat to prevent useless expand
         if (index < container->managed->array.length) {
             container->managed->array.base[index].type = 0;
@@ -365,9 +388,9 @@ void js_array_put(struct js_value *container, size_t index, struct js_value elem
     }
 }
 
-struct js_value js_array_get(struct js_value *container, size_t index) {
-    if (index < container->managed->array.length) {
-        struct js_value ret = container->managed->array.base[index];
+struct js_value js_get_managed_array_element(struct js_managed_value *managed, size_t index) {
+    if (index < managed->array.length) {
+        struct js_value ret = managed->array.base[index];
         return ret.type == 0 ? js_null() : ret;
     } else {
         return js_null();
@@ -375,37 +398,31 @@ struct js_value js_array_get(struct js_value *container, size_t index) {
 }
 
 struct js_value js_object(struct js_heap *heap) {
-    struct js_value ret = {.type = vt_object};
-    ret.managed = alloc(struct js_managed_value, 1);
-    ret.managed->type = vt_object;
-    buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
+    struct js_value ret = js_alloc_managed(heap, vt_object);
+    // struct js_value ret = {.type = vt_object};
+    // ret.managed = alloc(struct js_managed_value, 1);
+    // ret.managed->type = vt_object;
+    // buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
     return ret;
 }
 
-void js_object_put(struct js_value *container, const char *key, uint16_t key_length, struct js_value element) {
+void js_put_object_value(struct js_value *container, const char *key, uint16_t key_length, struct js_value element) {
     js_map_put(container->managed->object.base, container->managed->object.length, container->managed->object.capacity, key, key_length, element.type == vt_null ? (struct js_value){0} : element);
 }
 
-void js_object_put_sz(struct js_value *container, const char *key, struct js_value element) {
-    js_object_put(container, key, (uint16_t)strlen(key), element);
-}
-
-struct js_value js_object_get(struct js_value *container, const char *key, uint16_t key_length) {
+struct js_value js_get_object_value(struct js_value *container, const char *key, uint16_t key_length) {
     struct js_value ret;
     ret = js_map_get(container->managed->object.base, container->managed->object.length, container->managed->object.capacity, key, key_length);
     return ret.type == 0 ? js_null() : ret;
 }
 
-struct js_value js_object_get_sz(struct js_value *container, const char *key) {
-    return js_object_get(container, key, (uint16_t)strlen(key));
-}
-
 struct js_value js_function(struct js_heap *heap, uint32_t ingress) {
-    struct js_value ret = {.type = vt_function};
-    ret.managed = alloc(struct js_managed_value, 1);
-    ret.managed->type = vt_function;
+    struct js_value ret = js_alloc_managed(heap, vt_function);
+    // struct js_value ret = {.type = vt_function};
+    // ret.managed = alloc(struct js_managed_value, 1);
+    // ret.managed->type = vt_function;
     ret.managed->function.ingress = ingress;
-    buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
+    // buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
     return ret;
 }
 
@@ -414,19 +431,20 @@ bool js_is_function(struct js_value *value) {
 }
 
 struct js_value js_c_value(struct js_heap *heap, void *data, void (*mark)(void *), void (*sweep)(void *)) {
-    struct js_value ret = {.type = vt_c_value};
-    ret.managed = alloc(struct js_managed_value, 1);
-    ret.managed->type = vt_c_value;
+    struct js_value ret = js_alloc_managed(heap, vt_c_value);
+    // struct js_value ret = {.type = vt_c_value};
+    // ret.managed = alloc(struct js_managed_value, 1);
+    // ret.managed->type = vt_c_value;
     ret.managed->c_value.data = data;
     ret.managed->c_value.mark = mark;
     ret.managed->c_value.sweep = sweep;
-    buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
+    // buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
     return ret;
 }
 
 void js_mark(struct js_value *value) {
     // printf("js_mark: ");
-    // js_value_dump(pjs, value);
+    // js_dump_value(pjs, value);
     // printf("\n");
     switch (value->type) {
     case vt_string:
@@ -527,133 +545,270 @@ void js_sweep(struct js_heap *heap) {
     heap->capacity = new_capacity;
 }
 
-void js_managed_value_dump(struct js_managed_value *managed) { // also used by heap dump
+void js_serialize_managed_value(struct print_stream *out, enum serialized_style to, struct js_managed_value *managed) {
+    bool first;
     switch (managed->type) {
     case vt_string:
-        printf("'%.*s'", (int)managed->string.length, managed->string.base);
+        putsz_to_stream(out, to == user_style ? "" : "\"");
+        if (to == user_style) {
+            puts_to_stream(out, managed->string.base, managed->string.length);
+        } else {
+            escape_to_stream(out, managed->string.base, managed->string.length);
+        }
+        putsz_to_stream(out, to == user_style ? "" : "\"");
         break;
     case vt_array:
-        printf("[");
-        js_list_for_each(managed->array.base, managed->array.length, _, i, v, {
-            printf("%zu:", i);
-            js_value_dump(v);
-            printf(",");
-        });
-        printf("]");
+        if (to == dump_style) {
+            putsz_to_stream(out, "[");
+            first = true;
+            js_list_for_each(managed->array.base, managed->array.length, _, i, v, {
+                first ? (first = false) : putsz_to_stream(out, ",");
+                printf_to_stream(out, "%zu:", i);
+                js_serialize_value(out, to, v);
+            });
+            putsz_to_stream(out, "]");
+        } else if (to == json_style) {
+            putsz_to_stream(out, "[");
+            first = true;
+            for (size_t i = 0; i < managed->array.length; i++) {
+                first ? (first = false) : putsz_to_stream(out, ",");
+                struct js_value elem = js_get_managed_array_element(managed, i);
+                if (elem.type == vt_undefined || elem.type == vt_function || elem.type == vt_c_function || elem.type == vt_c_value) {
+                    // in array, un-jsonizables presented as null
+                    putsz_to_stream(out, "null");
+                } else {
+                    js_serialize_value(out, to, &elem);
+                }
+            }
+            putsz_to_stream(out, "]");
+        } else {
+            putsz_to_stream(out, "<array>");
+        }
         break;
     case vt_object:
-        printf("{");
-        js_map_for_each(managed->object.base, _, managed->object.capacity, k, kl, v, {
-            printf("%.*s:", (int)kl, k);
-            js_value_dump(v);
-            printf(",");
-        });
-        printf("}");
+        if (to == dump_style || to == json_style) {
+            putsz_to_stream(out, "{");
+            first = true;
+            js_map_for_each(managed->object.base, _, managed->object.capacity, k, kl, v, {
+                if (to == json_style && (v->type == vt_undefined || v->type == vt_function || v->type == vt_c_function || v->type == vt_c_value)) {
+                    continue;
+                }
+                first ? (first = false) : putsz_to_stream(out, ",");
+                putsz_to_stream(out, dump_style ? "'" : "\"");
+                escape_to_stream(out, k, kl);
+                putsz_to_stream(out, dump_style ? "'" : "\"");
+                putsz_to_stream(out, ":");
+                js_serialize_value(out, to, v);
+            });
+            putsz_to_stream(out, "}");
+        } else {
+            putsz_to_stream(out, "<object>");
+        }
         break;
     case vt_function:
-        printf("<function %u {", managed->function.ingress);
-        js_map_for_each(managed->function.closure.base, _, managed->function.closure.capacity, k, kl, v, {
-            printf("%.*s:", (int)kl, k);
-            js_value_dump(v);
-            printf(",");
-        });
-        printf("}>");
+        if (to == dump_style) {
+            printf_to_stream(out, "<function %u {", managed->function.ingress);
+            first = true;
+            js_map_for_each(managed->function.closure.base, _, managed->function.closure.capacity, k, kl, v, {
+                first ? (first = false) : putsz_to_stream(out, ",");
+                printf_to_stream(out, "%.*s:", (int)kl, k);
+                js_serialize_value(out, to, v);
+            });
+            putsz_to_stream(out, "}>");
+        } else if (to == user_style) {
+            putsz_to_stream(out, "<function>");
+        }
         break;
     case vt_c_value:
-        printf("<c_value %p %p %p>", managed->c_value.data, managed->c_value.mark, managed->c_value.sweep);
+        if (to == dump_style) {
+            printf_to_stream(out, "<c_value %p %p %p>", managed->c_value.data, managed->c_value.mark, managed->c_value.sweep);
+        } else if (to == user_style) {
+            putsz_to_stream(out, "<c_value>");
+        }
         break;
     default:
         fatal("Unknown managed value type %d", managed->type);
     }
 }
 
-void js_value_dump(struct js_value *value) {
+// DON'T use '_serialize()', possible confilct with internal functions
+void js_serialize_value(struct print_stream *out, enum serialized_style to, struct js_value *value) {
     switch (value->type) {
     case vt_undefined:
-        printf("undefined");
+        if (to == dump_style || to == json_style) {
+            printf_to_stream(out, "undefined");
+        }
         break;
     case vt_null:
-        printf("null");
+        printf_to_stream(out, "null");
         break;
     case vt_boolean:
-        printf(value->boolean ? "true" : "false");
+        printf_to_stream(out, value->boolean ? "true" : "false");
         break;
     case vt_number:
-        printf("%lg", value->number);
+        printf_to_stream(out, "%lg", value->number);
         break;
     case vt_scripture:
-        printf("'''%.*s'''", (int)js_string_length(value), js_string_base(value));
+        putsz_to_stream(out, to == dump_style ? "'" : (to == json_style ? "\"" : ""));
+        if (to == user_style) {
+            puts_to_stream(out, value->scripture.base, value->scripture.length);
+        } else {
+            escape_to_stream(out, value->scripture.base, value->scripture.length);
+        }
+        putsz_to_stream(out, to == dump_style ? "'" : (to == json_style ? "\"" : ""));
         break;
     case vt_c_function:
-        printf("<c_function %p>", value->c_function);
+        if (to == dump_style) {
+            printf_to_stream(out, "<c_function %p>", value->c_function);
+        } else if (to == user_style) {
+            putsz_to_stream(out, "<c_function>");
+        }
         break;
     case vt_string:
     case vt_array:
     case vt_object:
     case vt_function:
     case vt_c_value:
-        js_managed_value_dump(value->managed);
+        js_serialize_managed_value(out, to, value->managed);
         break;
     default:
         fatal("Unknown value type %d", value->type);
     }
 }
 
-void js_value_print(struct js_value *value) {
-    switch (value->type) {
-    case vt_undefined:
-        printf("undefined");
-        break;
-    case vt_null:
-        printf("null");
-        break;
-    case vt_boolean:
-        printf(value->boolean ? "true" : "false");
-        break;
-    case vt_number:
-        printf("%lg", value->number);
-        break;
-    case vt_scripture:
-    case vt_string:
-        printf("%.*s", (int)js_string_length(value), js_string_base(value));
-        break;
-    case vt_array:
-        printf("[");
-        js_list_for_each(value->managed->array.base, value->managed->array.length, _, i, v, {
-            printf("%zu:", i);
-            js_value_print(v);
-            printf(",");
-        });
-        printf("]");
-        break;
-    case vt_object:
-        printf("{");
-        js_map_for_each(value->managed->object.base, _, value->managed->object.capacity, k, kl, v, {
-            printf("%.*s:", (int)kl, k);
-            js_value_print(v);
-            printf(",");
-        });
-        printf("}");
-        break;
-    case vt_function:
-        printf("<function>");
-        break;
-    case vt_c_function:
-        printf("<c_function>");
-        break;
-    case vt_c_value:
-        printf("<c_value>");
-        break;
-    default:
-        fatal("Unknown value type %d", value->type);
-    }
+void js_dump_managed_value(struct js_managed_value *managed) { // also used by heap dump
+    struct print_stream out = {.type = file_stream, .fp = stdout};
+    js_serialize_managed_value(&out, dump_style, managed);
+    // switch (managed->type) {
+    //     case vt_string:
+    //         printf("'%.*s'", (int)managed->string.length, managed->string.base);
+    //         break;
+    //     case vt_array:
+    //         printf("[");
+    //         js_list_for_each(managed->array.base, managed->array.length, _, i, v, {
+    //             printf("%zu:", i);
+    //             js_dump_value(v);
+    //             printf(",");
+    //         });
+    //         printf("]");
+    //         break;
+    //     case vt_object:
+    //         printf("{");
+    //         js_map_for_each(managed->object.base, _, managed->object.capacity, k, kl, v, {
+    //             printf("%.*s:", (int)kl, k);
+    //             js_dump_value(v);
+    //             printf(",");
+    //         });
+    //         printf("}");
+    //         break;
+    //     case vt_function:
+    //         printf("<function %u {", managed->function.ingress);
+    //         js_map_for_each(managed->function.closure.base, _, managed->function.closure.capacity, k, kl, v, {
+    //             printf("%.*s:", (int)kl, k);
+    //             js_dump_value(v);
+    //             printf(",");
+    //         });
+    //         printf("}>");
+    //         break;
+    //     case vt_c_value:
+    //         printf("<c_value %p %p %p>", managed->c_value.data, managed->c_value.mark, managed->c_value.sweep);
+    //         break;
+    //     default:
+    //         fatal("Unknown managed value type %d", managed->type);
+    //     }
+}
+
+void js_dump_value(struct js_value *value) {
+    struct print_stream out = {.type = file_stream, .fp = stdout};
+    js_serialize_value(&out, dump_style, value);
+    // switch (value->type) {
+    // case vt_undefined:
+    //     printf("undefined");
+    //     break;
+    // case vt_null:
+    //     printf("null");
+    //     break;
+    // case vt_boolean:
+    //     printf(value->boolean ? "true" : "false");
+    //     break;
+    // case vt_number:
+    //     printf("%lg", value->number);
+    //     break;
+    // case vt_scripture:
+    //     printf("'''%.*s'''", (int)js_get_string_length(value), js_get_string_base(value));
+    //     break;
+    // case vt_c_function:
+    //     printf("<c_function %p>", value->c_function);
+    //     break;
+    // case vt_string:
+    // case vt_array:
+    // case vt_object:
+    // case vt_function:
+    // case vt_c_value:
+    //     js_dump_managed_value(value->managed);
+    //     break;
+    // default:
+    //     fatal("Unknown value type %d", value->type);
+    // }
+}
+
+void js_print_value(struct js_value *value) {
+    struct print_stream out = {.type = file_stream, .fp = stdout};
+    js_serialize_value(&out, user_style, value);
+    // switch (value->type) {
+    // case vt_undefined:
+    //     printf("undefined");
+    //     break;
+    // case vt_null:
+    //     printf("null");
+    //     break;
+    // case vt_boolean:
+    //     printf(value->boolean ? "true" : "false");
+    //     break;
+    // case vt_number:
+    //     printf("%lg", value->number);
+    //     break;
+    // case vt_scripture:
+    // case vt_string:
+    //     printf("%.*s", (int)js_get_string_length(value), js_get_string_base(value));
+    //     break;
+    // case vt_array:
+    //     printf("[");
+    //     js_list_for_each(value->managed->array.base, value->managed->array.length, _, i, v, {
+    //         printf("%zu:", i);
+    //         js_print_value(v);
+    //         printf(",");
+    //     });
+    //     printf("]");
+    //     break;
+    // case vt_object:
+    //     printf("{");
+    //     js_map_for_each(value->managed->object.base, _, value->managed->object.capacity, k, kl, v, {
+    //         printf("%.*s:", (int)kl, k);
+    //         js_print_value(v);
+    //         printf(",");
+    //     });
+    //     printf("}");
+    //     break;
+    // case vt_function:
+    //     printf("<function>");
+    //     break;
+    // case vt_c_function:
+    //     printf("<c_function>");
+    //     break;
+    // case vt_c_value:
+    //     printf("<c_value>");
+    //     break;
+    // default:
+    //     fatal("Unknown value type %d", value->type);
+    // }
 }
 
 bool js_is_string(struct js_value *value) {
     return value->type == vt_scripture || value->type == vt_string;
 }
 
-char *js_string_base(struct js_value *value) {
+char *js_get_string_base(struct js_value *value) {
     switch (value->type) {
     case vt_scripture:
         return value->scripture.base;
@@ -664,7 +819,7 @@ char *js_string_base(struct js_value *value) {
     }
 }
 
-size_t js_string_length(struct js_value *value) {
+size_t js_get_string_length(struct js_value *value) {
     switch (value->type) {
     case vt_scripture:
         return value->scripture.length;
@@ -675,11 +830,11 @@ size_t js_string_length(struct js_value *value) {
     }
 }
 
-int js_string_compare(struct js_value *lhs, struct js_value *rhs) {
-    char *pl = js_string_base(lhs);
-    size_t ll = js_string_length(lhs);
-    char *pr = js_string_base(rhs);
-    size_t lr = js_string_length(rhs);
+int js_compare_string(struct js_value *lhs, struct js_value *rhs) {
+    char *pl = js_get_string_base(lhs);
+    size_t ll = js_get_string_length(lhs);
+    char *pr = js_get_string_base(rhs);
+    size_t lr = js_get_string_length(rhs);
     return strncmp(pl, pr, max(ll, lr));
 }
 
@@ -688,8 +843,8 @@ struct js_result js_add(struct js_heap *heap, struct js_value *lhs, struct js_va
     if (lhs->type == vt_number && rhs->type == vt_number) {
         js_return(js_number(lhs->number + rhs->number));
     } else if (js_is_string(lhs) && js_is_string(rhs)) {
-        value = js_string(heap, js_string_base(lhs), js_string_length(lhs));
-        string_buffer_append(value.managed->string.base, value.managed->string.length, value.managed->string.capacity, js_string_base(rhs), js_string_length(rhs));
+        value = js_string(heap, js_get_string_base(lhs), js_get_string_length(lhs));
+        string_buffer_append(value.managed->string.base, value.managed->string.length, value.managed->string.capacity, js_get_string_base(rhs), js_get_string_length(rhs));
         js_return(value);
     } else {
         js_throw(js_scripture_sz("Add operand must be number or string"));
@@ -797,14 +952,14 @@ static struct js_value _random_js_value(struct js_heap *heap, enum js_value_type
         ret = js_array(heap);
         for (i = 0; i < rand() % 10; i++) {
             struct js_value v = _random_js_value(heap, _random_js_value_type(), depth + 1);
-            js_array_put(&ret, rand() % 100, v);
+            js_put_array_element(&ret, rand() % 100, v);
         }
         return ret;
     case vt_object:
         ret = js_object(heap);
         for (i = 0; i < rand() % 10; i++) {
             struct js_value v = _random_js_value(heap, _random_js_value_type(), depth + 1);
-            js_object_put_sz(&ret, random_sz_static(NULL), v);
+            js_put_object_value_sz(&ret, random_sz_static(NULL), v);
         }
         return ret;
     case vt_function:
@@ -832,7 +987,7 @@ void test_js_value() {
     for (enum js_value_type type = 1; type < countof(_value_type_names); type++) {
         struct js_value val = _random_js_value(&heap, type, 0);
         printf("%s: ", _value_type_names[type]);
-        js_value_dump(&val);
+        js_dump_value(&val);
         printf("\n");
     }
     js_sweep(&heap);
@@ -869,11 +1024,11 @@ void test_js_value_bug() {
         printf("%d. %s %zu %zu\n", i, k, fh, nh);
     }
     struct js_value obj = js_object(&heap);
-    js_object_put_sz(&obj, bug_keys[0], js_boolean(true));
-    js_object_put_sz(&obj, bug_keys[0], js_null());
-    js_object_put_sz(&obj, bug_keys[2], js_boolean(true));
-    js_object_put_sz(&obj, bug_keys[1], js_boolean(true));
-    js_object_put_sz(&obj, bug_keys[3], js_boolean(true));
+    js_put_object_value_sz(&obj, bug_keys[0], js_boolean(true));
+    js_put_object_value_sz(&obj, bug_keys[0], js_null());
+    js_put_object_value_sz(&obj, bug_keys[2], js_boolean(true));
+    js_put_object_value_sz(&obj, bug_keys[1], js_boolean(true));
+    js_put_object_value_sz(&obj, bug_keys[3], js_boolean(true));
 }
 
 void test_js_string_family() {
@@ -881,7 +1036,7 @@ void test_js_string_family() {
     for (;;) {
         for (uint8_t vt = vt_scripture; vt <= vt_string; vt++) {
             struct js_value str = _random_js_value(&heap, vt, 0);
-            printf("%s %s %.*s\n", js_is_string(&str) ? "true" : "false", _value_type_names[vt], (int)js_string_length(&str), js_string_base(&str));
+            printf("%s %s %.*s\n", js_is_string(&str) ? "true" : "false", _value_type_names[vt], (int)js_get_string_length(&str), js_get_string_base(&str));
             js_sweep(&heap);
         }
     }

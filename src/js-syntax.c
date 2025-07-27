@@ -9,6 +9,7 @@ You should have received a copy of the GNU General Public License along with thi
 */
 
 #include <ctype.h>
+#include <errno.h>
 #include <math.h>
 #include "js-syntax.h"
 
@@ -159,8 +160,7 @@ static bool _get_token_unfiltered(struct js_source *source, struct js_token *tok
             } else if (tok_h_char == '\"') {
                 token->state = ts_string_matching;
             } else if (tok_h_char == ':') {
-                token->state = ts_colon;
-                goto matched;
+                token->state = ts_colon_matching;
             } else if (tok_h_char == ',') {
                 token->state = ts_comma;
                 goto matched;
@@ -344,6 +344,15 @@ static bool _get_token_unfiltered(struct js_source *source, struct js_token *tok
             } else if (token->state == ts_string_matching_control) {
                 (token->tail_offset)++;
                 token->state = ts_string_matching;
+            } else if (token->state == ts_colon_matching) {
+                if (tok_t_char == ':') {
+                    (token->tail_offset)++;
+                    token->state = ts_double_colon;
+                    goto matched;
+                } else {
+                    token->state = ts_colon;
+                    goto matched;
+                }
             } else if (token->state == ts_assignment_matching) {
                 if (tok_t_char == '=') {
                     (token->tail_offset)++;
@@ -510,6 +519,9 @@ static bool _get_token_unfiltered(struct js_source *source, struct js_token *tok
     case ts_string_matching:
     case ts_string_matching_control:
         _return_false(source, token, "Unfinished string");
+    case ts_colon_matching:
+        token->state = ts_colon;
+        goto matched;
     case ts_assignment_matching:
         token->state = ts_assignment;
         goto matched;
@@ -586,7 +598,7 @@ static bool _get_token_filtered(struct js_source *source, struct js_token *token
     return success;
 }
 
-static struct js_source _unescape_string(char *base, uint32_t length) {
+static struct js_source _unescape(char *base, uint32_t length) {
     struct js_source ret = {0};
     bool matching_control = false;
     for (char *p = base; p < (base + length); p++) {
@@ -759,7 +771,7 @@ static bool _parse_value(struct js_source *source, struct js_token *token, struc
         _next_token(source, token);
         break;
     case ts_string:
-        unescaped = _unescape_string(_token_string_head(source, token), _token_string_length(token));
+        unescaped = _unescape(_token_string_head(source, token), _token_string_length(token));
         _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_string,
             sf_value, unescaped.length, unescaped.base);
         buffer_free(unescaped.base, unescaped.length, unescaped.capacity);
@@ -800,7 +812,7 @@ static bool _parse_value(struct js_source *source, struct js_token *token, struc
         } else {
             for (;;) {
                 if (token->state == ts_string) {
-                    unescaped = _unescape_string(_token_string_head(source, token), _token_string_length(token));
+                    unescaped = _unescape(_token_string_head(source, token), _token_string_length(token));
                     _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_string,
                         sf_value, unescaped.length, unescaped.base);
                     buffer_free(unescaped.base, unescaped.length, unescaped.capacity);
@@ -854,7 +866,7 @@ struct _accessor {
 #pragma pack(pop)
 
 static bool _accessor_put(struct js_source *source, struct js_token *token, struct js_bytecode *bytecode, struct js_cross_reference *xref, struct _accessor acc) {
-    switch (acc.type) {
+    switch (acc.type) { // previous parsed type
     case at_identifier:
         _add_instruction(token, bytecode, xref, op_variable_put, 1, opd_string, acc.identifier_length, acc.identifier_head);
         break;
@@ -869,7 +881,7 @@ static bool _accessor_put(struct js_source *source, struct js_token *token, stru
 }
 
 static bool _accessor_get(struct js_source *source, struct js_token *token, struct js_bytecode *bytecode, struct js_cross_reference *xref, struct _accessor acc) {
-    switch (acc.type) {
+    switch (acc.type) { // previous parsed type
     case at_identifier:
         _add_instruction(token, bytecode, xref, op_variable_get, 1, opd_string, acc.identifier_length, acc.identifier_head);
         break;
@@ -889,6 +901,8 @@ static bool _parse_additive_expression(struct js_source *, struct js_token *, st
 
 static bool _parse_accessor(struct js_source *source, struct js_token *token, struct js_bytecode *bytecode, struct js_cross_reference *xref, struct _accessor *acc /* out */) {
     uint32_t d0, d1;
+    bool bind = false; // indicate next chaining function call must consume binding value
+beginning:
     if (token->state == ts_left_parenthesis) {
         _next_token(source, token);
         _try(_parse_expression(source, token, bytecode, xref));
@@ -928,13 +942,24 @@ static bool _parse_accessor(struct js_source *source, struct js_token *token, st
                 _next_token(source, token);
                 acc->type = at_optional_chaining;
             } else {
-                _return_false(source, token, "Must be object.identifier");
+                _return_false(source, token, "Must be object?.identifier");
             }
+        } else if (token->state == ts_double_colon) {
+            _next_token(source, token);
+            _try(_accessor_get(source, token, bytecode, xref, *acc));
+            bind = true;
+            goto beginning; // following parse must reset to beginning state
         } else if (token->state == ts_left_parenthesis) {
             _next_token(source, token); // function call
             _try(_accessor_get(source, token, bytecode, xref, *acc));
             d0 = bytecode->length;
             _add_instruction(token, bytecode, xref, op_stack_push, 2, opd_uint8, opd_uint32, sf_function, 0); // return address
+            if (bind) { // treat bind value as first argument
+                _add_instruction(token, bytecode, xref, op_stack_swap, 2, opd_uint8, opd_uint8, 0, 2);
+                _add_instruction(token, bytecode, xref, op_stack_swap, 2, opd_uint8, opd_uint8, 1, 2);
+                _add_instruction(token, bytecode, xref, op_argument_append, 0);
+            }
+            bind = false; // bind value is consumed
             if (token->state == ts_right_parenthesis) {
                 _next_token(source, token);
             } else {
@@ -967,6 +992,9 @@ static bool _parse_accessor(struct js_source *source, struct js_token *token, st
         } else {
             break;
         }
+    }
+    if (bind) {
+        _return_false(source, token, "No function consume bind value");
     }
     return true;
 }
@@ -1543,6 +1571,48 @@ bool js_compile(struct js_source *source, struct js_token *token, struct js_byte
     return true;
 }
 
+bool js_read_source_file(struct js_source *source, const char *filename) {
+    // make sure at least \0 in ret
+    if (source->base == NULL && source->length == 0 && source->capacity == 0) {
+        source->base = alloc(char, 1);
+        source->capacity = 1;
+    }
+    FILE *fp = fopen(filename, "r");
+    if (fp == NULL) {
+        log_warning("Cannot open \"%s\": %s", filename, strerror(errno));
+        return false;
+    }
+    int ch = fgetc(fp);
+    if (ch == '#') { // shebang
+        if (fgetc(fp) != '!') {
+            log_warning("No '!' after '#' in shebang");
+            goto close_on_error;
+        }
+        for (;;) {
+            ch = fgetc(fp);
+            if (ch == EOF) {
+                log_warning("Unexpected EOF in shebang");
+                goto close_on_error;
+            }
+            if (ch == '\n') {
+                break;
+            }
+        }
+    } else {
+        string_buffer_append_ch(source->base, source->length, source->capacity, (char)ch);
+    }
+    char buf[1024];
+    size_t bytes_read;
+    while ((bytes_read = fread(buf, sizeof(char), countof(buf), fp))) {
+        string_buffer_append(source->base, source->length, source->capacity, buf, bytes_read);
+    }
+    fclose(fp);
+    return true;
+close_on_error:
+    fclose(fp);
+    return false;
+}
+
 #ifdef DEBUG
 
 void test_lexer() {
@@ -1571,8 +1641,8 @@ void test_lexer() {
         "+ += - -= * *= / /= % %= ++ --\n"
         "break continue function return\n"
         ". . ... in of typeof delete * *= ** **= try catch finally throw\n"
-        "\n"
-        "\n";
+        ": :: \n"
+        ":\n";
     struct js_source source = {
         .base = tokens,
         .length = sizeof(tokens), // use sizeof to test last '\0' -> ts_end_of_file
@@ -1632,7 +1702,7 @@ void test_parser() {
 static struct js_result f_native(struct js_vm *vm) {
     // struct js_result ret = js_call_by_name_sz(vm, "f_managed", (struct js_value[]){js_scripture_sz("Hello, "), js_scripture_sz("World, ")}, 2);
     struct js_result ret = {.success = false, .value = js_number(3.14)};
-    js_vm_dump(vm);
+    js_dump_vm(vm);
     return ret;
 }
 
@@ -1640,9 +1710,9 @@ void test_c_function() {
     struct js_source source = {0};
     struct js_token token = {0};
     struct js_vm vm = {0};
-    js_declare_variable_sz(&vm, "dump", js_c_function(js_vm_dump));
+    js_declare_variable_sz(&vm, "dump", js_c_function(js_dump_vm));
     js_declare_variable_sz(&vm, "f_native", js_c_function(f_native));
-    js_vm_dump(&vm);
+    js_dump_vm(&vm);
     // Test interoperability between C function and Script function, transitivity and closure
     // const char *test = "try { let f_managed = function(){ let c = \"Folks!\"; return function(a, b) {throw a + b + c;}; }(); let a = f_native(); } catch(ex) { dump(); }";
     const char *test = "function f_managed(){throw 3.14;} try { let a = f_native(); } catch(ex) { dump(); }";
@@ -1651,17 +1721,17 @@ void test_c_function() {
         js_bytecode_dump(&(vm.bytecode));
         struct js_result result = js_run(&vm);
         printf("result is: %s, ", result.success ? "true" : "false");
-        js_value_dump(&(result.value));
+        js_dump_value(&(result.value));
         printf("\n\n");
     }
     // buffer_dump(vm.bytecode.base, vm.bytecode.length, vm.bytecode.capacity);
-    js_vm_dump(&vm);
+    js_dump_vm(&vm);
 }
 
 void test_unescape_string() {
     for (;;) {
         char *in = "\\a\\b\\f\\n\\r\\t\\v-\\'-\\\"-\\?-\\\\-\\u1234";
-        struct js_source out = _unescape_string(in, (uint32_t)strlen(in));
+        struct js_source out = _unescape(in, (uint32_t)strlen(in));
         // buffer_dump(out.base, out.length, out.capacity);
         buffer_free(out.base, out.length, out.capacity);
     }
@@ -1679,6 +1749,21 @@ void test_free_vm() {
         }
         js_free_vm(&vm);
         token = (struct js_token){0};
+        buffer_free(source.base, source.length, source.capacity);
+    }
+}
+
+void test_read_source_file() {
+    for (;;) {
+        struct js_source source = {0};
+        js_read_source_file(&source, "no-exists");
+        buffer_dump(source.base, source.length, source.capacity);
+        js_read_source_file(&source, "examples/13-invalid-shebang.js");
+        buffer_dump(source.base, source.length, source.capacity);
+        js_read_source_file(&source, "examples/14-only-shebang.js");
+        buffer_dump(source.base, source.length, source.capacity);
+        js_read_source_file(&source, "examples/15-shebang.js");
+        buffer_dump(source.base, source.length, source.capacity);
         buffer_free(source.base, source.length, source.capacity);
     }
 }

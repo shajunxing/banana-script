@@ -36,6 +36,8 @@
 
 赋值表达式 `=` `+=` `-=` `*=` `/=` `%=` `++` `--` 不返回值。不支持逗号表达式 `,`。
 
+增加双冒号绑定运算符，语义为 `value::function(...args)` 等价于 `function(value, ...args)`，如此Class爱好者会很开心，因为能轻松写出面向对象范儿，甚至漂亮的链式语法风格。
+
 条件语句是`if`，循环语句是`while` `do while` `for`，条件必须是布尔值。`for` 循环仅支持以下语法，`[]` 表示可选部分。`for in` 和 `for of` 只处理非 `null` 的成员：
 
 - `for ([[let] variable = expression ] ; [condition] ; [assignment expression])`
@@ -55,7 +57,7 @@
 
 ## 技术内幕
 
-本项目兼容 C99，没有其他依赖，甚至不需要 make 系统，只需要 C 编译器，编译环境为 msvc/gcc/mingw。首先，从 <https://github.com/shajunxing/banana-nomake> 下载单独文件 `make.h`，然后打开 `make.c`，修改 `#include` 为正确的路径，然后使用 msvc 输入 `cl make.c && make.exe release`，或者使用 mingw 输入 `gcc -o make.exe make.c && ./make.exe release`。可执行文件位于 `bin` 文件夹中。
+本项目兼容 C99，没有其他依赖，甚至不需要 make 系统，只需要 C 编译器，编译环境为 msvc/gcc/mingw。首先，从 <https://github.com/shajunxing/banana-nomake> 下载单独文件 `make.h`，然后打开 `make.c`，修改 `#include` 为正确的路径，然后 msvc 输入 `cl make.c && make.exe release`，或者 mingw 输入 `gcc -o make.exe make.c && ./make.exe release`，或者 gcc 输入 `gcc -o make make.c && ./make release`。可执行文件位于 `bin` 文件夹中。
 
 项目遵循“最小依赖”原则，只包含必须的头文件，且模块之间只有单向引用，没有循环引用。模块的功能和依赖关系如下：
 

@@ -105,6 +105,8 @@ void qsort_r(void *, size_t, size_t, int (*)(const void *, const void *, void *)
 
 #define alloc(__arg_type, __arg_length) ((__arg_type *)calloc((__arg_length), sizeof(__arg_type)))
 
+// TODO: simplify these 'base' 'length' 'capacity' arguments, use an internal function and a wrapper macro (to cast integer types). But it has one disadvantage: programs include this .h will have to compile .c too.
+
 // buffer's capacity is always pow of 2
 #define buffer_alloc(__arg_base, __arg_length, __arg_capacity, __arg_required_capacity) \
     do { \
@@ -219,6 +221,8 @@ void qsort_r(void *, size_t, size_t, int (*)(const void *, const void *, void *)
         string_buffer_append((__arg_base), (__arg_length), (__arg_capacity), &__ch, 1); \
     } while (0)
 
+// DON'T use "//" comment because gcc will warn because of "\"
+/*
 #define string_buffer_append_f(__arg_base, __arg_length, __arg_capacity, __arg_format, ...) \
     do { \
         typeof(__arg_format) __format = __arg_format; \
@@ -255,6 +259,7 @@ void qsort_r(void *, size_t, size_t, int (*)(const void *, const void *, void *)
         } \
         (__arg_length) = __new_length; \
     } while (0)
+*/
 
 #define read_binary_file(__arg_fname, __arg_base, __arg_length, __arg_capacity) \
     do { \
@@ -274,6 +279,8 @@ void qsort_r(void *, size_t, size_t, int (*)(const void *, const void *, void *)
         fclose(__fp); \
     } while (0)
 
+// acorrding to https://en.cppreference.com/w/c/io/fseek.html, only offset 0 can be seeked in text mode, so below code is wrong
+/*
 #define read_text_file(__arg_fname, __arg_base, __arg_length, __arg_capacity) \
     do { \
         enforce(sizeof(*(__arg_base)) == 1); \
@@ -290,6 +297,7 @@ void qsort_r(void *, size_t, size_t, int (*)(const void *, const void *, void *)
             __arg_base + __arg_length, sizeof(*(__arg_base)), __fsize, __fp); \
         fclose(__fp); \
     } while (0)
+*/
 
 #define write_file(__arg_fname, __arg_mode, __arg_base, __arg_length, __arg_capacity) \
     do { \
@@ -330,15 +338,57 @@ void qsort_r(void *, size_t, size_t, int (*)(const void *, const void *, void *)
 #endif
 
 shared void print_hex(void *, size_t);
-shared char *string_dupe(const char *, size_t);
-shared char *string_dupe_sz(const char *);
-shared bool string_starts_with_sz(const char *, const char *);
-shared bool string_ends_with_sz(const char *, const char *);
-#define string_equals_sz(__arg_lhs, __arg_rhs) (strcmp(__arg_lhs, __arg_rhs) == 0)
-shared char *string_join_internal_sz(const char *, size_t, ...);
-#define string_join_sz(__arg_0, ...) string_join_internal_sz(__arg_0, numargs(__VA_ARGS__), ##__VA_ARGS__)
-#define string_concat_sz(...) string_join_sz("", ##__VA_ARGS__)
-shared int string_natural_compare_sz(const char *, const char *);
+shared char *dupe_s(const char *, size_t);
+shared char *dupe_sz(const char *);
+shared bool starts_with_sz(const char *, const char *);
+shared bool ends_with_sz(const char *, const char *);
+#define equals_sz(__arg_lhs, __arg_rhs) (strcmp(__arg_lhs, __arg_rhs) == 0)
+shared char *join_sz_internal(const char *, size_t, ...);
+#define join_sz(__arg_0, ...) join_sz_internal(__arg_0, numargs(__VA_ARGS__), ##__VA_ARGS__)
+#define concat_sz(...) join_sz("", ##__VA_ARGS__)
+shared int natural_compare_sz(const char *, const char *);
+
+enum print_stream_type {
+    file_stream,
+    string_stream,
+};
+
+#pragma pack(push, 1)
+struct print_stream {
+    uint8_t type;
+    union {
+        FILE *fp;
+        struct {
+            char *base;
+            size_t length;
+            size_t capacity;
+        };
+    };
+};
+#pragma pack(pop)
+
+// shared struct print_stream stdout_stream;
+shared void free_stream(struct print_stream *);
+shared void vprintf_to_stream(struct print_stream *, const char *, va_list);
+shared void printf_to_stream(struct print_stream *, const char *, ...);
+shared void putc_to_stream(struct print_stream *, char);
+shared void puts_to_stream(struct print_stream *, const char *, size_t);
+shared void putsz_to_stream(struct print_stream *, const char *);
+shared void escape_to_stream(struct print_stream *, const char *, size_t);
+
+struct re_capture {
+    char *head;
+    char *tail;
+    struct re_capture *super;
+    struct {
+        struct re_capture *base;
+        size_t length;
+        size_t capacity;
+    } subs;
+};
+
+shared void re_free_capture(struct re_capture *);
+shared bool re_match(char *, char *, struct re_capture *);
 
 #ifdef DEBUG
 
@@ -350,12 +400,14 @@ shared void test_random_double();
 shared void test_buffer();
 shared void test_string_buffer();
 shared void test_string_buffer_loop();
-shared void test_string_buffer_append_f();
+// shared void test_string_buffer_append_f();
 shared void test_memmove();
 shared void test_string_dupe();
-shared void test_read_file();
+// shared void test_read_file();
 shared void test_read_line();
 shared void test_natural_compare();
+shared void test_print_stream();
+shared void test_regex();
 
 #endif
 

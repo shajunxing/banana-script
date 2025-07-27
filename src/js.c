@@ -10,15 +10,15 @@ You should have received a copy of the GNU General Public License along with thi
 
 #include <time.h>
 #ifndef _WIN32
-    #include <readline/readline.h>
     #include <readline/history.h>
+    #include <readline/readline.h>
 #endif
 #include "js-syntax.h"
 #include "js-std.h"
 
 static char *_make_filename(char *source_filename, const char *ext, char *binary_filename) {
     if (binary_filename) {
-        return string_dupe_sz(binary_filename);
+        return dupe_sz(binary_filename);
     } else {
         char *dot = strrchr(source_filename, '.');
         if (dot) {
@@ -44,15 +44,13 @@ static void _write_binary(struct js_vm *vm, char *source_filename, char *bytecod
     free(fname);
 }
 
-static int _repl(int argc, char *argv[]) {
-    struct js_source source = {0}, line = {0};
-    struct js_token token = {0};
-    struct js_vm vm = {0};
-    js_declare_std_functions(&vm, argc, argv);
-#ifndef _WIN32
-    // disable filename completion
-    rl_bind_key('\t', rl_insert);
-#endif
+struct js_source source = {0};
+struct js_token token = {0};
+struct js_vm vm = {0};
+
+static int _repl() {
+    struct js_source line = {0};
+    js_declare_std_functions(&vm);
     printf("Banana Script REPL environment. Copyright (C) 2024-2025 ShaJunXing\n");
     printf("Type '/?' for more information.\n\n");
     for (;;) {
@@ -60,6 +58,8 @@ static int _repl(int argc, char *argv[]) {
         printf("> ");
         read_line(stdin, line.base, line.length, line.capacity);
 #else
+        // disable filename completion
+        rl_bind_key('\t', rl_insert);
         char *s = readline("> ");
         string_buffer_append_sz(line.base, line.length, line.capacity, s);
         free(s);
@@ -81,7 +81,7 @@ static int _repl(int argc, char *argv[]) {
                 } else if (__line_eq("/d")) {
                     buffer_dump(source.base, source.length, source.capacity);
                     buffer_dump(vm.bytecode.base, vm.bytecode.length, vm.bytecode.capacity);
-                    js_vm_dump(&vm);
+                    js_dump_vm(&vm);
                 } else if (__line_eq("/q")) {
                     printf("Bye.\n\n");
                     exit(EXIT_SUCCESS);
@@ -115,7 +115,7 @@ static int _repl(int argc, char *argv[]) {
                     struct js_result result = js_run(&vm);
                     if (!result.success) {
                         printf("Runtime Error: ");
-                        js_value_print(&(result.value));
+                        js_dump_value(&(result.value));
                         printf("\n");
                         rollback = true;
                     }
@@ -178,12 +178,14 @@ static int _help(char *arg_0) {
         X(test_buffer) \
         X(test_string_buffer) \
         X(test_string_buffer_loop) \
-        X(test_string_buffer_append_f) \
+        /* X(test_string_buffer_append_f) */ \
         X(test_memmove) \
         X(test_string_dupe) \
-        X(test_read_file) \
+        /* X(test_read_file) */ \
         X(test_read_line) \
         X(test_natural_compare) \
+        X(test_print_stream) \
+        X(test_regex) \
         X(test_data_structure_size) \
         X(test_js_map) \
         X(test_js_map_loop) \
@@ -199,7 +201,8 @@ static int _help(char *arg_0) {
         X(test_parser) \
         X(test_c_function) \
         X(test_unescape_string) \
-        X(test_free_vm)
+        X(test_free_vm) \
+        X(test_read_source_file)
 
     #define X(name) #name,
 static const char *test_function_names[] = {test_function_list};
@@ -246,8 +249,10 @@ int main(int argc, char *argv[]) {
     // #ifdef _WIN32
     //     SetConsoleOutputCP(65001);
     // #endif
+    js_std_argc = argc;
+    js_std_argv = argv;
     if (argc == 1) { // no arguments, enter repl
-        return _repl(argc, argv);
+        return _repl();
     }
     enum { t_bytecode,
         t_source,
@@ -306,13 +311,12 @@ int main(int argc, char *argv[]) {
 #undef __arg_eq
     }
     // do actions
-    struct js_source source = {0};
-    struct js_token token = {0};
-    struct js_vm vm = {0};
-    js_declare_std_functions(&vm, argc, argv);
+    js_declare_std_functions(&vm);
     if (source_filenames.base != NULL) {
         for (size_t i = 0; i < source_filenames.length; i++) {
-            read_text_file(source_filenames.base[i], source.base, source.length, source.capacity);
+            if (!js_read_source_file(&source, source_filenames.base[i])) {
+                return EXIT_FAILURE;
+            }
         }
         // TODO: add optimization
         (void)optimize;
@@ -353,7 +357,7 @@ int main(int argc, char *argv[]) {
                 }
             } else {
                 printf("Runtime Error: ");
-                js_value_print(&(result.value));
+                js_dump_value(&(result.value));
                 return EXIT_FAILURE;
             }
         } else if (action == a_unassemble) {

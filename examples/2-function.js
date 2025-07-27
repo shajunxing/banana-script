@@ -164,12 +164,12 @@ in banana script, for better performence, only strings, arrays, objects, functio
 // });
 // gc();
 // dump();
-// transponder(function(...args) {
-//     transponder(function(...args) {
-//         print(...args);
-//         dump();
-//         gc();
-//         dump();
-//     }, ...args);
-// }, null, true, 3.14, "hello");
 
+forward(function(...args) {
+    forward(function(...args) {
+        forward(function(...args) {
+            gc();
+            print(...args);
+        }, ...args);
+    }, ...args);
+}, null, true, 3.14, "hello");

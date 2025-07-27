@@ -58,7 +58,9 @@ struct js_source {
     X(ts_null) \
     X(ts_true) \
     X(ts_false) \
+    X(ts_colon_matching) \
     X(ts_colon) \
+    X(ts_double_colon) \
     X(ts_comma) \
     X(ts_assignment_matching) \
     X(ts_equal_to) \
@@ -144,6 +146,7 @@ struct js_token {
 #pragma pack(pop)
 
 shared bool js_compile(struct js_source *, struct js_token *, struct js_bytecode *, struct js_cross_reference *);
+shared bool js_read_source_file(struct js_source *, const char *);
 
 #ifdef DEBUG
 
@@ -152,6 +155,7 @@ shared void test_parser();
 shared void test_c_function();
 shared void test_unescape_string();
 shared void test_free_vm();
+shared void test_read_source_file();
 
 #endif
 

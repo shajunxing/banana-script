@@ -36,6 +36,8 @@ Operators follow strict rule, no implicit conversion. Only boolean can do logica
 
 Assignment expression `=` `+=` `-=` `*=` `/=` `%=` `++` `--` does not return value, Comma expression `,` is not supported.
 
+Add double colon binding operator, which `value::function(...args)` is equivalent to `function(value, ...args)`. This will definitely make class lovers happy because they can easily write oo style code, and even nice chain syntax style.
+
 Conditional statement is `if`, loops are `while` `do while` `for`, conditions must be boolean. `for` loop only support following syntax, `[]` means optional. `for in` and `for of` only handle non-null members:
 
 - `for ([[let] variable = expression ] ; [condition] ; [assignment expression])`
@@ -55,7 +57,7 @@ Garbage collection is manual, you can do it at any time you need.
 
 ## Technical internals
 
-This project is C99 compatable, no other dependences, even make systems are not necessary, only need C compiler, compilation environment is msgc/gcc/mingw. First, from <https://github.com/shajunxing/banana-nomake> download single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`. Executables are in `bin` folder.
+This project is C99 compatable, no other dependences, even make systems are not necessary, only need C compiler, compilation environment is msgc/gcc/mingw. First, from <https://github.com/shajunxing/banana-nomake> download single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`, or with gcc type `gcc -o make make.c && ./make release`. Executables are in `bin` folder.
 
 Project follows "minimal dependency" rule, only including necessary headers. Also, there's only one-way referencing between modules, with no circular referencing. Here’s how modules work and their dependencies:
 

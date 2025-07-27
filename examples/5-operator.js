@@ -5,6 +5,7 @@
 // [ "a", null, ...["b", null, "c"], null, "d" ];
 // // object { may conflict with block statement, must surround with parentheses
 // ({"foo" : {bar: {baz: ["a", "b"]}}})["foo"].bar?.baz[1];
+// dump();
 
 // test operators
 // let a = 10, b = 10, c = 10, d = 10, e = 10, f = 10, g = 10;
@@ -51,5 +52,27 @@
 // acc_2[1] **= 3;
 
 // test op_ternary wrongly run both sides of ':'
-let a = null;
-print(a == null ? "Hello" : "Hello, " + a);
+// let a = null;
+// print(a == null ? "Hello" : "Hello, " + a);
+
+// bind operator
+// "Hello"::print();
+// let obj = {
+//     "val" : [ null, false, true, "Hello", [], {} ],
+//     "funcs" : [ tojson, print ]
+// };
+// obj.val::obj.funcs[0]()::obj.funcs[1]();
+try {
+    for (let fname of ["make.bat", "foo.txt"]) {
+        print(tojson(split(read(fname), "\n")));
+    }
+} catch (err) {
+    print(tojson(err));
+}
+try {
+    for (let fname of ["make.bat", "foo.txt"]) {
+        read(fname)::split("\n")::tojson()::print();
+    }
+} catch (err) {
+    err::tojson()::print();
+}

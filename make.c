@@ -12,9 +12,10 @@ You should have received a copy of the GNU General Public License along with thi
 #include "../banana-nomake/src/make.h"
 
 #if os == posix
-    #define ex_libs "-lm -lreadline -lncurses -ltinfo"
+// suppress fucking stupid readline warnings "Using 'xxx' in statically linked applications requires at runtime the shared libraries ..."
+    #define ex_opts "-lm -lreadline -lncurses -ltinfo -Wl,--no-warnings"
 #else
-    #define ex_libs ""
+    #define ex_opts ""
 #endif
 
 void build() {
@@ -47,9 +48,9 @@ void build() {
     await();
     if (mtime(e("js")) < mtime(o("js"), d("js"), l("js"))) {
         if (compiler == gcc && shared) {
-            ld_exe(e("js"), o("js") " " d("js") " " ex_libs);
+            ld_exe(e("js"), o("js") " " d("js") " " ex_opts);
         } else {
-            ld_exe(e("js"), o("js") " " l("js") " " ex_libs);
+            ld_exe(e("js"), o("js") " " l("js") " " ex_opts);
         }
         // add utf8 support for windows
         // see https://stackoverflow.com/questions/8831143/windows-api-ansi-functions-and-utf-8

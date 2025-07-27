@@ -42,7 +42,7 @@
 //     print(err);
 // }
 
-// print(length(argv), argv);
+// print(argc, length(argv), argv);
 // let cwd = getcwd();
 // print(cwd);
 // for (let dir of ["d:\\", "~!@#$%^&*()", "z:\\"]) {
@@ -108,9 +108,55 @@
 // print(endswith("123456", "456"));
 // print(endswith("123456", "123456789"));
 
-// fwrite("foo", "foo.txt");
-// print(fread("foo.txt"));
-// remove("foo.txt");
+// let fname = "foo.txt";
+// write(fname, "Foo\n");
+// write(fname, true, "Bar\n");
+// print(read(fname));
+// try {
+//     let fp = open(fname);
+//     print(read(fp));
+//     close(fp);
+// } catch (err) {
+//     print(tojson(err));
+// }
+// try {
+//     open(fname, "a", function(fp) {
+//         write(fp, "Baz\n");
+//         write(fp, "Qux\n");
+//         throw "Boom!";
+//     });
+// } catch (err) {
+//     print(tojson(err));
+// }
+// open(fname, function(fp) { read(fp, print); });
+// remove(fname);
+// write(stdout, "Hello\n");
+
+// print(read("make.bat"));
+// let line_no = 0;
+// read("make.sh", function(line) {
+//     print(line_no, ":", line);
+//     line_no++;
+// });
+// try {
+//     read("make.c", function() {
+//         throw "Boom!";
+//     });
+// } catch (ex) {
+//     print(ex);
+// }
+// let cmd = os == "windows" ? "dir /b" : "ls -l";
+// print(read(cmd, true));
+// line_no = 0;
+// read(cmd, true, function(line) {
+//     print(line_no, ":", line);
+//     line_no++;
+// });
+// print(stdin, stdout, stderr);
+// print("print(read(stdin)), ctrl-z (windows) or ctrl-d (posix) to end, you must press at line beginning:");
+// print(read(stdin));
+// print("read(stdin, print), ctrl-z (windows) or ctrl-d (posix) to end, you must press at line beginning:");
+// read(stdin, print);
 
 // let arr = [];
 // for (;;) {
@@ -159,46 +205,63 @@
 // sort(arr, function(lhs, rhs) { return lhs - rhs; });
 // print(arr);
 
-let list = [
-    "1000X Radonius Maximus",
-    "10X Radonius",
-    "200X Radonius",
-    "20X Radonius",
-    "20X Radonius Prime",
-    "30X Radonius",
-    "40X Radonius",
-    "Allegia 50 Clasteron",
-    "Allegia 500 Clasteron",
-    "Allegia 50B Clasteron",
-    "Allegia 51 Clasteron",
-    "Allegia 6R Clasteron",
-    "Alpha 100",
-    "Alpha 2",
-    "Alpha 200",
-    "Alpha 2A",
-    "Alpha 2A-8000",
-    "Alpha 2A-900",
-    "Callisto Morphamax",
-    "Callisto Morphamax 500",
-    "Callisto Morphamax 5000",
-    "Callisto Morphamax 600",
-    "Callisto Morphamax 6000 SE",
-    "Callisto Morphamax 6000 SE2",
-    "Callisto Morphamax 700",
-    "Callisto Morphamax 7000",
-    "Xiph Xlater 10000",
-    "Xiph Xlater 2000",
-    "Xiph Xlater 300",
-    "Xiph Xlater 40",
-    "Xiph Xlater 5",
-    "Xiph Xlater 50",
-    "Xiph Xlater 500",
-    "Xiph Xlater 5000",
-    "Xiph Xlater 58"
-];
-sort(list, natural_compare);
-print(list);
-sort(list, function(lhs, rhs) {
-    return natural_compare(rhs, lhs);
-});
-print(list);
+// let list = [
+//     "1000X Radonius Maximus",
+//     "10X Radonius",
+//     "200X Radonius",
+//     "20X Radonius",
+//     "20X Radonius Prime",
+//     "30X Radonius",
+//     "40X Radonius",
+//     "Allegia 50 Clasteron",
+//     "Allegia 500 Clasteron",
+//     "Allegia 50B Clasteron",
+//     "Allegia 51 Clasteron",
+//     "Allegia 6R Clasteron",
+//     "Alpha 100",
+//     "Alpha 2",
+//     "Alpha 200",
+//     "Alpha 2A",
+//     "Alpha 2A-8000",
+//     "Alpha 2A-900",
+//     "Callisto Morphamax",
+//     "Callisto Morphamax 500",
+//     "Callisto Morphamax 5000",
+//     "Callisto Morphamax 600",
+//     "Callisto Morphamax 6000 SE",
+//     "Callisto Morphamax 6000 SE2",
+//     "Callisto Morphamax 700",
+//     "Callisto Morphamax 7000",
+//     "Xiph Xlater 10000",
+//     "Xiph Xlater 2000",
+//     "Xiph Xlater 300",
+//     "Xiph Xlater 40",
+//     "Xiph Xlater 5",
+//     "Xiph Xlater 50",
+//     "Xiph Xlater 500",
+//     "Xiph Xlater 5000",
+//     "Xiph Xlater 58"
+// ];
+// sort(list, natural_compare);
+// print(list);
+// sort(list, function(lhs, rhs) {
+//     return natural_compare(rhs, lhs);
+// });
+// print(list);
+
+// print(null, true, false, 3.14, "hello", os, [], {}, function() {}, tostring(print));
+// print(tostring(null), tostring(true), tostring(false), tostring(3.14),
+//     tostring("hello"), tostring(os), tostring([]), tostring({}),
+//     tostring(function() {}), tostring(print));
+// print(tojson({"list" : [ null, true, false, 3.14, "hello", os, [], {}, function() {}, print ]}));
+// print(tonumber(input("Enter a number: ")));
+
+// try {
+//     exit("foo");
+// } catch (err) {
+//     print(tojson(err));
+// }
+// exit(12.3); // to show exit code, in posix "echo $?" and in windows "echo %errorlevel%"
+
+// regular expression
+// print(format("${0}\n${1}\n${2}\n${3}", ...match("Unknown-14886@noemail.invalid", "^([\\w\\.-]+)\\@([\\w-]+)\\.([a-zA-Z\\w]+)$")));

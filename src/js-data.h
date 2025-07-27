@@ -118,6 +118,12 @@ struct js_result {
 };
 #pragma pack(pop)
 
+enum serialized_style {
+    dump_style,
+    json_style,
+    user_style, // user friendly style
+};
+
 // DON'T use conflict name such as 'k' 'v'
 #define js_map_for_each(__arg_base, __arg_length, __arg_capacity, __arg_k, __arg_kl, __arg_v, __arg_block) \
     do { \
@@ -173,30 +179,40 @@ shared struct js_value js_null();
 shared struct js_value js_boolean(bool);
 shared struct js_value js_number(double);
 shared struct js_value js_scripture_sz(const char *);
+shared struct js_value js_alloc_managed(struct js_heap *, enum js_value_type);
 shared struct js_value js_string(struct js_heap *, const char *, size_t);
 shared struct js_value js_string_sz(struct js_heap *, const char *);
 shared struct js_value js_string_f(struct js_heap *, const char *, ...);
 shared struct js_value js_array(struct js_heap *);
-shared void js_array_push(struct js_value *, struct js_value);
-shared void js_array_put(struct js_value *, size_t, struct js_value);
-shared struct js_value js_array_get(struct js_value *, size_t);
+shared void js_push_array_element(struct js_value *, struct js_value);
+shared void js_put_array_element(struct js_value *, size_t, struct js_value);
+shared struct js_value js_get_managed_array_element(struct js_managed_value *, size_t);
+static inline struct js_value js_get_array_element(struct js_value *container, size_t index) {
+    return js_get_managed_array_element(container->managed, index);
+}
 shared struct js_value js_object(struct js_heap *);
-shared void js_object_put(struct js_value *, const char *, uint16_t, struct js_value);
-shared void js_object_put_sz(struct js_value *, const char *, struct js_value);
-shared struct js_value js_object_get(struct js_value *, const char *, uint16_t);
-shared struct js_value js_object_get_sz(struct js_value *, const char *);
+shared void js_put_object_value(struct js_value *, const char *, uint16_t, struct js_value);
+static inline void js_put_object_value_sz(struct js_value *container, const char *key, struct js_value element) {
+    js_put_object_value(container, key, (uint16_t)strlen(key), element);
+}
+shared struct js_value js_get_object_value(struct js_value *, const char *, uint16_t);
+static inline struct js_value js_get_object_value_sz(struct js_value *container, const char *key) {
+    return js_get_object_value(container, key, (uint16_t)strlen(key));
+}
 shared struct js_value js_function(struct js_heap *, uint32_t);
 shared bool js_is_function(struct js_value *);
 shared struct js_value js_c_value(struct js_heap *, void *, void (*)(void *), void (*)(void *));
 shared void js_mark(struct js_value *);
 shared void js_sweep(struct js_heap *);
-shared void js_managed_value_dump(struct js_managed_value *);
-shared void js_value_dump(struct js_value *);
-shared void js_value_print(struct js_value *);
+shared void js_serialize_managed_value(struct print_stream *, enum serialized_style, struct js_managed_value *);
+shared void js_serialize_value(struct print_stream *, enum serialized_style, struct js_value *);
+shared void js_dump_managed_value(struct js_managed_value *);
+shared void js_dump_value(struct js_value *);
+shared void js_print_value(struct js_value *);
 shared bool js_is_string(struct js_value *);
-shared char *js_string_base(struct js_value *); // Caution: No guarantee it ends with 0
-shared size_t js_string_length(struct js_value *);
-shared int js_string_compare(struct js_value *, struct js_value *);
+shared char *js_get_string_base(struct js_value *); // Caution: No guarantee it ends with 0
+shared size_t js_get_string_length(struct js_value *);
+shared int js_compare_string(struct js_value *, struct js_value *);
 // Caution: '()' must be added in following macros
 #define js_return(__arg_value) \
     return ((struct js_result){.success = true, .value = (__arg_value)})

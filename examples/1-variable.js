@@ -27,8 +27,8 @@
 // }
 
 // test string escape
-print("\'\"\?\\\a\b\f\n\r\t\v\u1234");
-let o = {"\'\"\?\\\a\b\f\n\r\t\v\u1234": "Hi"};
-for (let k in o) {
-    print(k, o[k]);
-}
+// print("\'\"\?\\\a\b\f\n\r\t\v\u1234");
+// let o = {"\'\"\?\\\a\b\f\n\r\t\v\u1234": "Hi"};
+// for (let k in o) {
+//     print(k, o[k]);
+// }
