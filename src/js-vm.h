@@ -51,8 +51,8 @@ You should have received a copy of the GNU General Public License along with thi
     X(op_le) /* 0 */ \
     X(op_gt) /* 0 */ \
     X(op_ge) /* 0 */ \
-    X(op_and) /* 0 */ \
-    X(op_or) /* 0 */ \
+    X(op_and) /* 0 TODO: optimize for rhs no-exec */ \
+    X(op_or) /* 0 TODO: optimize for rhs no-exec */ \
     X(op_not) /* 0 */ \
     /* X(op_ternary) 0 */ \
     X(op_typeof) /* 0 */ \

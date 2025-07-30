@@ -50,8 +50,8 @@
 
 `delete` 语义为删除当前作用域范围的局部变量（对象成员置`null`即可删除）。比如，加入函数闭包的变量是声明函数变量之前的所有局部变量，可以在返回之前`delete`掉无用的变量以减少闭包大小，在REPL环境里执行以下两条语句，可以看到区别。
 
-- `let f = function(a, b){let c = a + b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`
-- `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`
+- `let f = function(a, b){let c = a + b; return function(d){return c + d;};}(1, 2); dump_vm(); print(f(3)); delete f;`
+- `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump_vm(); print(f(3)); delete f;`
 
 `throw` 可以抛出任意值，由`catch`接收。不支持`finally`，因为我认为根本不需要，反而会使代码执行顺序显得怪异。
 
@@ -76,11 +76,13 @@
 - `js-data`：数值类型和垃圾回收，你甚至可以在C项目里单独使用该模块操作带GC功能的高级数据结构，参见 <https://github.com/shajunxing/banana-cvar>
 - `js-vm`：字节码虚拟机，单独编译可得到不带源代码解析功能的最小足迹的解释器
 - `js-syntax`：词法解析和语法解析，将源代码转化为字节码
-- `js-std`：一些常用标准函数的参考实现，注意只是用作编写C函数的参考，不保证将来会变，具体用法可参考我的另一个项目 <https://github.com/shajunxing/view-comic-here>
+- `js-std`：一些常用标准函数的参考实现，注意只是用作编写C函数的参考，不保证将来会变，具体用法可参考 [examples/7-std.js](https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js) 以及我的另一个项目 <https://github.com/shajunxing/view-comic-here>
 
 所有值都是 `struct js_value` 类型，你可以通过 `js_xxx()` 函数创建，`xxx` 是值类型，你可以直接从这个结构体中读取 C 值，参见 `js_data.h` 中的定义。创建的值遵循垃圾回收规则。不要直接修改它们，如果你想得到不同的值，就创建新值。复合类型 `array` `object` 可以通过 `js_array_xxx()` `js_object_xxx()` 函数进行操作。
 
 C 函数必须是 `struct js_result (*)(struct js_vm *)` 格式，使用 `js_c_function()` 来创建 C 函数值，是的，当然它们都是值，可以放在任何地方，例如，如果使用 `js_declare_variable()` 放在堆栈根上，它们就是全局的。`struct js_result` 有两个成员，如果 `.success` 是 true, `.value` 就是返回值, 如果 false, `.value` 将会被 `catch` 接收，如果 `try catch` 存在的话。C函数同样也可以使用 `js_call()`调用脚本函数。在C函数内部，使用`js_get_arguments_base()` `js_get_arguments_length()` `js_get_argument()`函数获取传入参数。
+
+与C语言的交互可参考 [src/js-std.c](https://github.com/shajunxing/banana-script/blob/main/src/js-std.c)。
 
 ## 其它详见英文版
 

@@ -4,17 +4,17 @@
 // try {
 //     print(length());
 // } catch (err) {
-//     print(err);
+//     dump(err);
 // }
 // try {
 //     print(length(null, true, false));
 // } catch (err) {
-//     print(err);
+//     dump(err);
 // }
 // try {
 //     print(length(1.2));
 // } catch (err) {
-//     print(err);
+//     dump(err);
 // }
 // let obj = {"foo": true, "bar": false};
 // print(length(obj));
@@ -29,46 +29,46 @@
 // try {
 //     print(input("a", "b", "c", "d"));
 // } catch(err) {
-//     print(err);
+//     dump(err);
 // }
 // try {
 //     print(input(123));
 // } catch(err) {
-//     print(err);
+//     dump(err);
 // }
 // try {
 //     print(input("prompt: "));
 // } catch(err) {
-//     print(err);
+//     dump(err);
 // }
 
 // print(argc, length(argv), argv);
-// let cwd = getcwd();
-// print(cwd);
+// let wd = cwd();
+// print(wd);
 // for (let dir of ["d:\\", "~!@#$%^&*()", "z:\\"]) {
 //     try {
-//         chdir(dir);
-//         print(getcwd());
-//     } catch (ex) {
-//         print(ex);
+//         cd(dir);
+//         print(cwd());
+//     } catch (err) {
+//         dump(err);
 //     }
 // }
-// chdir(cwd);
-// print(getcwd());
+// cd(wd);
+// print(cwd());
 
 // for (let dir of ["abcdefg1234567", "~!@#$%^&*()", "z:\\asdasd"]) {
 //     try {
-//         let cwd = getcwd();
-//         mkdir(dir);
-//         chdir(dir);
-//         print(getcwd());
-//         chdir(cwd);
-//         print(getcwd());
+//         let wd = cwd();
+//         md(dir);
+//         cd(dir);
+//         print(cwd());
+//         cd(wd);
+//         print(cwd());
 //         print(dir, exists(dir) ? "is exist" : "not exist");
-//         rmdir(dir);
+//         rd(dir);
 //         print(dir, exists(dir) ? "is exist" : "not exist");
-//     } catch (ex) {
-//         print(ex);
+//     } catch (err) {
+//         dump(err);
 //     }
 // }
 
@@ -77,15 +77,15 @@
 // print(dirname(""));
 // print(dirname(argv[0]));
 
-// listdir("c:", print);
-// listdir("c:\\", print);
-// listdir("c:/", print);
-// listdir("c:\\windows", function(...args) {
+// ls("c:", print);
+// ls("c:\\", print);
+// ls("c:/", print);
+// ls("c:\\windows", function(...args) {
 //     print(...args);
 //     throw "Boom!";
 // });
 // gc();
-// dump();
+// dump_vm();
 
 // for (;;) {
 //     try {
@@ -129,7 +129,7 @@
 //     print(tojson(err));
 // }
 // open(fname, function(fp) { read(fp, print); });
-// remove(fname);
+// rm(fname);
 // write(stdout, "Hello\n");
 
 // print(read("make.bat"));
@@ -142,8 +142,8 @@
 //     read("make.c", function() {
 //         throw "Boom!";
 //     });
-// } catch (ex) {
-//     print(ex);
+// } catch (err) {
+//     dump(err);
 // }
 // let cmd = os == "windows" ? "dir /b" : "ls -l";
 // print(read(cmd, true));
@@ -162,27 +162,32 @@
 // for (;;) {
 //     try {
 //         push(arr, "hello");
-//         pop(arr);
-//         pop(arr);
-//     } catch (ex) {
-//         ;
+//         push(arr, "hello");
+//         dump(arr);
+//         dump(pop(arr));
+//         dump(pop(arr));
+//         dump(pop(arr));
+//         dump(pop(arr));
+//         dump(arr);
+//     } catch (err) {
+//         dump(err);
 //     }
 //     gc();
 // }
 
 // let str = "--hello--world--";
 // try {
-//     print(split(str, ""));
-// } catch (ex) {
-//     print(ex);
+//     dump(split(str, ""));
+// } catch (err) {
+//     dump(err);
 // }
-// print(split(str, "-"));
-// print(split(str, "--"));
-// print(split(str, "---"));
+// dump(split(str, "-"));
+// dump(split(str, "--"));
+// dump(split(str, "---"));
 // str = "hello--world";
-// print(split(str, "-"));
-// print(split(str, "--"));
-// print(split(str, "---"));
+// dump(split(str, "-"));
+// dump(split(str, "--"));
+// dump(split(str, "---"));
 
 // print(join(split("--hello--world--", "-"), "-"));
 // let arr = [];
@@ -200,10 +205,10 @@
 
 // let arr = [ 5, 3, 9, 2, 3, 8, 2, 5, 9, 7 ];
 // sort(arr, function(lhs, rhs) { return lhs - rhs; });
-// print(arr);
+// dump(arr);
 // arr = [ 3, null, 5, "foo", 1, true, false, 2, null, "bar" ];
 // sort(arr, function(lhs, rhs) { return lhs - rhs; });
-// print(arr);
+// dump(arr);
 
 // let list = [
 //     "1000X Radonius Maximus",
@@ -243,25 +248,49 @@
 //     "Xiph Xlater 58"
 // ];
 // sort(list, natural_compare);
-// print(list);
+// for (let elem of list) {
+//     print(elem);
+// }
+// print();
 // sort(list, function(lhs, rhs) {
 //     return natural_compare(rhs, lhs);
 // });
-// print(list);
+// for (let elem of list) {
+//     print(elem);
+// }
+// print();
 
 // print(null, true, false, 3.14, "hello", os, [], {}, function() {}, tostring(print));
 // print(tostring(null), tostring(true), tostring(false), tostring(3.14),
 //     tostring("hello"), tostring(os), tostring([]), tostring({}),
 //     tostring(function() {}), tostring(print));
 // print(tojson({"list" : [ null, true, false, 3.14, "hello", os, [], {}, function() {}, print ]}));
-// print(tonumber(input("Enter a number: ")));
+// for (;;) {
+//     try {
+//         print(tonumber(input("Enter a number: ")));
+//         break;
+//     } catch (err) {
+//         dump(err);
+//     }
+// }
 
 // try {
 //     exit("foo");
 // } catch (err) {
-//     print(tojson(err));
+//     dump(err);
 // }
 // exit(12.3); // to show exit code, in posix "echo $?" and in windows "echo %errorlevel%"
 
 // regular expression
 // print(format("${0}\n${1}\n${2}\n${3}", ...match("Unknown-14886@noemail.invalid", "^([\\w\\.-]+)\\@([\\w-]+)\\.([a-zA-Z\\w]+)$")));
+
+// system("exit 123")::print();
+
+// whoami()::print();
+
+// exec("cl.exe");
+// exec("ping.exe", "www.baidu.com", "-t");
+
+(whoami() == "root" || exec("su", "-c", argv::join(" ")));
+whoami()::print();
+

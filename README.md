@@ -50,8 +50,8 @@ Garbage collection is manual, you can do it at any time you need.
 
 `delete` means delete local variable within current scope (object members can be deleted by setting `null`). For example, variables added to the function closure are all local variables before function variable declaration, so unused variables can be `delete`d before return to reduce closure size, run following two statements in REPL environment to see differences.
 
-- `let f = function(a, b){let c = a + b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`
-- `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump(); print(f(3)); delete f;`
+- `let f = function(a, b){let c = a + b; return function(d){return c + d;};}(1, 2); dump_vm(); print(f(3)); delete f;`
+- `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump_vm(); print(f(3)); delete f;`
 
 `throw` can throw any value, which are received by `catch`. `finally` is not supported, because I think it's totally unecessary, and will make code execution order weird.
 
@@ -74,11 +74,13 @@ js-common   js-data     js-vm       js-syntax
 - `js-data`: Data types and garbage collection, you can even use this module separately in C projects to manipulate high-level data structures with GC functionality, see <https://github.com/shajunxing/banana-cvar>
 - `js-vm`: Bytecode Virtual Machine, compiled separately to get an interpreter with minimal footprint without source code parsing
 - `js-syntax`: Lexical parsing and syntax parsing, which converts source code into bytecode
-- `js-std`: A reference implementation of some commonly used standard functions. Note that it's just for reference when writing C functions and doesn't guarantee it will change in future. For specific usage, check out my other project <https://github.com/shajunxing/view-comic-here>
+- `js-std`: A reference implementation of some commonly used standard functions. Note that it's just for reference when writing C functions and doesn't guarantee it will change in future. For specific usage, check out [examples/7-std.js](https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js) and my other project <https://github.com/shajunxing/view-comic-here>
 
 All values are `struct js_value` type, you can create by `js_xxx()` functions, `xxx` is value type, and you can read c values direct from this struct, see definition in `js_data.h`. Created values follow garbage collecting rules. DON'T directly modify their content, if you want to get different values, create new one. Compound types `array` `object` can be operated by `js_array_xxx()` `js_object_xxx()` functions.
 
 C functions must be `struct js_result (*)(struct js_vm *)` format, use `js_c_function()` to create c function value, yes of course they are all values and can be put anywhere, for example, if put on stack root using `js_declare_variable()`, they will be global. `struct js_result` has two members, if `.success` is true, `.value` is return value, if false, `.value` is received by `catch` if there are `try catch`. c function can also call script function using `js_call()`. Inside C function, use `js_get_arguments_base()` `js_get_arguments_length()` `js_get_argument()` to get passed in arguments.
+
+For interacting with C language, you can check out [src/js-std.c](https://github.com/shajunxing/banana-script/blob/main/src/js-std.c).
 
 There are 2 types of string: `vt_scripture` means immutable c string literal in engine c source code, eg. `typeof` result, and `vt_string` are mutable. They are all null terminated. They can be used for futher optimization.
 
@@ -378,7 +380,7 @@ Add '::' after using AST, have to use AST, top-down mechanism cannot pass lvalue
     }
     // test undefined array hole correctly converted to null
     function foo(a, b, c) {
-        dump();
+        dump_vm();
     }
     foo(...[null, null, 3]);
 

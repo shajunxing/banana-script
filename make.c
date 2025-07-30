@@ -15,7 +15,8 @@ You should have received a copy of the GNU General Public License along with thi
 // suppress fucking stupid readline warnings "Using 'xxx' in statically linked applications requires at runtime the shared libraries ..."
     #define ex_opts "-lm -lreadline -lncurses -ltinfo -Wl,--no-warnings"
 #else
-    #define ex_opts ""
+// GetUserNameA requires advapi32.lib
+    #define ex_opts "advapi32.lib"
 #endif
 
 void build() {

@@ -437,7 +437,7 @@ static struct js_stack_frame *_stack_peek(struct js_vm *vm, uint16_t depth) { //
     return vm->stack.base + vm->stack.length - 1 - depth;
 }
 
-static struct js_stack_frame *_stack_swap(struct js_vm *vm, uint16_t depth_1, uint16_t depth_2) {
+static void _stack_swap(struct js_vm *vm, uint16_t depth_1, uint16_t depth_2) {
     enforce(vm->stack.length > depth_1);
     enforce(vm->stack.length > depth_2);
     struct js_stack_frame swap = vm->stack.base[vm->stack.length - 1 - depth_1];

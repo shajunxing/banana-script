@@ -13,7 +13,7 @@
 
 // test undefined array hole correctly converted to null
 // function foo(a, b, c) {
-//     dump();
+//     dump_vm();
 // }
 // foo(...[null, null, 3]);
 
@@ -37,7 +37,7 @@
 //                 let d = "bar2";
 //                 return function (c) {
 //                     // console.log(a, b, c, d);
-//                     dump();
+//                     dump_vm();
 //                 };
 //             }
 //         };
@@ -158,12 +158,12 @@ in banana script, for better performence, only strings, arrays, objects, functio
 //     f();
 // }
 // foo(function(){
-//     dump();
+//     dump_vm();
 //     gc();
-//     dump();
+//     dump_vm();
 // });
 // gc();
-// dump();
+// dump_vm();
 
 forward(function(...args) {
     forward(function(...args) {

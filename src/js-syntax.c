@@ -1123,22 +1123,46 @@ static bool _parse_relational_expression(struct js_source *source, struct js_tok
 }
 
 static bool _parse_logical_and_expression(struct js_source *source, struct js_token *token, struct js_bytecode *bytecode, struct js_cross_reference *xref) {
+    uint32_t* d_base = NULL; // because of while loop, there are many jumps, each address must be modified
+    size_t d_length = 0;
+    size_t d_capacity = 0;
+    uint32_t d0;
     _try(_parse_relational_expression(source, token, bytecode, xref));
     while (token->state == ts_and) {
+        _add_instruction(token, bytecode, xref, op_stack_dupe, 1, opd_uint8, 0); // jump will eat value, so dupe one
+        buffer_push(d_base, d_length, d_capacity, bytecode->length);
+        _add_instruction(token, bytecode, xref, op_jump_if_false, 1, opd_uint32, 0);
         _next_token(source, token);
         _try(_parse_relational_expression(source, token, bytecode, xref));
         _add_instruction(token, bytecode, xref, op_and, 0);
     }
+    d0 = bytecode->length;
+    buffer_for_each(d_base, d_length, d_capacity, i, d, {
+        js_put_instruction(bytecode, d, op_jump_if_false, 1, opd_uint32, d0);
+    });
+    buffer_free(d_base, d_length, d_capacity);
     return true;
 }
 
 static bool _parse_logical_or_expression(struct js_source *source, struct js_token *token, struct js_bytecode *bytecode, struct js_cross_reference *xref) {
+    uint32_t* d_base = NULL; // because of while loop, there are many jumps, each address must be modified
+    size_t d_length = 0;
+    size_t d_capacity = 0;
+    uint32_t d0;
     _try(_parse_logical_and_expression(source, token, bytecode, xref));
     while (token->state == ts_or) {
+        _add_instruction(token, bytecode, xref, op_stack_dupe, 1, opd_uint8, 0); // jump will eat value, so dupe one
+        buffer_push(d_base, d_length, d_capacity, bytecode->length);
+        _add_instruction(token, bytecode, xref, op_jump_if_true, 1, opd_uint32, 0);
         _next_token(source, token);
         _try(_parse_logical_and_expression(source, token, bytecode, xref));
         _add_instruction(token, bytecode, xref, op_or, 0);
     }
+    d0 = bytecode->length;
+    buffer_for_each(d_base, d_length, d_capacity, i, d, {
+        js_put_instruction(bytecode, d, op_jump_if_true, 1, opd_uint32, d0);
+    });
+    buffer_free(d_base, d_length, d_capacity);
     return true;
 }
 
@@ -1714,8 +1738,8 @@ void test_c_function() {
     js_declare_variable_sz(&vm, "f_native", js_c_function(f_native));
     js_dump_vm(&vm);
     // Test interoperability between C function and Script function, transitivity and closure
-    // const char *test = "try { let f_managed = function(){ let c = \"Folks!\"; return function(a, b) {throw a + b + c;}; }(); let a = f_native(); } catch(ex) { dump(); }";
-    const char *test = "function f_managed(){throw 3.14;} try { let a = f_native(); } catch(ex) { dump(); }";
+    // const char *test = "try { let f_managed = function(){ let c = \"Folks!\"; return function(a, b) {throw a + b + c;}; }(); let a = f_native(); } catch(ex) { dump_vm(); }";
+    const char *test = "function f_managed(){throw 3.14;} try { let a = f_native(); } catch(ex) { dump_vm(); }";
     string_buffer_append_sz(source.base, source.length, source.capacity, test);
     if (js_compile(&source, &token, &(vm.bytecode), &(vm.cross_reference))) {
         js_bytecode_dump(&(vm.bytecode));

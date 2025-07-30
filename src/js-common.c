@@ -291,24 +291,6 @@ void re_free_capture(struct re_capture *cap) {
     buffer_free(cap->subs.base, cap->subs.length, cap->subs.capacity);
 }
 
-static void _print_capture_recursively(struct re_capture *cap, int depth) {
-    if (!cap) {
-        printf("%*snull\n", depth * 4, "");
-        return;
-    }
-    if (cap->head && cap->tail) {
-        printf("%*s(%zu) \"%.*s\"\n", depth * 4, "", cap->subs.length, (int)(cap->tail - cap->head), cap->head);
-    } else {
-        printf("%*s(%zu) empty\n", depth * 4, "", cap->subs.length);
-    }
-    buffer_for_each(cap->subs.base, cap->subs.length, cap->subs.capacity,
-        i, c, _print_capture_recursively(c, depth + 1));
-}
-
-static void _print_capture(struct re_capture *cap) {
-    _print_capture_recursively(cap, 1);
-}
-
 // match single character, including escape pattern and class pattern
 static bool _match_char(char c, char *ph, char *pt) {
     bool inv = false;
@@ -715,6 +697,24 @@ void test_print_stream() {
     //     js_sweep(&heap);
     //     buffer_free(heap.base, heap.length, heap.capacity);
     // }
+}
+
+static void _print_capture_recursively(struct re_capture *cap, int depth) {
+    if (!cap) {
+        printf("%*snull\n", depth * 4, "");
+        return;
+    }
+    if (cap->head && cap->tail) {
+        printf("%*s(%zu) \"%.*s\"\n", depth * 4, "", cap->subs.length, (int)(cap->tail - cap->head), cap->head);
+    } else {
+        printf("%*s(%zu) empty\n", depth * 4, "", cap->subs.length);
+    }
+    buffer_for_each(cap->subs.base, cap->subs.length, cap->subs.capacity,
+        i, c, _print_capture_recursively(c, depth + 1));
+}
+
+static void _print_capture(struct re_capture *cap) {
+    _print_capture_recursively(cap, 1);
 }
 
 void test_regex() {

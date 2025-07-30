@@ -5,7 +5,7 @@
 // [ "a", null, ...["b", null, "c"], null, "d" ];
 // // object { may conflict with block statement, must surround with parentheses
 // ({"foo" : {bar: {baz: ["a", "b"]}}})["foo"].bar?.baz[1];
-// dump();
+// dump_vm();
 
 // test operators
 // let a = 10, b = 10, c = 10, d = 10, e = 10, f = 10, g = 10;
@@ -62,17 +62,39 @@
 //     "funcs" : [ tojson, print ]
 // };
 // obj.val::obj.funcs[0]()::obj.funcs[1]();
-try {
-    for (let fname of ["make.bat", "foo.txt"]) {
-        print(tojson(split(read(fname), "\n")));
-    }
-} catch (err) {
-    print(tojson(err));
+
+// try {
+//     for (let fname of ["make.bat", "foo.txt"]) {
+//         print(tojson(split(read(fname), "\n")));
+//     }
+// } catch (err) {
+//     print(tojson(err));
+// }
+// try {
+//     for (let fname of ["make.bat", "foo.txt"]) {
+//         read(fname)::split("\n")::tojson()::print();
+//     }
+// } catch (err) {
+//     err::tojson()::print();
+// }
+
+// test optimized && ||
+// (true && true && true && true);
+function f1() {
+    print("f1");
+    return true;
 }
-try {
-    for (let fname of ["make.bat", "foo.txt"]) {
-        read(fname)::split("\n")::tojson()::print();
-    }
-} catch (err) {
-    err::tojson()::print();
+function f2() {
+    print("f2");
+    return false;
 }
+function f3() {
+    print("f3");
+    return true;
+}
+print(f1() && f2() && f3());
+print(f1() || f2() || f3());
+print(f1() && f2() || f3());
+print(f1() || f2() && f3());
+gc();
+dump_vm();

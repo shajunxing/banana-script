@@ -13,9 +13,11 @@ You should have received a copy of the GNU General Public License along with thi
 #include <time.h>
 #ifdef _WIN32
     #define WIN32_LEAN_AND_MEAN
+    #include <windows.h> // put before lmcons.h to prevent "'PASCAL': macro redefinition"
     #include <direct.h> // getcwd, chdir, mkdir, rmdir
+    #include <lmcons.h> // GetUserNameA's UNLEN
     #include <string.h> // strrchr
-    #include <windows.h>
+    #include <process.h> // _exec family
     #ifndef getcwd
         #define getcwd _getcwd
     #endif
@@ -31,6 +33,9 @@ You should have received a copy of the GNU General Public License along with thi
     #ifndef pclose
         #define pclose _pclose
     #endif
+    #ifndef execvp
+        #define execvp _execvp
+    #endif
 static char *dirname(char *path) {
     // since windows version of _splitpath_s _makepath_s cannot handle long path, and have some bad behaviors such as path "" will crash, i implement following https://www.man7.org/linux/man-pages/man3/dirname.3p.html behaviors
     // log_debug("'%s'", path);
@@ -42,9 +47,19 @@ static char *dirname(char *path) {
         return ".";
     }
 }
+static const char *_windows_error_string() {
+    // https://learn.microsoft.com/en-us/windows/win32/debug/retrieving-the-last-error-code
+    // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-formatmessage
+    static char es[256];
+    memset(es, 0, sizeof(es));
+    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, GetLastError(), 1033, es, sizeof(es), NULL);
+    return es;
+}
 #else
     #include <dirent.h>
     #include <libgen.h>
+    #include <pwd.h> // getpwuid
     #include <readline/history.h>
     #include <readline/readline.h>
     #include <sys/stat.h> // mkdir
@@ -56,13 +71,17 @@ static int _mkdir(const char *path) {
 #endif
 #include "js-std.h"
 
+// must declare under '#include "js-std.h"', or in msvc will 'error C2370: 'js_std_pathsep': redefinition; different storage class'
 int js_std_argc = 0;
 char **js_std_argv = NULL;
 
 #ifdef _WIN32
-// must declare under '#include "js-std.h"', or in msvc will 'error C2370: 'js_std_pathsep': redefinition; different storage class'
+const char *js_std_os = "windows";
 const char *js_std_pathsep = "\\";
+    #define _throw_windows_error(__arg_vm) \
+        js_throw(js_string_sz(&(__arg_vm->heap), _windows_error_string()))
 #else
+const char *js_std_os = "posix";
 const char *js_std_pathsep = "/";
 #endif
 
@@ -100,11 +119,22 @@ const char *js_std_pathsep = "/";
         __arg_statement; \
     } while (0);
 
-struct js_result js_std_chdir(struct js_vm *vm) {
+struct js_result js_std_cd(struct js_vm *vm) {
     _one_string_argument(vm, path, {
         _posix_zero_on_success(chdir(path));
         _return_null();
     });
+}
+
+struct js_result js_std_cwd(struct js_vm *vm) {
+    char *cwd = getcwd(NULL, 0);
+    if (cwd) {
+        struct js_value ret = js_string_sz(&(vm->heap), (const char *)cwd);
+        free(cwd);
+        js_return(ret);
+    } else {
+        js_throw(js_string_sz(&(vm->heap), (const char *)strerror(errno)));
+    }
 }
 
 struct js_result js_std_clock(struct js_vm *vm) {
@@ -129,8 +159,34 @@ struct js_result js_std_dirname(struct js_vm *vm) {
     });
 }
 
+struct js_result js_std_dump(struct js_vm *vm) {
+    for (uint16_t i = 0; i < js_get_arguments_length(vm); i++) {
+        js_dump_value(js_get_arguments_base(vm) + i);
+        printf(" ");
+    }
+    printf("\n");
+    _return_null();
+}
+
 struct js_result js_std_endswith(struct js_vm *vm) {
     _two_string_arguments(vm, lhs, rhs, js_return(js_boolean(ends_with_sz(lhs, rhs))));
+}
+
+struct js_result js_std_exec(struct js_vm *vm) {
+    uint16_t nargs = js_get_arguments_length(vm);
+    struct js_value *argbase = js_get_arguments_base(vm);
+    char *argv[256] = {0};
+    js_assert(nargs > 0);
+    js_assert(nargs < sizeof(argv));
+    for (size_t i = 0; i < nargs; i++) {
+        argv[i] = js_get_string_base(argbase + i);
+    }
+    intptr_t ret = (intptr_t)execvp(js_get_string_base(argbase), argv);
+    if (ret == -1) {
+        _throw_posix_error(vm);
+    }
+    // acoording to windows document, _exec* will never return on success, cmd window will pause when sub-peocess ends, codes after it will not be executed, when pressed enter key, program exit.
+    _return_null();
 }
 
 struct js_result js_std_exists(struct js_vm *vm) {
@@ -212,17 +268,6 @@ struct js_result js_std_format(struct js_vm *vm) {
     js_return(ret);
 }
 
-struct js_result js_std_getcwd(struct js_vm *vm) {
-    char *cwd = getcwd(NULL, 0);
-    if (cwd) {
-        struct js_value ret = js_string_sz(&(vm->heap), (const char *)cwd);
-        free(cwd);
-        js_return(ret);
-    } else {
-        js_throw(js_string_sz(&(vm->heap), (const char *)strerror(errno)));
-    }
-}
-
 struct js_result js_std_input(struct js_vm *vm) {
     uint16_t nargs = js_get_arguments_length(vm);
     if (nargs > 1) {
@@ -292,7 +337,7 @@ struct js_result js_std_length(struct js_vm *vm) {
     }
 }
 
-struct js_result js_std_listdir(struct js_vm *vm) {
+struct js_result js_std_ls(struct js_vm *vm) {
     uint16_t nargs = js_get_arguments_length(vm);
     struct js_value *argbase = js_get_arguments_base(vm);
     js_assert(nargs == 2);
@@ -415,7 +460,7 @@ struct js_result js_std_match(struct js_vm *vm) {
     });
 }
 
-struct js_result js_std_mkdir(struct js_vm *vm) {
+struct js_result js_std_md(struct js_vm *vm) {
     _one_string_argument(vm, path, {
         _posix_zero_on_success(_mkdir(path));
         _return_null();
@@ -657,16 +702,16 @@ struct js_result js_std_read(struct js_vm *vm) {
     // });
 }
 
-struct js_result js_std_remove(struct js_vm *vm) {
+struct js_result js_std_rd(struct js_vm *vm) {
     _one_string_argument(vm, path, {
-        _posix_zero_on_success(remove(path));
+        _posix_zero_on_success(rmdir(path));
         _return_null();
     });
 }
 
-struct js_result js_std_rmdir(struct js_vm *vm) {
+struct js_result js_std_rm(struct js_vm *vm) {
     _one_string_argument(vm, path, {
-        _posix_zero_on_success(rmdir(path));
+        _posix_zero_on_success(remove(path));
         _return_null();
     });
 }
@@ -748,6 +793,21 @@ struct js_result js_std_startswith(struct js_vm *vm) {
     _two_string_arguments(vm, lhs, rhs, js_return(js_boolean(starts_with_sz(lhs, rhs))));
 }
 
+struct js_result js_std_system(struct js_vm *vm) {
+    uint16_t nargs = js_get_arguments_length(vm);
+    struct js_value *argbase = js_get_arguments_base(vm);
+    js_assert(nargs == 1);
+    js_assert(js_is_string(argbase));
+    int ret = system(js_get_string_base(argbase));
+    if (errno) {
+        _throw_posix_error(vm);
+    }
+#ifndef _WIN32 // cannot be put inside _one_string_argument macro
+    ret = WEXITSTATUS(ret);
+#endif
+    js_return(js_number((double)ret));
+}
+
 struct js_result js_std_tostring(struct js_vm *vm) {
     uint16_t nargs = js_get_arguments_length(vm);
     struct js_value *argbase = js_get_arguments_base(vm);
@@ -777,6 +837,7 @@ struct js_result js_std_tojson(struct js_vm *vm) {
 struct js_result js_std_tonumber(struct js_vm *vm) {
     _one_string_argument(vm, str, {
         char *end;
+        errno = 0; // fix windows bug: won't reset last error such as ERANGE, linux is ok
         double num = strtod(str, &end);
         if (errno) {
             _throw_posix_error(vm);
@@ -786,6 +847,28 @@ struct js_result js_std_tonumber(struct js_vm *vm) {
         }
         js_return(js_number(num));
     });
+}
+
+struct js_result js_std_whoami(struct js_vm *vm) {
+    uint16_t nargs = js_get_arguments_length(vm);
+    js_assert(nargs == 0);
+#ifdef _WIN32
+    char buf[UNLEN + 1] = {0};
+    DWORD len = sizeof(buf);
+    if (GetUserNameA(buf, &len)) {
+        js_return(js_string(&(vm->heap), buf, len));
+    } else {
+        _throw_windows_error(vm);
+    }
+#else
+    // DON'T use getlogin, it will keep origin user name after su
+    struct passwd *pw = getpwuid(geteuid());
+    if (pw) {
+        js_return(js_string_sz(&(vm->heap), pw->pw_name));
+    } else {
+        _throw_posix_error(vm);
+    }
+#endif
 }
 
 /*
@@ -863,35 +946,39 @@ struct js_result js_std_write(struct js_vm *vm) {
 }
 
 #define _function_list \
-    X(chdir) \
+    X(cd) \
     X(clock) \
     X(close) \
     X(dirname) \
+    X(dump) \
     X(endswith) \
+    X(exec) \
     X(exists) \
     X(exit) \
     X(format) \
-    X(getcwd) \
+    X(cwd) \
     X(input) \
     X(join) \
     X(length) \
-    X(listdir) \
+    X(ls) \
     X(match) \
-    X(mkdir) \
+    X(md) \
     X(natural_compare) \
     X(open) \
     X(pop) \
     X(print) \
     X(push) \
     X(read) \
-    X(remove) \
-    X(rmdir) \
+    X(rm) \
+    X(rd) \
     X(sort) \
     X(split) \
     X(startswith) \
+    X(system) \
     X(tojson) \
     X(tonumber) \
     X(tostring) \
+    X(whoami) \
     X(write)
 
 #ifdef DEBUG
@@ -919,11 +1006,7 @@ void js_declare_std_functions(struct js_vm *vm) {
         }
         js_declare_variable_sz(vm, "argv", arg_vector);
     }
-#ifdef _WIN32
-    js_declare_variable_sz(vm, "os", js_scripture_sz("windows"));
-#else
-    js_declare_variable_sz(vm, "os", js_scripture_sz("posix"));
-#endif
+    js_declare_variable_sz(vm, "os", js_scripture_sz(js_std_os));
     js_declare_variable_sz(vm, "pathsep", js_scripture_sz(js_std_pathsep));
     // log_expression("%llu", stdin);
     // log_expression("%llu", stdout);
@@ -935,7 +1018,7 @@ void js_declare_std_functions(struct js_vm *vm) {
     js_declare_variable_sz(vm, "stdin", js_number((double)(intptr_t)stdin));
     js_declare_variable_sz(vm, "stdout", js_number((double)(intptr_t)stdout));
     js_declare_variable_sz(vm, "stderr", js_number((double)(intptr_t)stderr));
-    js_declare_variable_sz(vm, "dump", js_c_function(js_dump_vm));
+    js_declare_variable_sz(vm, "dump_vm", js_c_function(js_dump_vm));
     js_declare_variable_sz(vm, "gc", js_c_function(js_collect_garbage));
     // compatibility purpose
     struct js_value console = js_object(&(vm->heap));

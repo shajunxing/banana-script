@@ -1,3 +1,9 @@
+# 2025-07-30
+
+More std functions, see example/7-std.js for usage
+
+Optimized `&&` `||` operator: if lhs of `&&` is false, rhs will not be executed, and if lhs of `||` is true, rhs will also not be executed 
+
 # 2025-07-28
 
 Reconstructed dump/tostring/tojson functions. Added more std functions.

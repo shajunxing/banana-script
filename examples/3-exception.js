@@ -15,6 +15,6 @@ for (;;) {
     } catch (ex) {
         // print(tojson(ex));
     }
-    // dump();
+    // dump_vm();
     gc();
 }

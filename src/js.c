@@ -358,6 +358,7 @@ int main(int argc, char *argv[]) {
             } else {
                 printf("Runtime Error: ");
                 js_dump_value(&(result.value));
+                printf("\n");
                 return EXIT_FAILURE;
             }
         } else if (action == a_unassemble) {
