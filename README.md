@@ -6,9 +6,7 @@ This article is openly licensed via [CC BY-NC-ND 4.0](https://creativecommons.or
 
 Project Address: <https://github.com/shajunxing/banana-script>
 
-![REPL](screenshot1.png "REPL")
-
-![Command line arguments](screenshot2.png "Command line arguments")
+![REPL](screenshot3.png "REPL")
 
 ## Features
 
