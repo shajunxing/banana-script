@@ -78,6 +78,7 @@ static int _repl() {
                     printf("  /q                       quit program\n");
                     printf("  /u                       unassemble bytecodes\n");
                     printf("  /w                       write source and binaries to file\n");
+                    printf("\n");
                 } else if (__line_eq("/d")) {
                     buffer_dump(source.base, source.length, source.capacity);
                     buffer_dump(vm.bytecode.base, vm.bytecode.length, vm.bytecode.capacity);
@@ -119,6 +120,7 @@ static int _repl() {
                         printf("\n");
                         rollback = true;
                     }
+                    printf("\n");
                 } else {
                     rollback = true;
                 }
@@ -138,10 +140,9 @@ static int _repl() {
 }
 
 static int _help(char *arg_0) {
-    printf("Usage: %s [filenames] [options]\n", arg_0);
+    printf("Usage: %s [options] [filename] ...\n", arg_0);
     printf("\n");
-    printf("If both options and filenames are not specified, enter repl environment.\n");
-    printf("If only filenames specified, load them sequentially as source code, and run.\n");
+    printf("If no arguments, enter repl environment.\n");
     printf("\n");
     printf("Action options:\n");
     printf("  -c, --compile            compile only\n");
@@ -155,7 +156,7 @@ static int _help(char *arg_0) {
     printf("\n");
     printf("File options:\n");
     printf("  -b, --binary <filename>  bytecode binary filename\n");
-    printf("  -s, --source <filenames> one or more source filenames\n");
+    printf("  -s, --source <filenames> one or more source filenames, loaded by order\n");
     printf("  -x, --xref <filename>    cross reference filename\n");
     printf("\n");
     printf("Relationship between actions and files:\n");
@@ -254,10 +255,6 @@ int main(int argc, char *argv[]) {
     if (argc == 1) { // no arguments, enter repl
         return _repl();
     }
-    enum { t_bytecode,
-        t_source,
-        t_xref
-    } file_type = t_source;
     struct {
         char **base;
         size_t length;
@@ -270,45 +267,46 @@ int main(int argc, char *argv[]) {
         a_unassemble
     } action = a_run;
     bool optimize = false;
-    for (int i = 1; i < argc; i++) {
-        char *arg = argv[i];
-#define __arg_eq(__arg_0) (strcmp(arg, (__arg_0)) == 0)
-        if (arg[0] == '-') {
-            if (__arg_eq("-b") || __arg_eq("--bytecode")) {
-                file_type = t_bytecode;
-            } else if (__arg_eq("-s") || __arg_eq("--source")) {
-                file_type = t_source;
-            } else if (__arg_eq("-x") || __arg_eq("--xref")) {
-                file_type = t_xref;
-            } else if (__arg_eq("-c") || __arg_eq("--compile")) {
+    int i;
+    for (i = 1; i < argc; i++) {
+#define __next_i \
+    if (++i >= argc) \
+    break
+        if (starts_with_sz(argv[i], "-")) {
+            if (equals_sz(argv[i], "-b") || equals_sz(argv[i], "--bytecode")) {
+                __next_i;
+                bytecode_filename = argv[i];
+            } else if (equals_sz(argv[i], "-s") || equals_sz(argv[i], "--source")) {
+                __next_i;
+                buffer_push(source_filenames.base, source_filenames.length, source_filenames.capacity, argv[i]);
+            } else if (equals_sz(argv[i], "-x") || equals_sz(argv[i], "--xref")) {
+                __next_i;
+                xref_filename = argv[i];
+            } else if (equals_sz(argv[i], "-c") || equals_sz(argv[i], "--compile")) {
                 action = a_compile;
-            } else if (__arg_eq("-h") || __arg_eq("--help")) {
+            } else if (equals_sz(argv[i], "-h") || equals_sz(argv[i], "--help")) {
                 return _help(argv[0]);
-            } else if (__arg_eq("-o") || __arg_eq("--optimize")) {
+            } else if (equals_sz(argv[i], "-o") || equals_sz(argv[i], "--optimize")) {
                 optimize = true;
-            } else if (__arg_eq("-r") || __arg_eq("--run")) {
+            } else if (equals_sz(argv[i], "-r") || equals_sz(argv[i], "--run")) {
                 action = a_run;
 #ifdef DEBUG
-            } else if (__arg_eq("-t") || __arg_eq("--test")) {
+            } else if (equals_sz(argv[i], "-t") || equals_sz(argv[i], "--test")) {
                 return _test(argv[0], argc - i - 1, argv + i + 1);
 #endif
-            } else if (__arg_eq("-u") || __arg_eq("--unassemble")) {
+            } else if (equals_sz(argv[i], "-u") || equals_sz(argv[i], "--unassemble")) {
                 action = a_unassemble;
             } else {
-                // rest arguments are handled by script, shouldn't fatal
-                // fatal("Unknown option: %s", arg);
+                fatal("Unknown option: %s", argv[i]);
             }
         } else {
-            // handle file names
-            if (file_type == t_bytecode) {
-                bytecode_filename = arg;
-            } else if (file_type == t_source) {
-                buffer_push(source_filenames.base, source_filenames.length, source_filenames.capacity, arg);
-            } else {
-                xref_filename = arg;
-            }
+            break;
         }
-#undef __arg_eq
+#undef __next_i
+    }
+    // if no source file specified by -s, here specify only one, and rest arguments left un-handled
+    if (!source_filenames.base && i < argc) {
+        buffer_push(source_filenames.base, source_filenames.length, source_filenames.capacity, argv[i]);
     }
     // do actions
     js_declare_std_functions(&vm);

@@ -169,7 +169,19 @@ struct js_result js_std_dump(struct js_vm *vm) {
 }
 
 struct js_result js_std_endswith(struct js_vm *vm) {
-    _two_string_arguments(vm, lhs, rhs, js_return(js_boolean(ends_with_sz(lhs, rhs))));
+    // _two_string_arguments(vm, lhs, rhs, js_return(js_boolean(ends_with_sz(lhs, rhs))));
+    uint16_t nargs = js_get_arguments_length(vm);
+    struct js_value *argbase = js_get_arguments_base(vm);
+    js_assert(nargs > 1);
+    js_assert(js_is_string(argbase));
+    char *lhs = js_get_string_base(argbase);
+    for (uint16_t i = 1; i < nargs; i++) {
+        js_assert(js_is_string(argbase + i));
+        if (ends_with_sz(lhs, js_get_string_base(argbase + i))) {
+            js_return(js_boolean(true));
+        }
+    }
+    js_return(js_boolean(false));
 }
 
 struct js_result js_std_exec(struct js_vm *vm) {
@@ -446,10 +458,10 @@ static void _append_capture(struct js_vm *vm, struct js_value *arr, struct re_ca
 }
 
 struct js_result js_std_match(struct js_vm *vm) {
-    _two_string_arguments(vm, str, pat, {
+    _two_string_arguments(vm, txt, pat, {
         struct re_capture cap = {0};
         struct js_value ret;
-        if (re_match(str, pat, &cap)) {
+        if (re_match(txt, pat, &cap)) {
             ret = js_array(&(vm->heap));
             _append_capture(vm, &ret, &cap);
         } else {
@@ -553,18 +565,6 @@ struct js_result js_std_push(struct js_vm *vm) {
     _return_null();
 }
 
-/*
-generic read for text file or process output
-arguments can be following formats:
-    number fp
-    number fp, function cb
-    string fname/cmd
-    string fname/cmd, boolean iscmd
-    string fname/cmd, function cb
-    string fname/cmd, boolean iscmd, function cb
-iscommand means use popen() instead of fopen() if arg 0 is string
-if has cb, read each line and call it, pass line as parameter, or returns while content until eof
-*/
 struct js_result js_std_read(struct js_vm *vm) {
     uint16_t nargs = js_get_arguments_length(vm);
     struct js_value *argbase = js_get_arguments_base(vm);
@@ -752,7 +752,7 @@ struct js_result js_std_sort(struct js_vm *vm) {
     qsort_r(argbase->managed->array.base, argbase->managed->array.length,
         sizeof(struct js_value), _comparator, &ctx);
 #endif
-    _return_null();
+    js_return(*argbase);
 }
 
 struct js_result js_std_split(struct js_vm *vm) {
@@ -790,7 +790,19 @@ struct js_result js_std_split(struct js_vm *vm) {
 }
 
 struct js_result js_std_startswith(struct js_vm *vm) {
-    _two_string_arguments(vm, lhs, rhs, js_return(js_boolean(starts_with_sz(lhs, rhs))));
+    // _two_string_arguments(vm, lhs, rhs, js_return(js_boolean(starts_with_sz(lhs, rhs))));
+    uint16_t nargs = js_get_arguments_length(vm);
+    struct js_value *argbase = js_get_arguments_base(vm);
+    js_assert(nargs > 1);
+    js_assert(js_is_string(argbase));
+    char *lhs = js_get_string_base(argbase);
+    for (uint16_t i = 1; i < nargs; i++) {
+        js_assert(js_is_string(argbase + i));
+        if (starts_with_sz(lhs, js_get_string_base(argbase + i))) {
+            js_return(js_boolean(true));
+        }
+    }
+    js_return(js_boolean(false));
 }
 
 struct js_result js_std_system(struct js_vm *vm) {
@@ -871,13 +883,6 @@ struct js_result js_std_whoami(struct js_vm *vm) {
 #endif
 }
 
-/*
-generic write for text file
-arguments can be following formats:
-    number fp, string str
-    string fname, string str
-    string fname, boolean isappend, string str
-*/
 struct js_result js_std_write(struct js_vm *vm) {
     uint16_t nargs = js_get_arguments_length(vm);
     struct js_value *argbase = js_get_arguments_base(vm);

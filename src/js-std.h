@@ -13,12 +13,6 @@ You should have received a copy of the GNU General Public License along with thi
 
 #include "js-vm.h"
 
-/*
-function naming rules:
-1. simple unique feature, match one dos/unix command/function, such as 'cd' 'md' 'rd', use shortest name, can also improve speed
-2. more complicated, customize it's name
-*/
-
 shared int js_std_argc;
 shared char **js_std_argv;
 shared const char *js_std_os;

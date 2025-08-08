@@ -10,7 +10,7 @@
 
 ![命令行参数](screenshot2.png "命令行参数")
 
-## 介绍
+## 特色
 
 我的目标是剔除和修改我在实践中总结的JavaScript语言的没用的和模棱两可的部分，只保留我喜欢和需要的，创建一个最小语法的解释器。**只支持 JSON 兼容的数据类型和函数，函数是第一类值，函数支持闭包。我不喜欢面向对象编程，所以所有与类相关的内容都不支持**。没有任何内置不可删除的全局变量、全局函数或对象成员，哪怕解释器初始化的时候加入的内容都可以在任何时候轻松删除，恢复到空空如也的状态。
 
@@ -20,7 +20,7 @@
 
 变量声明使用 `let`，所有变量都是局部变量，不支持 `const`，因为一切都必须可删除。访问未声明的变量会引发错误，访问数组/对象不存在的成员会返回 `null`，写入`null`则为删除对应成员。
 
-函数定义支持默认参数 `param = value` 和剩余参数 `...args`。数组字面量和函数调用支持展开语法 `...`，不会跳过`null`成员。函数中没有 预定义的成员比如`this` `arguments`。`return` 如果在函数外部，意为退出虚拟机。
+函数定义只支持`function`关键字，不支持`=>`表达式。支持默认参数 `param = value` 和剩余参数 `...args`。数组字面量和函数调用支持展开语法 `...`，不会跳过`null`成员。函数中没有 预定义的成员比如`this` `arguments`。`return` 如果在函数外部，意为退出虚拟机。
 
 运算符遵循严格规则，没有隐式转换。只有布尔值可以进行逻辑运算。`== !=` 是严格意义上的比较，可以应用于所有类型。字符串支持所有关系运算符和 `+`。数字支持所有关系和数值运算符。运算符的优先级从低到高为：
 
@@ -54,6 +54,55 @@
 - `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump_vm(); print(f(3)); delete f;`
 
 `throw` 可以抛出任意值，由`catch`接收。不支持`finally`，因为我认为根本不需要，反而会使代码执行顺序显得怪异。
+
+## 标准库
+
+包含最常使用的输入输出和数值处理函数，以下是已经基本固定不变的函数，更多的参考 [examples/7-std.js](https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js) 和 [src/js-std.c](https://github.com/shajunxing/banana-script/blob/main/src/js-std.c)。
+
+函数命名规则：
+
+1. 最常用的，取最常用的名字，比如控制台输入输出，就是`input` `print`，最方便记忆，我请chatgpt帮我统计过使用率。
+2. 单一功能的，匹配一个 dos/unix 命令或 c std/unistd 函数，例如 `cd` `md` `rd`，用最短的那个，这样还能提高速度。
+3. 非单一功能的，定制名称。
+
+函数描述规则：
+
+类似c语言函数格式，参数和返回值类型可以是 `null` `boolean` ... ，也可以用 `/` 表示多种类型、`any` 表示任意类型。`[]` 表示可选参数，`...`表示不限量参数。
+
+`string input([string prompt])` 打印提示符（可选）并接受用户输入一行。如果需要数值，可用`number tonumber(string str)` 将字符串转换为数值。
+
+`null print([any value], ...)` 打印零个或多个值，用空格分隔，结尾换行。值的呈现形式有三类，从复杂到简单分别是 `dump` `json` `user`，`print()`函数用的是第三类，另有`dump()`与其格式一样，但用的是第一类。还有两个函数 `string tojson(any value)` `string tostring(any value)` 用于把任意值转换成第二和第三类呈现形式的字符串。
+
+```
+string read(number handle)
+string read(string filename/cmdline)
+string read(string filename/cmdline, boolean iscommand)
+null read(number handle, function callback)
+null read(string filename/cmdline, function callback)
+null read(string filename/cmdline, boolean iscommand, function callback)
+```
+
+用于文本文件或控制台进程输出的通用读取函数，该函数接受以数字表示的文件/进程句柄，或以字符串表示的文件名/命令行，其中，`iscommand` 表示是否为进程命令行，默认为文件名。如果不存在 `callback` 函数，该函数将读取整个文件内容/进程输出并返回；如果存在，则在每一行上调用 `callback` 函数，并将该行作为参数传递。
+
+```
+null write(number handle, string text)
+null write(string filename, string text)
+null write(string filename, boolean isappend, string text)
+```
+
+用于文本文件的通用写入功能，接受数字表示的文件句柄或字符串表示的文件名。`isappend` 参数表示在文件末尾追加内容，而不是覆盖文件。
+
+`array/null match(string text, string pattern)` 正则表达式匹配。如果匹配，返回所有捕获，否则返回`null`，正则表达式当前支持 `^` `$` `()` `\d` `\s` `\w` `[]` `*` `+` `?`。
+
+`number argc` `array argv` 进程命令行参数。
+
+`string os` 操作系统类型，可以是`windows`或`posix`。
+
+`string pathsep` 路径分隔符，可以是`\`或`/`。
+
+`null cd(string path)` `null md(string path)` `null rd(string path)` `null rd(string path)` 进入目录、创建目录、删除目录、删除文件。
+
+`string cwd()` 返回进程当前工作目录。
 
 ## 技术内幕
 

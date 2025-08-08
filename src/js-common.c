@@ -257,13 +257,13 @@ I like short, lean, clear and easy-to-read code, and I learned from classic exam
 
 1. First of all, pay tribute to master's code, construct a basic `match` and `match_here` two-layer structure, which can correctly parse `^` `$`;
 2. Then use tree structure to achieve arbitrary depth nested `()`;
-3. Then implement pattern matching of a single character, abstract `match_char` function, in which `d` `s` `w` `[]`;
-4. Finally, add quantifier `*` ` `?`.
+3. Then implement pattern matching of a single character, abstract `match_char` function, in which `\d` `\s` `\w` `[]`;
+4. Finally, add quantifier `*` `+` `?`.
 
 Of course, traditional regular libraries are generally precompiled to AST because they support many functions, such as need for backscanning, etc., and my simple recursive descending code framework here can be regarded as implementing most common functions, which can be expanded with more escapes, character classes, and quantifiers.
 */
 
-static void _start_capture(char *str, struct re_capture **cap) {
+static void _start_capture(char *txt, struct re_capture **cap) {
 #define __last_sub() ((*cap)->subs.base + (*cap)->subs.length - 1)
     // printf("_start_capture\n");
     if (cap && *cap) {
@@ -273,15 +273,15 @@ static void _start_capture(char *str, struct re_capture **cap) {
                 (struct re_capture){.super = (*cap)});
         }
         (*cap) = __last_sub();
-        (*cap)->head = str;
+        (*cap)->head = txt;
     }
 #undef __last_sub
 }
 
-static void _end_capture(char *str, struct re_capture **cap) {
+static void _end_capture(char *txt, struct re_capture **cap) {
     // printf("_end_capture\n");
     if (cap && *cap) {
-        (*cap)->tail = str;
+        (*cap)->tail = txt;
         (*cap) = (*cap)->super;
     }
 }
@@ -331,11 +331,11 @@ static bool _match_char(char c, char *ph, char *pt) {
 #undef __check_return
 }
 
-static bool _match_here(char *str, char *pat, struct re_capture *cap) {
-#define __set_capture_head() (cap ? (cap->head = str) : (void)0)
-#define __set_capture_tail() (cap ? (cap->tail = str) : (void)0)
-#define __start_capture() (cap ? _start_capture(str, &cap) : (void)0)
-#define __end_capture() (cap ? _end_capture(str, &cap) : (void)0)
+static bool _match_here(char *txt, char *pat, struct re_capture *cap) {
+#define __set_capture_head() (cap ? (cap->head = txt) : (void)0)
+#define __set_capture_tail() (cap ? (cap->tail = txt) : (void)0)
+#define __start_capture() (cap ? _start_capture(txt, &cap) : (void)0)
+#define __end_capture() (cap ? _end_capture(txt, &cap) : (void)0)
     __set_capture_head();
     for (;;) {
         // DON'T use "if (*pat == '(' && cap)", *pat must always be consumed
@@ -349,10 +349,10 @@ static bool _match_here(char *str, char *pat, struct re_capture *cap) {
             __set_capture_tail();
             return true;
         } else if (*pat == '$') {
-            bool ret = *str == '\0';
+            bool ret = *txt == '\0';
             ret ? __set_capture_tail() : (void)0;
             return ret;
-        } else if (*str == '\0') {
+        } else if (*txt == '\0') {
             return false;
         } else {
             char *ph = pat;
@@ -370,24 +370,24 @@ static bool _match_here(char *str, char *pat, struct re_capture *cap) {
             // quantifiers
             if (*pat == '?') {
                 // zero or one
-                if (_match_char(*str, ph, pat)) {
-                    str++;
+                if (_match_char(*txt, ph, pat)) {
+                    txt++;
                 }
                 pat++;
             } else {
                 // '+' is combination of 'one' and 'zero or more'
                 if (*pat != '*') {
                     // 'one': '+' and others
-                    char c = *str;
-                    str++;
+                    char c = *txt;
+                    txt++;
                     if (!_match_char(c, ph, pat)) {
                         return false;
                     }
                 }
                 if (*pat == '*' || *pat == '+') {
                     // 'zero or more': '*' and '+'
-                    while (*str != '\0' && _match_char(*str, ph, pat)) {
-                        str++;
+                    while (*txt != '\0' && _match_char(*txt, ph, pat)) {
+                        txt++;
                     }
                     pat++;
                 }
@@ -400,16 +400,16 @@ static bool _match_here(char *str, char *pat, struct re_capture *cap) {
 #undef __set_capture_head
 }
 
-// string and pattern's current position cannot be put into context, because they will be re-entered in namy functions
-bool re_match(char *string, char *pattern, struct re_capture *capture) {
+// text and pattern's current position cannot be put into context, because they will be re-entered in namy functions
+bool re_match(char *text, char *pattern, struct re_capture *capture) {
     if (*pattern == '^') {
-        return _match_here(string, pattern + 1, capture);
+        return _match_here(text, pattern + 1, capture);
     }
-    for (;; string++) {
-        if (_match_here(string, pattern, capture)) {
+    for (;; text++) {
+        if (_match_here(text, pattern, capture)) {
             return true;
         }
-        if (*string == '\0') {
+        if (*text == '\0') {
             return false;
         }
     }

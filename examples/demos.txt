@@ -1,0 +1,8 @@
+// using txt to prevent formatting
+
+print({"foo":true,"bar":[null,false,{"baz":function(a){return function(b){return function(c){return a+b+c;};};}}]}?.bar[2]["baz"]("How ")("are ")("you?"));
+
+["1", "100", "3", "10", "2"]::sort(natural_compare)::tojson()::print();
+
+print(format("${0}\n${1}\n${2}\n${3}", ...match("Unknown-14886@noemail.invalid", "^([\\w\\.-]+)\\@([\\w-]+)\\.([a-zA-Z\\w]+)$")));
+

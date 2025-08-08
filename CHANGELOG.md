@@ -1,3 +1,8 @@
+# 2025-08-08
+
+Optimized js executable's parameter parsing
+Optimized several std functions
+
 # 2025-07-30
 
 More std functions, see example/7-std.js for usage

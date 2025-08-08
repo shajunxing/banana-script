@@ -42,7 +42,8 @@
 //     dump(err);
 // }
 
-// print(argc, length(argv), argv);
+// dump(argc, length(argv), argv);
+
 // let wd = cwd();
 // print(wd);
 // for (let dir of ["d:\\", "~!@#$%^&*()", "z:\\"]) {
@@ -101,12 +102,12 @@
 
 // print(format("-${1}-${0}-", "world", "hello"));
 
-// print(startswith("123456", "123"));
-// print(startswith("123456", "456"));
-// print(startswith("123456", "123456789"));
-// print(endswith("123456", "123"));
-// print(endswith("123456", "456"));
-// print(endswith("123456", "123456789"));
+print("123456"::startswith("123456789"));
+print("123456"::startswith("123456789", "456"));
+print("123456"::startswith("123456789", "456", "123"));
+print("123456"::endswith("123456789"));
+print("123456"::endswith("123456789", "123"));
+print("123456"::endswith("123456789", "123", "456"));
 
 // let fname = "foo.txt";
 // write(fname, "Foo\n");
@@ -291,6 +292,5 @@
 // exec("cl.exe");
 // exec("ping.exe", "www.baidu.com", "-t");
 
-(whoami() == "root" || exec("su", "-c", argv::join(" ")));
-whoami()::print();
-
+// (whoami() == "root" || exec("su", "-c", argv::join(" ")));
+// whoami()::print();

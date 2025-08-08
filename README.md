@@ -10,7 +10,7 @@ Project Address: <https://github.com/shajunxing/banana-script>
 
 ![Command line arguments](screenshot2.png "Command line arguments")
 
-## Introduction
+## Features
 
 My goal is to remove and modify useless and ambiguous parts of JavaScript language that I've summarized in practice, and to create a minimal syntax interpreter by keeping only what I like and need. **Only JSON-compatible data types and function are supported, function is first-class value, and function supports closure. I don't like object-oriented programming, so everything class related are not supported**. There are no built-in immunable global variables, global functions, or object members, even contents added during interpreter initialization can be easily deleted at any time and reverted to clean empty state.
 
@@ -20,7 +20,7 @@ Data types are `null` `boolean` `number` `string` `array` `object` `function`, r
 
 Variable declaraction use `let`, all variables are local, `const` is not supported because all must be deletable. Access undeclared variables will cause error, access array/object's unexisting members will get `null`, and put `null` will delete corresponding member.
 
-Function definition supports default argument `param = value` and rest argument `...args`. Array literal and function call support spread syntax `...`, which will not skip `null` members. No predefined members such as `this` `arguments` in function. If `return` is outside function, means exit vm.
+Function definition supports `function` keyword, does not support `=>` expression, support default argument `param = value` and rest argument `...args`. Array literal and function call support spread syntax `...`, which will not skip `null` members. No predefined members such as `this` `arguments` in function. If `return` is outside function, means exit vm.
 
 Operators follow strict rule, no implicit conversion. Only boolean can do logical operations. `== !=` are strict meaning, and can be done by all types. Strings can do all relational operations and `+`. Numbers can do all relational and numerical operations. Operator precedence from low to high is:
 
@@ -54,6 +54,55 @@ Garbage collection is manual, you can do it at any time you need.
 - `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump_vm(); print(f(3)); delete f;`
 
 `throw` can throw any value, which are received by `catch`. `finally` is not supported, because I think it's totally unecessary, and will make code execution order weird.
+
+## Standard Library
+
+This includes most commonly used input/output and numeric processing functions. Below are functions that have basically remained unchanged. For more info, check out [examples/7-std.js](https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js) and [src/js-std.c](https://github.com/shajunxing/banana-script/blob/main/src/js-std.c).
+
+function naming rules:
+
+1. Most commonly used ones, take most commonly used names, like console input and output, which are `input` and `print`. They're easiest to remember. I even asked ChatGPT helping me check their usage percentage.
+2. Single featured ones, match per dos/unix command, or c std/unistd function, such as `cd` `md` `rd`, use shortest one, which can also improve speed.
+3. Non-single featured ones, customize names.
+
+Function description rules:
+
+Similar to C language function format, parameter and return value types can be `null` `boolean` ..., and can also represent multiple types with `/` or any type with `any`. `[]` indicates optional parameters, and `...` indicates unlimited parameters.
+
+`string input([string prompt])` prints prompt (optional) and accepts line of user input. If you need number, you can use `number tonumber(string str)` to convert string into number.
+
+`null print([any value], ...)` prints zero or more values, separated by spaces, with newline at end. There are three types for how values are presented, from complex to simple: `dump`, `json`, and `user`. `print()` function uses third type, while `dump()` has same format but uses first type. There are also two functions, `string tojson(any value)` and `string tostring(any value)`, which convert any value into strings of second and third types, respectively.
+
+```
+string read(number handle)
+string read(string filename/cmdline)
+string read(string filename/cmdline, boolean iscommand)
+null read(number handle, function callback)
+null read(string filename/cmdline, function callback)
+null read(string filename/cmdline, boolean iscommand, function callback)
+```
+
+Generic reading function for text file or console process output, which takes number represented file/process handle, or string represented file name/command line, `iscmd` means is process command line, default is file name. If no `callback` exist, this function will read whole file content/process output and returns, or if exists, it will call `callback` on each line and pass this line as argument.
+
+```
+null write(number handle, string text)
+null write(string filename, string text)
+null write(string filename, boolean isappend, string text)
+```
+
+Generic writing function for text file, which takes number represented file handle, or string represented file name. `isappend` means append to end of file instead of overwrite file.
+
+`array/null match(string text, string pattern)` is for regular expression matching. If matched, returns all captures; otherwise, returns `null`. Currently supports `^`, `$`, `()`, `d`, `s`, `w`, `[]`, `*`, ` `, and `?`.
+
+`number argc` `array argv` are process command line arguments.
+
+`string os` indicates operating system type, which can be `windows` or `posix`.
+
+`string pathsep` is path separator, which can be `\` or `/`.
+
+`null cd(string path)` `null md(string path)` `null rd(string path)` `null rd(string path)` are for changing to directory, creating directory, removing directory, and removing file, respectively.
+
+`string cwd()` returns current working directory.
 
 ## Technical internals
 
