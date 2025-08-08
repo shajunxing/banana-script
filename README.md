@@ -109,12 +109,11 @@ This project is C99 compatable, no other dependences, even make systems are not 
 Project follows "minimal dependency" rule, only including necessary headers. Also, there's only one-way referencing between modules, with no circular referencing. Here’s how modules work and their dependencies:
 
 ```
-js-common   js-data     js-vm       js-syntax
-    <-----------
-                <-----------
-                            <-----------
-    <-----------------------
-    <-----------------------------------
+    js-common   js-data     js-vm       js-syntax   js-std
+        <-----------
+                    <-----------
+                                <-----------
+                                <-----------------------
 ```
 
 - `js-common`: Constants, macro definitions, and functions common to project, such as log, memory io
