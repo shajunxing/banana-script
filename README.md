@@ -30,11 +30,11 @@ Operators follow strict rule, no implicit conversion. Only boolean can do logica
 - Multiplicative operator `*` `/` `%`
 - Exponential operator `**`
 - Prefix operator `+` `-` `!` `typeof`
-- Array/object member access and function call operator `[]` `.` `?.` `()`
+- Array/object member access and function call operator `[]` `.` `?.` `()` `::`
+
+Double colon binding operator `::` proposed in JavaScript <https://github.com/tc39/proposal-bind-operator> <https://babeljs.io/docs/babel-plugin-proposal-function-bind> has had its semantics greatly simplified: `value::function(...args)` is equivalent to `function(value, ...args)`. Class lovers will be happy because they can easily write in object-oriented style, even using nice chaining syntax!
 
 Assignment expression `=` `+=` `-=` `*=` `/=` `%=` `++` `--` does not return value, Comma expression `,` is not supported.
-
-Add double colon binding operator, which `value::function(...args)` is equivalent to `function(value, ...args)`. This will definitely make class lovers happy because they can easily write oo style code, and even nice chain syntax style.
 
 Conditional statement is `if`, loops are `while` `do while` `for`, conditions must be boolean. `for` loop only support following syntax, `[]` means optional. `for in` and `for of` only handle non-null members:
 
@@ -55,7 +55,7 @@ Garbage collection is manual, you can do it at any time you need.
 
 ## Standard Library
 
-This includes most commonly used input/output and numeric processing functions. Below are functions that have basically remained unchanged. For more info, check out [examples/7-std.js](https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js) and [src/js-std.c](https://github.com/shajunxing/banana-script/blob/main/src/js-std.c).
+This includes most commonly used input/output and numeric processing functions. Below are functions that have basically remained unchanged. For more info, check out <https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js> and <https://github.com/shajunxing/banana-script/blob/main/src/js-std.c>.
 
 function naming rules:
 
@@ -109,24 +109,24 @@ This project is C99 compatable, no other dependences, even make systems are not 
 Project follows "minimal dependency" rule, only including necessary headers. Also, there's only one-way referencing between modules, with no circular referencing. Here’s how modules work and their dependencies:
 
 ```
-    js-common   js-data     js-vm       js-syntax   js-std
-        <-----------
-                    <-----------
-                                <-----------
-                                <-----------------------
+js-common   js-data     js-vm       js-syntax   js-std
+    <-----------
+                <-----------
+                            <-----------
+                            <-----------------------
 ```
 
-- `js-common`: Constants, macro definitions, and functions common to project, such as log, memory io
-- `js-data`: Data types and garbage collection, you can even use this module separately in C projects to manipulate high-level data structures with GC functionality, see <https://github.com/shajunxing/banana-cvar>
-- `js-vm`: Bytecode Virtual Machine, compiled separately to get an interpreter with minimal footprint without source code parsing
-- `js-syntax`: Lexical parsing and syntax parsing, which converts source code into bytecode
-- `js-std`: A reference implementation of some commonly used standard functions. Note that it's just for reference when writing C functions and doesn't guarantee it will change in future. For specific usage, check out [examples/7-std.js](https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js) and my other project <https://github.com/shajunxing/view-comic-here>
+- `js-common`: Constants, macro definitions, and functions common to project, such as log printing, memory operations.
+- `js-data`: Data types and garbage collection, you can even use this module separately in C projects to manipulate high-level data structures with GC functionality, see <https://github.com/shajunxing/banana-cvar>.
+- `js-vm`: Bytecode Virtual Machine, compiled separately to get an interpreter with minimal footprint without source code parsing.
+- `js-syntax`: Lexical parsing and syntax parsing, which converts source code into bytecode.
+- `js-std`: Reference implementation of commonly used standard functions, which can be used as reference for writing C functions.
 
 All values are `struct js_value` type, you can create by `js_xxx()` functions, `xxx` is value type, and you can read c values direct from this struct, see definition in `js_data.h`. Created values follow garbage collecting rules. DON'T directly modify their content, if you want to get different values, create new one. Compound types `array` `object` can be operated by `js_array_xxx()` `js_object_xxx()` functions.
 
 C functions must be `struct js_result (*)(struct js_vm *)` format, use `js_c_function()` to create c function value, yes of course they are all values and can be put anywhere, for example, if put on stack root using `js_declare_variable()`, they will be global. `struct js_result` has two members, if `.success` is true, `.value` is return value, if false, `.value` is received by `catch` if there are `try catch`. c function can also call script function using `js_call()`. Inside C function, use `js_get_arguments_base()` `js_get_arguments_length()` `js_get_argument()` to get passed in arguments.
 
-For interacting with C language, you can check out [src/js-std.c](https://github.com/shajunxing/banana-script/blob/main/src/js-std.c).
+For interacting with C language, you can check out <https://github.com/shajunxing/banana-script/blob/main/src/js-std.c>.
 
 There are 2 types of string: `vt_scripture` means immutable c string literal in engine c source code, eg. `typeof` result, and `vt_string` are mutable. They are all null terminated. They can be used for futher optimization.
 

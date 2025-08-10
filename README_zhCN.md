@@ -30,11 +30,11 @@
 - 乘除运算符 `*` `/` `%`
 - 指数运算符 `**`
 - 前缀运算符 `+` `-` `!` `typeof`
-- 数组/对象成员访问和函数调用运算符 `[]` `.` `?.` `()`
+- 数组/对象成员访问和函数调用运算符 `[]` `.` `?.` `()` `::`
+
+JavaScript提案的双冒号绑定运算符 `::` <https://github.com/tc39/proposal-bind-operator> <https://babeljs.io/docs/babel-plugin-proposal-function-bind>，我对它的语义做了大幅简化： `value::function(...args)` 等价于 `function(value, ...args)`，如此Class爱好者会很开心，因为能轻松写出面向对象范儿，甚至漂亮的链式语法风格。
 
 赋值表达式 `=` `+=` `-=` `*=` `/=` `%=` `++` `--` 不返回值。不支持逗号表达式 `,`。
-
-增加双冒号绑定运算符，语义为 `value::function(...args)` 等价于 `function(value, ...args)`，如此Class爱好者会很开心，因为能轻松写出面向对象范儿，甚至漂亮的链式语法风格。
 
 条件语句是`if`，循环语句是`while` `do while` `for`，条件必须是布尔值。`for` 循环仅支持以下语法，`[]` 表示可选部分。`for in` 和 `for of` 只处理非 `null` 的成员：
 
@@ -55,7 +55,7 @@
 
 ## 标准库
 
-包含最常使用的输入输出和数值处理函数，以下是已经基本固定不变的函数，更多的参考 [examples/7-std.js](https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js) 和 [src/js-std.c](https://github.com/shajunxing/banana-script/blob/main/src/js-std.c)。
+包含最常使用的输入输出和数值处理函数，以下是已经基本固定不变的函数，更多的参考 <https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js> 和 <https://github.com/shajunxing/banana-script/blob/main/src/js-std.c>。
 
 函数命名规则：
 
@@ -109,24 +109,24 @@ null write(string filename, boolean isappend, string text)
 项目遵循“最小依赖”原则，只包含必须的头文件，且模块之间只有单向引用，没有循环引用。模块的功能和依赖关系如下：
 
 ```
-    js-common   js-data     js-vm       js-syntax   js-std
-        <-----------
-                    <-----------
-                                <-----------
-                                <-----------------------
+js-common   js-data     js-vm       js-syntax   js-std
+    <-----------
+                <-----------
+                            <-----------
+                            <-----------------------
 ```
 
-- `js-common`： 项目通用的常量、宏定义和函数，例如日志打印、内存读写
-- `js-data`：数值类型和垃圾回收，你甚至可以在C项目里单独使用该模块操作带GC功能的高级数据结构，参见 <https://github.com/shajunxing/banana-cvar>
-- `js-vm`：字节码虚拟机，单独编译可得到不带源代码解析功能的最小足迹的解释器
-- `js-syntax`：词法解析和语法解析，将源代码转化为字节码
-- `js-std`：一些常用标准函数的参考实现，注意只是用作编写C函数的参考，不保证将来会变，具体用法可参考 [examples/7-std.js](https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js) 以及我的另一个项目 <https://github.com/shajunxing/view-comic-here>
+- `js-common`： 项目通用的常量、宏定义和函数，例如日志打印、内存操作。
+- `js-data`：数值类型和垃圾回收，你甚至可以在C项目里单独使用该模块操作带GC功能的高级数据结构，参见 <https://github.com/shajunxing/banana-cvar。
+- `js-vm`：字节码虚拟机，单独编译可得到不带源代码解析功能的最小足迹的解释器。
+- `js-syntax`：词法解析和语法解析，将源代码转化为字节码。
+- `js-std`：一些常用标准函数的参考实现，可用作编写C函数的参考。
 
 所有值都是 `struct js_value` 类型，你可以通过 `js_xxx()` 函数创建，`xxx` 是值类型，你可以直接从这个结构体中读取 C 值，参见 `js_data.h` 中的定义。创建的值遵循垃圾回收规则。不要直接修改它们，如果你想得到不同的值，就创建新值。复合类型 `array` `object` 可以通过 `js_array_xxx()` `js_object_xxx()` 函数进行操作。
 
 C 函数必须是 `struct js_result (*)(struct js_vm *)` 格式，使用 `js_c_function()` 来创建 C 函数值，是的，当然它们都是值，可以放在任何地方，例如，如果使用 `js_declare_variable()` 放在堆栈根上，它们就是全局的。`struct js_result` 有两个成员，如果 `.success` 是 true, `.value` 就是返回值, 如果 false, `.value` 将会被 `catch` 接收，如果 `try catch` 存在的话。C函数同样也可以使用 `js_call()`调用脚本函数。在C函数内部，使用`js_get_arguments_base()` `js_get_arguments_length()` `js_get_argument()`函数获取传入参数。
 
-与C语言的交互可参考 [src/js-std.c](https://github.com/shajunxing/banana-script/blob/main/src/js-std.c)。
+与C语言的交互可参考 <https://github.com/shajunxing/banana-script/blob/main/src/js-std.c>。
 
 ## 其它详见英文版
 
