@@ -10,7 +10,7 @@ Project Address: <https://github.com/shajunxing/banana-script>
 
 ## Features
 
-My goal is to remove and modify useless and ambiguous parts of JavaScript language that I've summarized in practice, and to create a minimal syntax interpreter by keeping only what I like and need. **Only JSON-compatible data types and function are supported, function is first-class value, and function supports closure. I don't like object-oriented programming, so everything class related are not supported**. There are no built-in immunable global variables, global functions, or object members, even contents added during interpreter initialization can be easily deleted at any time and reverted to clean empty state.
+My goal is to remove and modify useless and ambiguous parts of JavaScript language that I've summarized in practice, and to create a minimal syntax interpreter by keeping only what I like and need. Only JSON-compatible data types and function are supported, function is first-class value, and function supports closure. I don't like object-oriented programming, so everything class-related is not supported, but I've redefined proposal's **double colon binding operator** (<https://github.com/tc39/proposal-bind-operator> <https://babeljs.io/docs/babel-plugin-proposal-function-bind>) , now `value::function(... args)` is equivalent to `function(value, ... args)`, which will make it easy to write object-oriented styles and even beautiful chain syntax styles. There are no built-in immunable global variables, global functions, or object members, even contents added during interpreter initialization can be easily deleted at any time and reverted to clean empty state.
 
 ## Two-Minute Brief Syntax Guide for Proficient JavaScript Users
 
@@ -20,7 +20,7 @@ Variable declaraction use `let`, all variables are local, `const` is not support
 
 Function definition supports `function` keyword, does not support `=>` expression, support default argument `param = value` and rest argument `...args`. Array literal and function call support spread syntax `...`, which will not skip `null` members. No predefined members such as `this` `arguments` in function. If `return` is outside function, means exit vm.
 
-Operators follow strict rule, no implicit conversion. Only boolean can do logical operations. `== !=` are strict meaning, and can be done by all types. Strings can do all relational operations and `+`. Numbers can do all relational and numerical operations. Operator precedence from low to high is:
+Operators follow strict rule, no implicit conversion. Only boolean can do logical operations. `== !=` are strict meaning, and can be done by all types. Numbers can do all relational and numerical operations, strings can do all relational operations and `+`. Operator precedence from low to high is:
 
 - Ternary operator `?` `:`
 - Logical or operator `||`
@@ -90,7 +90,7 @@ null write(string filename, boolean isappend, string text)
 
 Generic writing function for text file, which takes number represented file handle, or string represented file name. `isappend` means append to end of file instead of overwrite file.
 
-`array/null match(string text, string pattern)` is for regular expression matching. If matched, returns all captures; otherwise, returns `null`. Currently supports `^`, `$`, `()`, `d`, `s`, `w`, `[]`, `*`, ` `, and `?`.
+`array/null match(string text, string pattern)` is for regular expression matching. If matched, returns all captures; otherwise, returns `null`. Currently supports `^` `$` `()` `\d` `\s` `\w` `.` `[]` `*` `+` `?`.
 
 `number argc` `array argv` are process command line arguments.
 
@@ -122,7 +122,7 @@ js-common   js-data     js-vm       js-syntax   js-std
 - `js-syntax`: Lexical parsing and syntax parsing, which converts source code into bytecode.
 - `js-std`: Reference implementation of commonly used standard functions, which can be used as reference for writing C functions.
 
-All values are `struct js_value` type, you can create by `js_xxx()` functions, `xxx` is value type, and you can read c values direct from this struct, see definition in `js_data.h`. Created values follow garbage collecting rules. DON'T directly modify their content, if you want to get different values, create new one. Compound types `array` `object` can be operated by `js_array_xxx()` `js_object_xxx()` functions.
+All values are `struct js_value` type, you can create by `js_...()` functions, `...` is value type, and you can read c values direct from this struct, see definition in `js_data.h`. Created values follow garbage collecting rules. DON'T directly modify their content, if you want to get different values, create new one. Compound types `array` `object` can be operated by `js_..._array_...()` `js_..._object_...()` functions.
 
 C functions must be `struct js_result (*)(struct js_vm *)` format, use `js_c_function()` to create c function value, yes of course they are all values and can be put anywhere, for example, if put on stack root using `js_declare_variable()`, they will be global. `struct js_result` has two members, if `.success` is true, `.value` is return value, if false, `.value` is received by `catch` if there are `try catch`. c function can also call script function using `js_call()`. Inside C function, use `js_get_arguments_base()` `js_get_arguments_length()` `js_get_argument()` to get passed in arguments.
 
@@ -241,7 +241,7 @@ I modify it:
     (*high*)
     accessor = (identifier|'('expression')'|value){'['additive_expression']'|('.'|'?.')identifier|'('[expression|'...'access_call_expression[,expression|'...'access_call_expression]]')'}
     access_call_expression = accessor (* as rvalue *)
-    prefix_expression = ['!'|'+'|'-'] access_call_expression
+    prefix_expression = ['!'|'+'|'-'|'typeof'] access_call_expression
     exponentiatial_expression = prefix_expression {'**' prefix_expression}
     multiplicative_expression = exponentiation_expression {('*'|'/'|'%') exponentiation_expression}
     additive_expression = multiplicative_expression {('+'|'-') multiplicative_expression}
@@ -295,9 +295,8 @@ use 'expression' to prevent conflict, still can down to () to include them:
             | 'try' '{' { statement } '}' ['catch' '(' identifier ')' '{' { statement } '}' ]
             | 'throw' expression ';'
             | declaration_expression ';'
-            | assignment_expression ';'
-
-assignment_expression put at last, because it cannot be determined by first token
+            | prefix_expression; (* such as 'typeof(true)::print()' *)
+            | assignment_expression ';' (* put at last, because it cannot be determined by first token *)
 
 function is variable, function scope is same as variable, can only visit same or parent levels
 

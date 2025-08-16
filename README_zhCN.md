@@ -10,17 +10,17 @@
 
 ## 特色
 
-我的目标是剔除和修改我在实践中总结的JavaScript语言的没用的和模棱两可的部分，只保留我喜欢和需要的，创建一个最小语法的解释器。**只支持 JSON 兼容的数据类型和函数，函数是第一类值，函数支持闭包。我不喜欢面向对象编程，所以所有与类相关的内容都不支持**。没有任何内置不可删除的全局变量、全局函数或对象成员，哪怕解释器初始化的时候加入的内容都可以在任何时候轻松删除，恢复到空空如也的状态。
+我的目标是剔除和修改我在实践中总结的JavaScript语言的没用的和模棱两可的部分，只保留我喜欢和需要的，创建一个最小语法的解释器。只支持 JSON 兼容的数据类型和函数，函数是第一类值，函数支持闭包。我不喜欢面向对象编程，所以所有与类相关的内容都不支持，但是，我重新定义了提案里的**双冒号绑定运算符**（<https://github.com/tc39/proposal-bind-operator> <https://babeljs.io/docs/babel-plugin-proposal-function-bind>），现在 `value::function(...args)` 等价于 `function(value, ...args)`，如此Class爱好者会很开心，因为能轻松写出面向对象范儿，甚至漂亮的链式语法风格。没有任何内置不可删除的全局变量、全局函数或对象成员，哪怕解释器初始化的时候加入的内容都可以在任何时候轻松删除，恢复到空空如也的状态。
 
 ## 给JavaScript熟练者的两分钟简要语法指南
 
-数值类型为`null` `boolean` `number` `string` `array` `object` `function`，`typeof`的结果严格对应这些名字。不支持 `undefined`，因为 `null` 已经足够。数组和对象是干净的，没有预定义的成员，比如`__proto__`。
+数值类型为 `null` `boolean` `number` `string` `array` `object` `function`，`typeof`的结果严格对应这些名字。不支持 `undefined`，因为 `null` 已经足够。数组和对象是干净的，没有预定义的成员，比如`__proto__`。
 
 变量声明使用 `let`，所有变量都是局部变量，不支持 `const`，因为一切都必须可删除。访问未声明的变量会引发错误，访问数组/对象不存在的成员会返回 `null`，写入`null`则为删除对应成员。
 
-函数定义只支持`function`关键字，不支持`=>`表达式。支持默认参数 `param = value` 和剩余参数 `...args`。数组字面量和函数调用支持展开语法 `...`，不会跳过`null`成员。函数中没有 预定义的成员比如`this` `arguments`。`return` 如果在函数外部，意为退出虚拟机。
+函数定义只支持`function`关键字，不支持`=>`表达式。支持默认参数 `param = value` 和剩余参数 `...args`。数组字面量和函数调用支持展开语法 `...`，不会跳过`null`成员。函数中没有预定义的成员比如`this` `arguments`。`return` 如果在函数外部，意为退出虚拟机。
 
-运算符遵循严格规则，没有隐式转换。只有布尔值可以进行逻辑运算。`== !=` 是严格意义上的比较，可以应用于所有类型。字符串支持所有关系运算符和 `+`。数字支持所有关系和数值运算符。运算符的优先级从低到高为：
+运算符遵循严格规则，没有隐式转换。只有布尔值可以进行逻辑运算。`== !=` 是严格意义上的比较，可以应用于所有类型。数字支持所有关系和数值运算符，字符串支持所有关系运算符和 `+`。运算符的优先级从低到高为：
 
 - 三元运算符 `?` `:`
 - 逻辑或运算符 `||`
@@ -31,8 +31,6 @@
 - 指数运算符 `**`
 - 前缀运算符 `+` `-` `!` `typeof`
 - 数组/对象成员访问和函数调用运算符 `[]` `.` `?.` `()` `::`
-
-JavaScript提案的双冒号绑定运算符 `::` <https://github.com/tc39/proposal-bind-operator> <https://babeljs.io/docs/babel-plugin-proposal-function-bind>，我对它的语义做了大幅简化： `value::function(...args)` 等价于 `function(value, ...args)`，如此Class爱好者会很开心，因为能轻松写出面向对象范儿，甚至漂亮的链式语法风格。
 
 赋值表达式 `=` `+=` `-=` `*=` `/=` `%=` `++` `--` 不返回值。不支持逗号表达式 `,`。
 
@@ -90,7 +88,7 @@ null write(string filename, boolean isappend, string text)
 
 用于文本文件的通用写入功能，接受数字表示的文件句柄或字符串表示的文件名。`isappend` 参数表示在文件末尾追加内容，而不是覆盖文件。
 
-`array/null match(string text, string pattern)` 正则表达式匹配。如果匹配，返回所有捕获，否则返回`null`，正则表达式当前支持 `^` `$` `()` `\d` `\s` `\w` `[]` `*` `+` `?`。
+`array/null match(string text, string pattern)` 正则表达式匹配。如果匹配，返回所有捕获，否则返回`null`，正则表达式当前支持 `^` `$` `()` `\d` `\s` `\w` `.` `[]` `*` `+` `?`。
 
 `number argc` `array argv` 进程命令行参数。
 
@@ -122,7 +120,7 @@ js-common   js-data     js-vm       js-syntax   js-std
 - `js-syntax`：词法解析和语法解析，将源代码转化为字节码。
 - `js-std`：一些常用标准函数的参考实现，可用作编写C函数的参考。
 
-所有值都是 `struct js_value` 类型，你可以通过 `js_xxx()` 函数创建，`xxx` 是值类型，你可以直接从这个结构体中读取 C 值，参见 `js_data.h` 中的定义。创建的值遵循垃圾回收规则。不要直接修改它们，如果你想得到不同的值，就创建新值。复合类型 `array` `object` 可以通过 `js_array_xxx()` `js_object_xxx()` 函数进行操作。
+所有值都是 `struct js_value` 类型，你可以通过 `js_...()` 函数创建，`...` 是值类型，你可以直接从这个结构体中读取 C 值，参见 `js_data.h` 中的定义。创建的值遵循垃圾回收规则。不要直接修改它们，如果你想得到不同的值，就创建新值。复合类型 `array` `object` 可以通过 `js_..._array_...()` `js_..._object_...()` 函数进行操作。
 
 C 函数必须是 `struct js_result (*)(struct js_vm *)` 格式，使用 `js_c_function()` 来创建 C 函数值，是的，当然它们都是值，可以放在任何地方，例如，如果使用 `js_declare_variable()` 放在堆栈根上，它们就是全局的。`struct js_result` 有两个成员，如果 `.success` 是 true, `.value` 就是返回值, 如果 false, `.value` 将会被 `catch` 接收，如果 `try catch` 存在的话。C函数同样也可以使用 `js_call()`调用脚本函数。在C函数内部，使用`js_get_arguments_base()` `js_get_arguments_length()` `js_get_argument()`函数获取传入参数。
 
