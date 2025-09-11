@@ -80,21 +80,28 @@
 
 // test optimized && ||
 // (true && true && true && true);
-function f1() {
-    print("f1");
-    return true;
-}
-function f2() {
-    print("f2");
-    return false;
-}
-function f3() {
-    print("f3");
-    return true;
-}
-print(f1() && f2() && f3());
-print(f1() || f2() || f3());
-print(f1() && f2() || f3());
-print(f1() || f2() && f3());
-gc();
+// function f1() {
+//     print("f1");
+//     return true;
+// }
+// function f2() {
+//     print("f2");
+//     return false;
+// }
+// function f3() {
+//     print("f3");
+//     return true;
+// }
+// print(f1() && f2() && f3());
+// print(f1() || f2() || f3());
+// print(f1() && f2() || f3());
+// print(f1() || f2() && f3());
+// gc();
+// dump_vm();
+
+// test prefix expression at statement beginning
+typeof(true)::print();
++1;
+!false::print();
+3;
 dump_vm();

@@ -293,6 +293,7 @@ void re_free_capture(struct re_capture *cap) {
 
 // match single character, including escape pattern and class pattern
 static bool _match_char(char c, char *ph, char *pt) {
+    // log_debug("_match_char('%c\', '%c', '%c')", c, *ph, *pt);
     bool inv = false;
 #define __check_return(__arg_expr) \
     do { \
@@ -301,10 +302,13 @@ static bool _match_char(char c, char *ph, char *pt) {
         } \
     } while (0)
     while (ph < pt) {
+        // log_debug("while ('%c' < '%c')", *ph, *pt);
         if (*ph == '^') {
+            // log_debug("if (*ph == '^')");
             inv = true;
             ph++;
         } else if (*ph == '\\') {
+            // log_debug("else if (*ph == '\\')");
             ph++;
             if (*ph == 'd') {
                 __check_return(isdigit(c));
@@ -313,12 +317,14 @@ static bool _match_char(char c, char *ph, char *pt) {
             } else if (*ph == 'w') {
                 __check_return(isalnum(c) || c == '_');
             } else {
+                // log_debug("__check_return(c == *ph)");
                 __check_return(c == *ph);
             }
             ph++;
         } else if (*ph == '.') {
             // including '\r' '\n'
             __check_return(true);
+            ph++;
         } else if (*(ph + 1) == '-') {
             __check_return(c >= *ph && c <= *(ph + 2));
             ph += 3;
@@ -332,6 +338,7 @@ static bool _match_char(char c, char *ph, char *pt) {
 }
 
 static bool _match_here(char *txt, char *pat, struct re_capture *cap) {
+    // log_debug("_match_here(\"%s\", \"%s\")", txt, pat);
 #define __set_capture_head() (cap ? (cap->head = txt) : (void)0)
 #define __set_capture_tail() (cap ? (cap->tail = txt) : (void)0)
 #define __start_capture() (cap ? _start_capture(txt, &cap) : (void)0)
@@ -355,22 +362,29 @@ static bool _match_here(char *txt, char *pat, struct re_capture *cap) {
         } else if (*txt == '\0') {
             return false;
         } else {
-            char *ph = pat;
+            char *ph, *pt;
             if (*pat == '\\') {
+                ph = pat;
                 pat++;
+                pt = pat + 1;
             } else if (*pat == '[') {
+                ph = pat + 1;
                 do {
                     pat++;
                     if (*pat == '\0') {
                         return false;
                     }
                 } while (*pat != ']');
+                pt = pat;
+            } else {
+                ph = pat;
+                pt = pat + 1;
             }
             pat++;
             // quantifiers
             if (*pat == '?') {
                 // zero or one
-                if (_match_char(*txt, ph, pat)) {
+                if (_match_char(*txt, ph, pt)) {
                     txt++;
                 }
                 pat++;
@@ -380,13 +394,13 @@ static bool _match_here(char *txt, char *pat, struct re_capture *cap) {
                     // 'one': '+' and others
                     char c = *txt;
                     txt++;
-                    if (!_match_char(c, ph, pat)) {
+                    if (!_match_char(c, ph, pt)) {
                         return false;
                     }
                 }
                 if (*pat == '*' || *pat == '+') {
                     // 'zero or more': '*' and '+'
-                    while (*txt != '\0' && _match_char(*txt, ph, pat)) {
+                    while (*txt != '\0' && _match_char(*txt, ph, pt)) {
                         txt++;
                     }
                     pat++;
@@ -402,6 +416,7 @@ static bool _match_here(char *txt, char *pat, struct re_capture *cap) {
 
 // text and pattern's current position cannot be put into context, because they will be re-entered in namy functions
 bool re_match(char *text, char *pattern, struct re_capture *capture) {
+    // log_debug("re_match(\"%s\", \"%s\")", text, pattern);
     if (*pattern == '^') {
         return _match_here(text, pattern + 1, capture);
     }
@@ -686,11 +701,11 @@ void test_print_stream() {
     //     struct js_heap heap = {0};
     //     struct js_value val = _random_js_value(&heap, vt_object, 2);
     //     struct print_stream out = {.type = string_stream};
-    //     js_serialize_value(&out, dump_style, &val);
+    //     js_serialize_value(&out, todump_style, &val);
     //     putsz_to_stream(&out, "\n\n");
-    //     js_serialize_value(&out, json_style, &val);
+    //     js_serialize_value(&out, tojson_style, &val);
     //     putsz_to_stream(&out, "\n\n");
-    //     js_serialize_value(&out, user_style, &val);
+    //     js_serialize_value(&out, tostring_style, &val);
     //     putsz_to_stream(&out, "\n\n\n\n");
     //     // puts(out.base);
     //     free_stream(&out);
@@ -748,6 +763,8 @@ void test_regex() {
         {"aabbbccc", "a?b"},
         {"Unknown-14886@noemail.invalid", "^([\\w\\.-]+)\\@([\\w-]+)\\.([a-zA-Z\\w]+)$"},
         {"asdf", "a(sd)z"},
+        {"filename.ext", "[^\\.]+$"},
+        {"filename.ext", "[^.]+$"},
     };
     // for (;;) { // test memory leak
     for (size_t i = 0; i < countof(samples); i++) {

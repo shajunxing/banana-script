@@ -16,7 +16,7 @@ My goal is to remove and modify useless and ambiguous parts of JavaScript langua
 
 Data types are `null` `boolean` `number` `string` `array` `object` `function`, results of `typeof` correspond strictly to these names. No `undefined` because `null` is enough. Array and object are clean, no predefined members such as `__proto__`.
 
-Variable declaraction use `let`, all variables are local, `const` is not supported because all must be deletable. Access undeclared variables will cause error, access array/object's unexisting members will get `null`, and put `null` will delete corresponding member.
+Variable declaraction use `let`, all variables are local, `const` is not supported because all must be deletable. Access undeclared variables will cause error, access array/object's unexisting members will get `null` (including array index are negative and non-integer, but these are forbidden for put operation), and put `null` will delete corresponding member.
 
 Function definition supports `function` keyword, does not support `=>` expression, support default argument `param = value` and rest argument `...args`. Array literal and function call support spread syntax `...`, which will not skip `null` members. No predefined members such as `this` `arguments` in function. If `return` is outside function, means exit vm.
 
@@ -51,56 +51,87 @@ Garbage collection is manual, you can do it at any time you need.
 - `let f = function(a, b){let c = a + b; return function(d){return c + d;};}(1, 2); dump_vm(); print(f(3)); delete f;`
 - `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump_vm(); print(f(3)); delete f;`
 
-`throw` can throw any value, which are received by `catch`. `finally` is not supported, because I think it's totally unecessary, and will make code execution order weird.
+`throw` can throw any value, which are received by `catch` (optional). `finally` is not supported, because I think it's totally unecessary, and will make code execution order weird.
 
 ## Standard Library
 
-This includes most commonly used input/output and numeric processing functions. Below are functions that have basically remained unchanged. For more info, check out <https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js> and <https://github.com/shajunxing/banana-script/blob/main/src/js-std.c>.
+Includes most commonly used input/output and numeric processing functions. You can understand them as 'reference implementations', with no guarantee that they will remain unchanged in future. For more info, check out <https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js> and <https://github.com/shajunxing/banana-script/blob/main/src/js-std.c>.
 
-function naming rules:
+Naming rules:
 
 1. Most commonly used ones, take most commonly used names, like console input and output, which are `input` and `print`. They're easiest to remember. I even asked ChatGPT helping me check their usage percentage.
 2. Single featured ones, match per dos/unix command, or c std/unistd function, such as `cd` `md` `rd`, use shortest one, which can also improve speed.
 3. Non-single featured ones, customize names.
 
-Function description rules:
+Values and function definition conventions:
 
-Similar to C language function format, parameter and return value types can be `null` `boolean` ..., and can also represent multiple types with `/` or any type with `any`. `[]` indicates optional parameters, and `...` indicates unlimited parameters.
+- -: null, function with no return value actually returns null
+- b: boolean
+- n: number
+- s: string
+- (): function
+- []: array, or optional parameter
+- {}: object
+- *: any types
+- /: multiple types or names seperator
+- ...: unlimited arguments
 
-`string input([string prompt])` prints prompt (optional) and accepts line of user input. If you need number, you can use `number tonumber(string str)` to convert string into number.
+Language:
 
-`null print([any value], ...)` prints zero or more values, separated by spaces, with newline at end. There are three types for how values are presented, from complex to simple: `dump`, `json`, and `user`. `print()` function uses third type, while `dump()` has same format but uses first type. There are also two functions, `string tojson(any value)` and `string tostring(any value)`, which convert any value into strings of second and third types, respectively.
+|<div style="min-width:16em;">Definition</div>|Description|
+|-|-|
+|dump_vm()|Print vm status.|
+|b endswith(s str, s sub, s ...)|Determine whether a string ends with any of sub strings.|
+|s format(s fmt, * ...)|Format with `fmt`, there are two types of replacement field, first is `${foo}` where `foo` is variable name, second is `${0}` `${1}` `${2}` ... where numbers indicates which argument followed by, starts from 0, and will be represented as `tostring()` style.|
+|gc()|Perform garbage collection.|
+|s join([s] arr, s sep)|Join string array with seperator.|
+|n length([]/{}/s val)|Returns array/object length or number of bytes of string.|
+|[s]/- match(s text, s pattern)|Regular expression matching. If matched returns all captures, otherwise returns `null`. Currently supports `^` `$` `()` `\d` `\s` `\w` `.` `[]` `*` `+` `?`.|
+|n natural_compare(s lhs, s rhs)|Natural-compare algorithm, used by `sort()`.|
+|* pop([] arr)|Removes array's last element and returns.|
+|push([] arr, * elem)|Add element to end of array.|
+|[] sort([] arr, n comp(* lhs, * rhs))|Same as C `qsort()`, sort array and returns it.|
+|[s] split(s str, [s sep])|Split string into array. If `sep` is omitted, returns array containing original string as single element. If `sep` is empty, string will be divided into bytes.|
+|b startswith(s str, s sub, s ...)|Determine whether a string starts with any of sub strings.|
 
-```
-string read(number handle)
-string read(string filename/cmdline)
-string read(string filename/cmdline, boolean iscommand)
-null read(number handle, function callback)
-null read(string filename/cmdline, function callback)
-null read(string filename/cmdline, boolean iscommand, function callback)
-```
+Operating system:
 
-Generic reading function for text file or console process output, which takes number represented file/process handle, or string represented file name/command line, `iscmd` means is process command line, default is file name. If no `callback` exist, this function will read whole file content/process output and returns, or if exists, it will call `callback` on each line and pass this line as argument.
-
-```
-null write(number handle, string text)
-null write(string filename, string text)
-null write(string filename, boolean isappend, string text)
-```
-
-Generic writing function for text file, which takes number represented file handle, or string represented file name. `isappend` means append to end of file instead of overwrite file.
-
-`array/null match(string text, string pattern)` is for regular expression matching. If matched, returns all captures; otherwise, returns `null`. Currently supports `^` `$` `()` `\d` `\s` `\w` `.` `[]` `*` `+` `?`.
-
-`number argc` `array argv` are process command line arguments.
-
-`string os` indicates operating system type, which can be `windows` or `posix`.
-
-`string pathsep` is path separator, which can be `\` or `/`.
-
-`null cd(string path)` `null md(string path)` `null rd(string path)` `null rd(string path)` are for changing to directory, creating directory, removing directory, and removing file, respectively.
-
-`string cwd()` returns current working directory.
+|<div style="min-width:16em;">Definition</div>|Description|
+|-|-|
+|n argc|Same as C `main(argc, argv)`.|
+|[s] argv|Same as C `main(argc, argv)`.|
+|s basename(s path)|Same as POSIX `basename()`, returns final component of `path`.|
+|cd(s path)|Same as POSIX `chdir()`.|
+|n clock()|Same as C `clock()`, returns process time as second.|
+|s ctime(n time)|Same as C `ctime()`, `time` is unix epoch, which means seconds elapsed since utc 1970-01-01 00:00:00 +0000|
+|s cwd()|Same as POSIX `getcwd()`.|
+|s dirname(s path)|Same as POSIX `dirname()`, returns parent directory of `path`.|
+|exec(s arg, s ...)|Same as POSIX `execvp()`, but first parameter `file` is automatically filled with `argv[0]`.|
+|b exists(s path)|Checks if file `path` exists.|
+|exit(n status)|Same as C `exit()`, `status` will be cast to integer.|
+|s input([s prompt])|Prompt (optional) and accepts line of user input. If you need number, use `tonumber()` to convert.|
+|ls(s dir, cb(s fname, b isdir))|List directory and with each entry call `cb`.|
+|md(s path)|Same as POSIX `mkdir()`|
+|s os|`windows` or `posix`|
+|s pathsep|`\` or `/`|
+|print(...)| prints zero or more values, separated by spaces, with newline at end. There are three styles for how values are represented as string, from simple to complex: `tostring()`, `tojson()` and `todump()`. Default uses first one.|
+|s read(n fp)<br>s read(s fname)<br>s read(s fname, b iscmd)<br>read(n fp, cb(s line))<br>read(s fname, cb(s line))<br>read(s fname, b iscmd, cb(s line))|Generic reading function for text file or console process, which takes file handle `fp`, or file name (or command line if `iscmd` is true) `fname`. If no `cb` exist, will returns whole content, or will call it repeatly with each line as argument.|
+|rd(s path)|Same as POSIX `rmdir()`|
+|rm(s path)|Same as POSIX `rm()`|
+|sleep(n timeout)<br>sleep(n timeout, cb(n remains))<br>sleep(n timeout, cb(n remains), n interval)|Sleep certain seconds. If `cb` exists, call it each `interval` seconds, and pass `remains` seconds as argument. Default `interval` is 1 second.|
+|spawn(s arg, s ...)|Create new process, parameters are same as `exec()`.|
+|{} stat(s path)|Same as POSIX `stat()`. Return value currently contains `size` `atime` `ctime` `mtime` `uid` `gid`.|
+|n system(s cmd)|Same as C `system()`.|
+|n stdin|Same as C `stdin`|
+|n stdout|Same as C `stdout`|
+|n stderr|Same as C `stderr`|
+|n time()|Same as C `time()` but high precision, returns seconds elapsed since utc 1970-01-01 00:00:00 +0000|
+|s todump(* val)|Returns dump representation of any value.|
+|s tojson(* val)|Returns json representation of any value.|
+|s tonumber(s str)|Convert string represented number to number.|
+|s tostring(* val)|Returns string representation of any value.|
+|s whoami()|Get current user name.|
+|write(n fp, s text)</br>write(s fname, s text)</br>write(s fname, b isappend, s text)</br>|Generic writing function for text file, which takes file handle `fp`, or file name `fname`. `isappend` means append mode instead of overwrite mode.|
 
 ## Technical internals
 
@@ -124,7 +155,7 @@ js-common   js-data     js-vm       js-syntax   js-std
 
 All values are `struct js_value` type, you can create by `js_...()` functions, `...` is value type, and you can read c values direct from this struct, see definition in `js_data.h`. Created values follow garbage collecting rules. DON'T directly modify their content, if you want to get different values, create new one. Compound types `array` `object` can be operated by `js_..._array_...()` `js_..._object_...()` functions.
 
-C functions must be `struct js_result (*)(struct js_vm *)` format, use `js_c_function()` to create c function value, yes of course they are all values and can be put anywhere, for example, if put on stack root using `js_declare_variable()`, they will be global. `struct js_result` has two members, if `.success` is true, `.value` is return value, if false, `.value` is received by `catch` if there are `try catch`. c function can also call script function using `js_call()`. Inside C function, use `js_get_arguments_base()` `js_get_arguments_length()` `js_get_argument()` to get passed in arguments.
+C functions must be `js_c_function_type` format, use `js_c_function()` to create c function value, yes of course they are all values and can be put anywhere, for example, if put on stack root using `js_declare_variable()`, they will be global. `struct js_result` has two members, if `.success` is true, `.value` is return value, if false, `.value` is received by `catch` if there are `try catch`. c function can also call script function using `js_call()`, `js_call_by_name()` and `js_call_by_name_sz()`.
 
 For interacting with C language, you can check out <https://github.com/shajunxing/banana-script/blob/main/src/js-std.c>.
 
@@ -429,6 +460,6 @@ Add '::' after using AST, have to use AST, top-down mechanism cannot pass lvalue
     }
     foo(...[null, null, 3]);
 
-    TODO: better remove 'delete' operator, because it's variable modification action is at runtime, "if (...) { delete ...; }", but variable creating is at compile time? or runtime? "if (...) { let ...; }", if using AST to change variables visitation from hashmap to array?
+Better remove `delete` operator, because it's variable modification action is at runtime, "if (...) { delete ...; }", but variable creating is at compile time? or runtime? "if (...) { let ...; }", if using AST to change variables visitation from hashmap to array? No, `delete` cannot be removed, because an unexistance variable's scope cannot be determined, for example, `let a = 10; {a = null; /* a is deleted */ a = 20; /* now where is a? in this scope or parent scope? */ }`
 
-    C functions have no closure, because they are always static, not dynamically created, so they don't have creation scope, unlike lua, lua's purpose is only for saving data across function call.
+C functions have no closure, because they are always static, not dynamically created, so they don't have creation scope, unlike lua, lua's purpose is only for saving data across function call.

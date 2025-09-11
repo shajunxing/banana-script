@@ -11,3 +11,7 @@ let mbr8 = obj1?.foo?.bar;
 arr1[100] = "bingo";
 let obj2 = {"arr2" : [ obj1, [...arr1 ] ]};
 console.log(arr1); // test if node.js skip null
+
+// test array index
+let a = [1, 2, 3];
+print(a[-1], a[-2.3], a[1], a[2.3], a[100], a[100.1]);

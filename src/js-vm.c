@@ -270,19 +270,19 @@ void js_bytecode_dump(struct js_bytecode *bytecode) {
     printf("\n");
 }
 
-struct js_result js_dump_vm(struct js_vm *vm) {
+void js_dump_vm(struct js_vm *vm) {
     printf("heap base=%p length=%zu capacity=%zu\n", vm->heap.base, vm->heap.length, vm->heap.capacity);
     buffer_for_each(vm->heap.base, vm->heap.length, vm->heap.capacity, i, v, {
         printf("    %zu. ", i);
         js_dump_managed_value(*v);
         printf("\n");
     });
-    printf("globals base=%p length=%u capacity=%u\n", vm->globals.base, vm->globals.length, vm->globals.capacity);
-    js_map_for_each(vm->globals.base, _, vm->globals.capacity, k, kl, v, {
-        printf("    %.*s = ", (int)kl, k);
-        js_dump_value(v);
-        printf("\n");
-    });
+    // printf("globals base=%p length=%u capacity=%u\n", vm->globals.base, vm->globals.length, vm->globals.capacity);
+    // js_map_for_each(vm->globals.base, _, vm->globals.capacity, k, kl, v, {
+    //     printf("    %.*s = ", (int)kl, k);
+    //     js_dump_value(v);
+    //     printf("\n");
+    // });
     printf("stack base=%p length=%u capacity=%u\n", vm->stack.base, vm->stack.length, vm->stack.capacity);
     for (uint16_t depth = 0; depth < vm->stack.length; depth++) {
         struct js_stack_frame *frame = vm->stack.base + depth;
@@ -328,7 +328,6 @@ struct js_result js_dump_vm(struct js_vm *vm) {
     }
     printf("pc=%u\n", vm->pc);
     printf("\n");
-    js_return(js_null());
 }
 
 // reverse order, from top to down
@@ -490,19 +489,19 @@ static void _stack_push_value(struct js_vm *vm, struct js_value value) {
 
 static const char *const _typeof_table[] = {"undefined", "null", "boolean", "number", "string", "string", "string", "array", "object", "function", "function"};
 
-struct js_value *js_get_arguments_base(struct js_vm *vm) {
+static struct js_value *_get_arguments_base(struct js_vm *vm) {
     struct js_stack_frame *frame = _stack_peek(vm, 0);
     enforce(frame->type == sf_function);
     return frame->arguments.base;
 }
 
-uint16_t js_get_arguments_length(struct js_vm *vm) {
+static uint16_t _get_arguments_length(struct js_vm *vm) {
     struct js_stack_frame *frame = _stack_peek(vm, 0);
     enforce(frame->type == sf_function);
     return frame->arguments.length;
 }
 
-struct js_value js_get_argument(struct js_vm *vm, uint16_t index) {
+static struct js_value _get_argument(struct js_vm *vm, uint16_t index) {
     struct js_stack_frame *frame = _stack_peek(vm, 0);
     enforce(frame->type == sf_function);
     if (index < frame->arguments.length) {
@@ -749,7 +748,7 @@ struct js_result js_run(struct js_vm *vm) {
                 // __debug();
                 break;
             case vt_c_function:
-                // result = ((js_c_function_pointer_type)value.c_function)(vm);
+                // result = ((js_c_function_type)value.c_function)(vm, _get_arguments_length(vm), _get_arguments_base(vm));
                 // if (result.success) {
                 //     _stack_pop(vm, 2);
                 //     _stack_push_value(vm, result.value);
@@ -757,7 +756,7 @@ struct js_result js_run(struct js_vm *vm) {
                 //     // exception handling
                 //     __throw(result.value);
                 // }
-                __do_try(((js_c_function_pointer_type)value.c_function)(vm));
+                __do_try(((js_c_function_type)value.c_function)(vm, _get_arguments_length(vm), _get_arguments_base(vm)));
                 _stack_pop(vm, 2);
                 _stack_push_value(vm, result.value);
                 // __debug();
@@ -805,7 +804,7 @@ struct js_result js_run(struct js_vm *vm) {
             } else {
                 __lhs = js_null();
             }
-            __rhs = js_get_argument(vm, _stack_peek(vm, 0)->arguments.index++);
+            __rhs = _get_argument(vm, _stack_peek(vm, 0)->arguments.index++);
             if (__rhs.type != vt_null) {
                 __lhs = __rhs;
             }
@@ -847,11 +846,17 @@ struct js_result js_run(struct js_vm *vm) {
             selector = _stack_pop_value(vm);
             container = _stack_pop_value(vm);
             if (container.type == vt_array && selector.type == vt_number) {
-                index = (size_t)selector.number;
-                if (index != selector.number) {
-                    __throw(js_scripture_sz("Invalid array index, must be positive integer"));
+                if (selector.number < 0) {
+                    _stack_push_value(vm, js_null());
+                } else {
+                    index = (size_t)selector.number;
+                    if (index != selector.number) {
+                        // __throw(js_scripture_sz("Invalid array index, must be positive integer"));
+                        _stack_push_value(vm, js_null());
+                    } else {
+                        _stack_push_value(vm, js_get_array_element(&container, index));
+                    }
                 }
-                _stack_push_value(vm, js_get_array_element(&container, index));
             } else if (container.type == vt_object && js_is_string(&selector)) {
                 _stack_push_value(vm, js_get_object_value(&container, js_get_string_base(&selector), (uint16_t)js_get_string_length(&selector)));
             } else {
@@ -1155,7 +1160,7 @@ struct js_result js_run(struct js_vm *vm) {
 #undef __debug
 }
 
-struct js_result js_collect_garbage(struct js_vm *vm) {
+void js_gc(struct js_vm *vm) {
 #define __mark_map(__arg_map) \
     js_map_for_each((__arg_map).base, (__arg_map).length, (__arg_map).capacity, k, kl, v, { \
         (void)k; \
@@ -1180,12 +1185,11 @@ struct js_result js_collect_garbage(struct js_vm *vm) {
         }
     });
     js_sweep(&(vm->heap));
-    js_return(js_null());
 #undef __mark_list
 #undef __mark_map
 }
 
-struct js_result js_call(struct js_vm *vm, struct js_value fv, struct js_value *arguments, uint16_t num_arguments) {
+struct js_result js_call(struct js_vm *vm, struct js_value fv, uint16_t argc, struct js_value *argv) {
     if (fv.type == vt_function) {
         // backup stack depth, in callee, may throw error, stack won't be cleaned up, if not cleaned here and return at upper vm's 'op_call', and '__do_try' will check stack and found leftover .egress=0 stack, and exit vm, this shouldn't happen
         uint16_t stack_length_backup = vm->stack.length;
@@ -1193,11 +1197,11 @@ struct js_result js_call(struct js_vm *vm, struct js_value fv, struct js_value *
             ((struct js_stack_frame){.type = sf_value, .value = fv}));
         struct js_stack_frame frame = (struct js_stack_frame){.type = sf_function, .function = fv.managed, .egress = 0}; // 0 indicates called by c function
         // prepare arguments
-        for (uint16_t i = 0; i < num_arguments; i++) {
-            // js_dump_value(arguments + i);
+        for (uint16_t i = 0; i < argc; i++) {
+            // js_dump_value(argv + i);
             // printf("\n");
             // special treat for vt_undefined from such as array element passed to sort callback
-            struct js_value arg = arguments[i];
+            struct js_value arg = argv[i];
             if (arg.type == 0) {
                 arg = js_null();
             }
@@ -1215,15 +1219,16 @@ struct js_result js_call(struct js_vm *vm, struct js_value fv, struct js_value *
         }
         return result;
     } else if (fv.type == vt_c_function) {
+        // TODO: still need stack?
         buffer_push(vm->stack.base, vm->stack.length, vm->stack.capacity,
             ((struct js_stack_frame){.type = sf_value, .value = fv}));
         struct js_stack_frame frame = (struct js_stack_frame){.type = sf_function};
-        for (uint16_t i = 0; i < num_arguments; i++) {
+        for (uint16_t i = 0; i < argc; i++) {
             // is it necessart to special treat for vt_undefined like above? maybe not, c_function can handle it
-            buffer_push(frame.arguments.base, frame.arguments.length, frame.arguments.capacity, arguments[i]);
+            buffer_push(frame.arguments.base, frame.arguments.length, frame.arguments.capacity, argv[i]);
         }
         buffer_push(vm->stack.base, vm->stack.length, vm->stack.capacity, frame);
-        struct js_result result = ((js_c_function_pointer_type)fv.c_function)(vm);
+        struct js_result result = ((js_c_function_type)fv.c_function)(vm, _get_arguments_length(vm), _get_arguments_base(vm));
         _stack_pop(vm, 2);
         return result;
     } else {
@@ -1231,15 +1236,15 @@ struct js_result js_call(struct js_vm *vm, struct js_value fv, struct js_value *
     }
 }
 
-struct js_result js_call_by_name(struct js_vm *vm, const char *name, uint16_t name_length, struct js_value *arguments, uint16_t num_arguments) {
+struct js_result js_call_by_name(struct js_vm *vm, const char *name, uint16_t name_length, uint16_t argc, struct js_value *argv) {
     struct js_result result = js_get_variable(vm, name, name_length);
     if (!result.success) {
         return result;
     }
-    return js_call(vm, result.value, arguments, num_arguments);
+    return js_call(vm, result.value, argc, argv);
 }
 
-struct js_value js_c_function(js_c_function_pointer_type c_function) {
+struct js_value js_c_function(js_c_function_type c_function) {
     return (struct js_value){.type = vt_c_function, .c_function = c_function};
 }
 

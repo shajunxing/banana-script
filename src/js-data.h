@@ -119,9 +119,9 @@ struct js_result {
 #pragma pack(pop)
 
 enum serialized_style {
-    dump_style,
-    json_style,
-    user_style, // user friendly style
+    tostring_style,
+    tojson_style,
+    todump_style,
 };
 
 // DON'T use conflict name such as 'k' 'v'
@@ -208,7 +208,6 @@ shared void js_serialize_managed_value(struct print_stream *, enum serialized_st
 shared void js_serialize_value(struct print_stream *, enum serialized_style, struct js_value *);
 shared void js_dump_managed_value(struct js_managed_value *);
 shared void js_dump_value(struct js_value *);
-shared void js_print_value(struct js_value *);
 shared bool js_is_string(struct js_value *);
 shared char *js_get_string_base(struct js_value *); // Caution: No guarantee it ends with 0
 shared size_t js_get_string_length(struct js_value *);

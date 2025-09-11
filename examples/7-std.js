@@ -4,18 +4,19 @@
 // try {
 //     print(length());
 // } catch (err) {
-//     dump(err);
+//     print(tojson(err));
 // }
 // try {
 //     print(length(null, true, false));
 // } catch (err) {
-//     dump(err);
+//     print(tojson(err));
 // }
 // try {
 //     print(length(1.2));
 // } catch (err) {
-//     dump(err);
+//     print(tojson(err));
 // }
+
 // let obj = {"foo": true, "bar": false};
 // print(length(obj));
 // obj.qux = 1;
@@ -26,23 +27,24 @@
 // print(length(obj));
 // obj.qux = null;
 // print(length(obj));
+
 // try {
 //     print(input("a", "b", "c", "d"));
 // } catch(err) {
-//     dump(err);
+//     print(tojson(err));
 // }
 // try {
 //     print(input(123));
 // } catch(err) {
-//     dump(err);
+//     print(tojson(err));
 // }
 // try {
 //     print(input("prompt: "));
 // } catch(err) {
-//     dump(err);
+//     print(tojson(err));
 // }
 
-// dump(argc, length(argv), argv);
+// print(argc, length(argv), tojson(argv));
 
 // let wd = cwd();
 // print(wd);
@@ -51,7 +53,7 @@
 //         cd(dir);
 //         print(cwd());
 //     } catch (err) {
-//         dump(err);
+//         print(tojson(err));
 //     }
 // }
 // cd(wd);
@@ -69,7 +71,7 @@
 //         rd(dir);
 //         print(dir, exists(dir) ? "is exist" : "not exist");
 //     } catch (err) {
-//         dump(err);
+//         print(tojson(err));
 //     }
 // }
 
@@ -77,6 +79,17 @@
 // print(dirname("foo"));
 // print(dirname(""));
 // print(dirname(argv[0]));
+// https://www.man7.org/linux/man-pages/man3/dirname.3p.html
+// https://www.man7.org/linux/man-pages/man3/basename.3p.html
+// if (os == "posix") {
+//     for (let path of ["usr", "usr/", "", "/", "//", "///", "/usr/", "/usr/lib", "//usr//lib//", "/home//dwc//test"]) {
+//         print(basename(path), dirname(path));
+//     }
+// } else {
+//     for (let path of ["usr", "usr\\", "", "\\", "\\\\", "\\\\\\", "\\usr\\", "\\usr\\lib", "\\\\usr\\\\lib\\\\", "c:\\home\\\\dwc\\\\test"]) {
+//         print(basename(path), dirname(path));
+//     }
+// }
 
 // ls("c:", print);
 // ls("c:\\", print);
@@ -100,14 +113,17 @@
 //     gc();
 // }
 
-// print(format("-${1}-${0}-", "world", "hello"));
+// for(;;) {
+//     print(format("-${1}-${0}-${2}-${3}-${4}-${5}-${6}-", "world", "hello", true, 3.14, {}, []));
+//     gc();
+// }
 
-print("123456"::startswith("123456789"));
-print("123456"::startswith("123456789", "456"));
-print("123456"::startswith("123456789", "456", "123"));
-print("123456"::endswith("123456789"));
-print("123456"::endswith("123456789", "123"));
-print("123456"::endswith("123456789", "123", "456"));
+// print("123456"::startswith("123456789"));
+// print("123456"::startswith("123456789", "456"));
+// print("123456"::startswith("123456789", "456", "123"));
+// print("123456"::endswith("123456789"));
+// print("123456"::endswith("123456789", "123"));
+// print("123456"::endswith("123456789", "123", "456"));
 
 // let fname = "foo.txt";
 // write(fname, "Foo\n");
@@ -144,7 +160,7 @@ print("123456"::endswith("123456789", "123", "456"));
 //         throw "Boom!";
 //     });
 // } catch (err) {
-//     dump(err);
+//     print(tojson(err));
 // }
 // let cmd = os == "windows" ? "dir /b" : "ls -l";
 // print(read(cmd, true));
@@ -163,32 +179,31 @@ print("123456"::endswith("123456789", "123", "456"));
 // for (;;) {
 //     try {
 //         push(arr, "hello");
-//         push(arr, "hello");
-//         dump(arr);
-//         dump(pop(arr));
-//         dump(pop(arr));
-//         dump(pop(arr));
-//         dump(pop(arr));
-//         dump(arr);
+//         push(arr, "world");
+//         print(tojson(arr));
+//         print(pop(arr));
+//         print(pop(arr));
+//         print(pop(arr));
+//         print(pop(arr));
+//         print(tojson(arr));
 //     } catch (err) {
-//         dump(err);
+//         print(tojson(err));
 //     }
 //     gc();
 // }
 
 // let str = "--hello--world--";
-// try {
-//     dump(split(str, ""));
-// } catch (err) {
-//     dump(err);
-// }
-// dump(split(str, "-"));
-// dump(split(str, "--"));
-// dump(split(str, "---"));
+// split(str)::tojson()::print();
+// split(str, "")::tojson()::print();
+// split(str, "-")::tojson()::print();
+// split(str, "--")::tojson()::print();
+// split(str, "---")::tojson()::print();
 // str = "hello--world";
-// dump(split(str, "-"));
-// dump(split(str, "--"));
-// dump(split(str, "---"));
+// split(str)::tojson()::print();
+// split(str, "")::tojson()::print();
+// split(str, "-")::tojson()::print();
+// split(str, "--")::tojson()::print();
+// split(str, "---")::tojson()::print();
 
 // print(join(split("--hello--world--", "-"), "-"));
 // let arr = [];
@@ -206,10 +221,10 @@ print("123456"::endswith("123456789", "123", "456"));
 
 // let arr = [ 5, 3, 9, 2, 3, 8, 2, 5, 9, 7 ];
 // sort(arr, function(lhs, rhs) { return lhs - rhs; });
-// dump(arr);
+// arr::tojson()::print();
 // arr = [ 3, null, 5, "foo", 1, true, false, 2, null, "bar" ];
 // sort(arr, function(lhs, rhs) { return lhs - rhs; });
-// dump(arr);
+// arr::tojson()::print();
 
 // let list = [
 //     "1000X Radonius Maximus",
@@ -261,29 +276,31 @@ print("123456"::endswith("123456789", "123", "456"));
 // }
 // print();
 
-// print(null, true, false, 3.14, "hello", os, [], {}, function() {}, tostring(print));
-// print(tostring(null), tostring(true), tostring(false), tostring(3.14),
-//     tostring("hello"), tostring(os), tostring([]), tostring({}),
-//     tostring(function() {}), tostring(print));
+// print(null, true, false, 3.14, "hello", os, [], {}, function() {}, print);
+// print(tostring(null), tostring(true), tostring(false), tostring(3.14), tostring("hello"), tostring(os), tostring([]), tostring({}), tostring(function() {}), tostring(print));
+// print(todump(null), todump(true), todump(false), todump(3.14), todump("hello"), todump(os), todump([]), todump({}), todump(function() {}), todump(print));
 // print(tojson({"list" : [ null, true, false, 3.14, "hello", os, [], {}, function() {}, print ]}));
 // for (;;) {
 //     try {
 //         print(tonumber(input("Enter a number: ")));
 //         break;
 //     } catch (err) {
-//         dump(err);
+//         print(tojson(err));
 //     }
 // }
 
 // try {
 //     exit("foo");
 // } catch (err) {
-//     dump(err);
+//     print(tojson(err));
 // }
 // exit(12.3); // to show exit code, in posix "echo $?" and in windows "echo %errorlevel%"
 
 // regular expression
 // print(format("${0}\n${1}\n${2}\n${3}", ...match("Unknown-14886@noemail.invalid", "^([\\w\\.-]+)\\@([\\w-]+)\\.([a-zA-Z\\w]+)$")));
+// "filename.ext"::match("[^\\.]+$")::tojson()::print();
+// "filename.ext"::match("[^\.]+$")::tojson()::print();
+// "filename.ext"::match("[^.]+$")::tojson()::print();
 
 // system("exit 123")::print();
 
@@ -294,3 +311,42 @@ print("123456"::endswith("123456789", "123", "456"));
 
 // (whoami() == "root" || exec("su", "-c", argv::join(" ")));
 // whoami()::print();
+
+// if (os == "windows") {
+//     spawn("cmd", "/c", "start", "js", "examples/8-print-args.js", "foo bar", "baz qux")::print();
+//     spawn("notepad", "make.bat")::print();
+// } else {
+//     spawn("xterm", "-e", "bin/js", "examples/8-print-args.js", "foo bar", "baz qux")::print();
+//     spawn("xmessage", "-font", "variable", "-title", "Greetings", "Hello, World!")::print();
+//     spawn("xclock", "-update", "1")::print();
+// }
+
+// print(time());
+// print(ctime(0));
+// print(ctime(time()));
+
+// ls(cwd(), function(filename, isdir) {
+//     if (isdir) {
+//         return;
+//     }
+//     print(filename);
+//     let st = stat(filename);
+//     print("   ", "size:", st.size);
+//     print("   ", "atime:", ctime(st.atime));
+//     print("   ", "ctime:", ctime(st.ctime));
+//     print("   ", "mtime:", ctime(st.mtime));
+//     print("   ", "uid:", st.uid);
+//     print("   ", "gid:", st.gid);
+// });
+// print(stat("lkasdjhasdkjh"));
+
+// let begin = time();
+// sleep(1.5);
+// let end = time();
+// print(end - begin);
+
+// sleep(3.6, function(remained){
+//     write(stdout, format("\rTime remained: ${0}", tostring(remained)));
+// }, 0.3);
+// print();
+

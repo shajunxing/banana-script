@@ -105,7 +105,7 @@ void qsort_r(void *, size_t, size_t, int (*)(const void *, const void *, void *)
 
 #define alloc(__arg_type, __arg_length) ((__arg_type *)calloc((__arg_length), sizeof(__arg_type)))
 
-// TODO: simplify these 'base' 'length' 'capacity' arguments, use an internal function and a wrapper macro (to cast integer types). But it has one disadvantage: programs include this .h will have to compile .c too.
+// DON'T simplify these 'base' 'length' 'capacity' arguments, use an internal function and a wrapper macro (to cast integer types), because programs include this .h will have to compile .c too, and 'enforce' will nolonger display correct __FILE__ __LINE__
 
 // buffer's capacity is always pow of 2
 #define buffer_alloc(__arg_base, __arg_length, __arg_capacity, __arg_required_capacity) \

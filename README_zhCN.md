@@ -16,7 +16,7 @@
 
 数值类型为 `null` `boolean` `number` `string` `array` `object` `function`，`typeof`的结果严格对应这些名字。不支持 `undefined`，因为 `null` 已经足够。数组和对象是干净的，没有预定义的成员，比如`__proto__`。
 
-变量声明使用 `let`，所有变量都是局部变量，不支持 `const`，因为一切都必须可删除。访问未声明的变量会引发错误，访问数组/对象不存在的成员会返回 `null`，写入`null`则为删除对应成员。
+变量声明使用 `let`，所有变量都是局部变量，不支持 `const`，因为一切都必须可删除。访问未声明的变量会引发错误，访问数组/对象不存在的成员会返回 `null` （包括数组索引是负值和非整数，但写操作是禁止的），写入`null`则为删除对应成员。
 
 函数定义只支持`function`关键字，不支持`=>`表达式。支持默认参数 `param = value` 和剩余参数 `...args`。数组字面量和函数调用支持展开语法 `...`，不会跳过`null`成员。函数中没有预定义的成员比如`this` `arguments`。`return` 如果在函数外部，意为退出虚拟机。
 
@@ -49,56 +49,7 @@
 - `let f = function(a, b){let c = a + b; return function(d){return c + d;};}(1, 2); dump_vm(); print(f(3)); delete f;`
 - `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump_vm(); print(f(3)); delete f;`
 
-`throw` 可以抛出任意值，由`catch`接收。不支持`finally`，因为我认为根本不需要，反而会使代码执行顺序显得怪异。
-
-## 标准库
-
-包含最常使用的输入输出和数值处理函数，以下是已经基本固定不变的函数，更多的参考 <https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js> 和 <https://github.com/shajunxing/banana-script/blob/main/src/js-std.c>。
-
-函数命名规则：
-
-1. 最常用的，取最常用的名字，比如控制台输入输出，就是`input` `print`，最方便记忆，我请chatgpt帮我统计过使用率。
-2. 单一功能的，匹配一个 dos/unix 命令或 c std/unistd 函数，例如 `cd` `md` `rd`，用最短的那个，这样还能提高速度。
-3. 非单一功能的，定制名称。
-
-函数描述规则：
-
-类似c语言函数格式，参数和返回值类型可以是 `null` `boolean` ... ，也可以用 `/` 表示多种类型、`any` 表示任意类型。`[]` 表示可选参数，`...`表示不限量参数。
-
-`string input([string prompt])` 打印提示符（可选）并接受用户输入一行。如果需要数值，可用`number tonumber(string str)` 将字符串转换为数值。
-
-`null print([any value], ...)` 打印零个或多个值，用空格分隔，结尾换行。值的呈现形式有三类，从复杂到简单分别是 `dump` `json` `user`，`print()`函数用的是第三类，另有`dump()`与其格式一样，但用的是第一类。还有两个函数 `string tojson(any value)` `string tostring(any value)` 用于把任意值转换成第二和第三类呈现形式的字符串。
-
-```
-string read(number handle)
-string read(string filename/cmdline)
-string read(string filename/cmdline, boolean iscommand)
-null read(number handle, function callback)
-null read(string filename/cmdline, function callback)
-null read(string filename/cmdline, boolean iscommand, function callback)
-```
-
-用于文本文件或控制台进程输出的通用读取函数，该函数接受以数字表示的文件/进程句柄，或以字符串表示的文件名/命令行，其中，`iscommand` 表示是否为进程命令行，默认为文件名。如果不存在 `callback` 函数，该函数将读取整个文件内容/进程输出并返回；如果存在，则在每一行上调用 `callback` 函数，并将该行作为参数传递。
-
-```
-null write(number handle, string text)
-null write(string filename, string text)
-null write(string filename, boolean isappend, string text)
-```
-
-用于文本文件的通用写入功能，接受数字表示的文件句柄或字符串表示的文件名。`isappend` 参数表示在文件末尾追加内容，而不是覆盖文件。
-
-`array/null match(string text, string pattern)` 正则表达式匹配。如果匹配，返回所有捕获，否则返回`null`，正则表达式当前支持 `^` `$` `()` `\d` `\s` `\w` `.` `[]` `*` `+` `?`。
-
-`number argc` `array argv` 进程命令行参数。
-
-`string os` 操作系统类型，可以是`windows`或`posix`。
-
-`string pathsep` 路径分隔符，可以是`\`或`/`。
-
-`null cd(string path)` `null md(string path)` `null rd(string path)` `null rd(string path)` 进入目录、创建目录、删除目录、删除文件。
-
-`string cwd()` 返回进程当前工作目录。
+`throw` 可以抛出任意值，由 `catch` （可选的）接收。不支持`finally`，因为我认为根本不需要，反而会使代码执行顺序显得怪异。
 
 ## 技术内幕
 
@@ -115,14 +66,14 @@ js-common   js-data     js-vm       js-syntax   js-std
 ```
 
 - `js-common`： 项目通用的常量、宏定义和函数，例如日志打印、内存操作。
-- `js-data`：数值类型和垃圾回收，你甚至可以在C项目里单独使用该模块操作带GC功能的高级数据结构，参见 <https://github.com/shajunxing/banana-cvar。
+- `js-data`：数值类型和垃圾回收，你甚至可以在C项目里单独使用该模块操作带GC功能的高级数据结构，参见 <https://github.com/shajunxing/banana-cvar>。
 - `js-vm`：字节码虚拟机，单独编译可得到不带源代码解析功能的最小足迹的解释器。
 - `js-syntax`：词法解析和语法解析，将源代码转化为字节码。
 - `js-std`：一些常用标准函数的参考实现，可用作编写C函数的参考。
 
 所有值都是 `struct js_value` 类型，你可以通过 `js_...()` 函数创建，`...` 是值类型，你可以直接从这个结构体中读取 C 值，参见 `js_data.h` 中的定义。创建的值遵循垃圾回收规则。不要直接修改它们，如果你想得到不同的值，就创建新值。复合类型 `array` `object` 可以通过 `js_..._array_...()` `js_..._object_...()` 函数进行操作。
 
-C 函数必须是 `struct js_result (*)(struct js_vm *)` 格式，使用 `js_c_function()` 来创建 C 函数值，是的，当然它们都是值，可以放在任何地方，例如，如果使用 `js_declare_variable()` 放在堆栈根上，它们就是全局的。`struct js_result` 有两个成员，如果 `.success` 是 true, `.value` 就是返回值, 如果 false, `.value` 将会被 `catch` 接收，如果 `try catch` 存在的话。C函数同样也可以使用 `js_call()`调用脚本函数。在C函数内部，使用`js_get_arguments_base()` `js_get_arguments_length()` `js_get_argument()`函数获取传入参数。
+C 函数必须是 `js_c_function_type` 格式，使用 `js_c_function()` 来创建 C 函数值，是的，当然它们都是值，可以放在任何地方，例如，如果使用 `js_declare_variable()` 放在堆栈根上，它们就是全局的。`struct js_result` 有两个成员，如果 `.success` 是 true, `.value` 就是返回值, 如果 false, `.value` 将会被 `catch` 接收，如果 `try catch` 存在的话。C函数同样也可以使用 `js_call()`、`js_call_by_name()` 和 `js_call_by_name_sz()`调用脚本函数。
 
 与C语言的交互可参考 <https://github.com/shajunxing/banana-script/blob/main/src/js-std.c>。
 

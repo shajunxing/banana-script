@@ -17,6 +17,8 @@ You should have received a copy of the GNU General Public License along with thi
     #include <direct.h> // getcwd, chdir, mkdir, rmdir
     #include <lmcons.h> // GetUserNameA's UNLEN
     #include <string.h> // strrchr
+    #include <sys/types.h> // _stat
+    #include <sys/stat.h> // _stat
     #include <process.h> // _exec family
     #ifndef getcwd
         #define getcwd _getcwd
@@ -36,17 +38,10 @@ You should have received a copy of the GNU General Public License along with thi
     #ifndef execvp
         #define execvp _execvp
     #endif
-static char *dirname(char *path) {
-    // since windows version of _splitpath_s _makepath_s cannot handle long path, and have some bad behaviors such as path "" will crash, i implement following https://www.man7.org/linux/man-pages/man3/dirname.3p.html behaviors
-    // log_debug("'%s'", path);
-    char *lastsep = strrchr(path, '\\');
-    if (lastsep) {
-        *lastsep = '\0';
-        return path;
-    } else {
-        return ".";
-    }
-}
+    #ifndef stat
+        #define stat _stat
+typedef struct _stat struct_stat;
+    #endif
 static const char *_windows_error_string() {
     // https://learn.microsoft.com/en-us/windows/win32/debug/retrieving-the-last-error-code
     // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-formatmessage
@@ -56,9 +51,16 @@ static const char *_windows_error_string() {
         NULL, GetLastError(), 1033, es, sizeof(es), NULL);
     return es;
 }
+static double _time() {
+    FILETIME ft = {0};
+    GetSystemTimeAsFileTime(&ft);
+    // https://programmerall.com/article/22032114313/
+    return (double)(((unsigned long long)ft.dwLowDateTime + ((unsigned long long)ft.dwHighDateTime << 32)) / 10000000.0) - 11644473600;
+}
+    // stdlib.c already has _sleep()
+    #define __sleep(__arg_secs) Sleep((DWORD)((__arg_secs) * 1000))
 #else
     #include <dirent.h>
-    #include <libgen.h>
     #include <pwd.h> // getpwuid
     #include <readline/history.h>
     #include <readline/readline.h>
@@ -68,7 +70,16 @@ static const char *_windows_error_string() {
 static int _mkdir(const char *path) {
     return mkdir(path, 0777);
 }
+typedef struct stat struct_stat;
+    #include <sys/time.h>
+static double _time() {
+    struct timeval tv = {0};
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec + tv.tv_usec / 1000000.0;
+}
+    #define __sleep(__arg_secs) usleep((int)((__arg_secs) * 1000000))
 #endif
+
 #include "js-std.h"
 
 // must declare under '#include "js-std.h"', or in msvc will 'error C2370: 'js_std_pathsep': redefinition; different storage class'
@@ -78,11 +89,13 @@ char **js_std_argv = NULL;
 #ifdef _WIN32
 const char *js_std_os = "windows";
 const char *js_std_pathsep = "\\";
+static const char _pathsep_ch = '\\';
     #define _throw_windows_error(__arg_vm) \
         js_throw(js_string_sz(&(__arg_vm->heap), _windows_error_string()))
 #else
 const char *js_std_os = "posix";
 const char *js_std_pathsep = "/";
+static const char _pathsep_ch = '/';
 #endif
 
 #define _return_null() js_return(js_null())
@@ -97,36 +110,66 @@ const char *js_std_pathsep = "/";
         } \
     } while (0)
 
-#define _one_string_argument(__arg_vm, __arg_str, __arg_statement) \
-    do { \
-        uint16_t __nargs = js_get_arguments_length(__arg_vm); \
-        struct js_value *__argbase = js_get_arguments_base(__arg_vm); \
-        js_assert(__nargs == 1); \
-        js_assert(js_is_string(__argbase)); \
-        char *__arg_str = js_get_string_base(__argbase); \
-        __arg_statement; \
-    } while (0);
-
-#define _two_string_arguments(__arg_vm, __arg_str_0, __arg_str_1, __arg_statement) \
-    do { \
-        uint16_t __nargs = js_get_arguments_length(__arg_vm); \
-        struct js_value *__argbase = js_get_arguments_base(__arg_vm); \
-        js_assert(__nargs == 2); \
-        js_assert(js_is_string(__argbase)); \
-        js_assert(js_is_string(__argbase + 1)); \
-        char *__arg_str_0 = js_get_string_base(__argbase); \
-        char *__arg_str_1 = js_get_string_base(__argbase + 1); \
-        __arg_statement; \
-    } while (0);
-
-struct js_result js_std_cd(struct js_vm *vm) {
-    _one_string_argument(vm, path, {
-        _posix_zero_on_success(chdir(path));
-        _return_null();
-    });
+struct js_result js_std_basename(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(js_is_string(argv));
+    // since windows version of _splitpath_s _makepath_s cannot handle long path, and have some bad behaviors such as path "" will crash, i implement following https://www.man7.org/linux/man-pages/man3/dirname.3p.html behaviors
+    // posix version is also harmful because it will modify parameter `path`, so i implement it by myself
+    // test case is in https://www.man7.org/linux/man-pages/man3/basename.3p.html
+    char *path = js_get_string_base(argv);
+    size_t pathlen = js_get_string_length(argv);
+    if (pathlen == 0) {
+        js_return(js_scripture_sz("."));
+    } else {
+        char *pt = path + pathlen - 1;
+        while (*pt == _pathsep_ch && pt > path) {
+            pt--;
+        }
+        if (pt == path) {
+            js_return(js_scripture_sz(js_std_pathsep));
+        }
+        char *ph = pt;
+        while (*ph != _pathsep_ch && ph > path) {
+            ph--;
+        }
+        if (*ph == _pathsep_ch) {
+            js_return(js_string(&(vm->heap), ph + 1, pt - ph));
+        } else {
+            js_return(js_string(&(vm->heap), ph, pt - ph + 1));
+        }
+    }
 }
 
-struct js_result js_std_cwd(struct js_vm *vm) {
+struct js_result js_std_cd(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(js_is_string(argv));
+    _posix_zero_on_success(chdir(js_get_string_base(argv)));
+    _return_null();
+}
+
+struct js_result js_std_clock(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_return(js_number(clock() * 1.0 / CLOCKS_PER_SEC));
+}
+
+struct js_result js_std_close(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(argv->type == vt_number);
+    // no error handling
+    FILE *fp = (FILE *)(intptr_t)argv->number;
+    // log_debug("fclose %p", fp);
+    fclose(fp);
+    _return_null();
+}
+
+struct js_result js_std_ctime(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(argv->type == vt_number);
+    time_t t = (time_t)argv->number;
+    char *s = ctime(&t);
+    js_return(js_string(&(vm->heap), s, strlen(s) - 1)); // remove trailing '\n' of ctime() result
+}
+
+struct js_result js_std_cwd(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
     char *cwd = getcwd(NULL, 0);
     if (cwd) {
         struct js_value ret = js_string_sz(&(vm->heap), (const char *)cwd);
@@ -137,63 +180,61 @@ struct js_result js_std_cwd(struct js_vm *vm) {
     }
 }
 
-struct js_result js_std_clock(struct js_vm *vm) {
-    js_return(js_number(clock() * 1.0 / CLOCKS_PER_SEC));
-}
-
-struct js_result js_std_close(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    js_assert(nargs == 1);
-    js_assert(argbase->type == vt_number);
-    // no error handling
-    FILE *fp = (FILE *)(intptr_t)argbase->number;
-    // log_debug("fclose %p", fp);
-    fclose(fp);
-    _return_null();
-}
-
-struct js_result js_std_dirname(struct js_vm *vm) {
-    _one_string_argument(vm, path, {
-        js_return(js_string_sz(&(vm->heap), dirname(path)));
-    });
-}
-
-struct js_result js_std_dump(struct js_vm *vm) {
-    for (uint16_t i = 0; i < js_get_arguments_length(vm); i++) {
-        js_dump_value(js_get_arguments_base(vm) + i);
-        printf(" ");
+struct js_result js_std_dirname(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(js_is_string(argv));
+    // since windows version of _splitpath_s _makepath_s cannot handle long path, and have some bad behaviors such as path "" will crash, i implement following https://www.man7.org/linux/man-pages/man3/dirname.3p.html behaviors
+    // posix version is also harmful because it will modify parameter `path`, so i implement it by myself
+    // test case is in https://www.man7.org/linux/man-pages/man3/basename.3p.html
+    char *path = js_get_string_base(argv);
+    size_t pathlen = js_get_string_length(argv);
+    if (pathlen == 0) {
+        js_return(js_scripture_sz("."));
+    } else {
+        char *pt = path + pathlen - 1;
+        while (*pt == _pathsep_ch && pt > path) {
+            pt--;
+        }
+        while (*pt != _pathsep_ch && pt > path) {
+            pt--;
+        }
+        while (*pt == _pathsep_ch && pt > path) {
+            pt--;
+        }
+        if (pt == path) {
+            js_return(js_scripture_sz(*pt == _pathsep_ch ? js_std_pathsep : "."));
+        } else {
+            js_return(js_string(&(vm->heap), path, pt - path + 1));
+        }
     }
-    printf("\n");
+}
+
+struct js_result js_std_dump_vm(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_dump_vm(vm);
     _return_null();
 }
 
-struct js_result js_std_endswith(struct js_vm *vm) {
-    // _two_string_arguments(vm, lhs, rhs, js_return(js_boolean(ends_with_sz(lhs, rhs))));
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    js_assert(nargs > 1);
-    js_assert(js_is_string(argbase));
-    char *lhs = js_get_string_base(argbase);
-    for (uint16_t i = 1; i < nargs; i++) {
-        js_assert(js_is_string(argbase + i));
-        if (ends_with_sz(lhs, js_get_string_base(argbase + i))) {
+struct js_result js_std_endswith(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc > 1);
+    js_assert(js_is_string(argv));
+    char *lhs = js_get_string_base(argv);
+    for (uint16_t i = 1; i < argc; i++) {
+        js_assert(js_is_string(argv + i));
+        if (ends_with_sz(lhs, js_get_string_base(argv + i))) {
             js_return(js_boolean(true));
         }
     }
     js_return(js_boolean(false));
 }
 
-struct js_result js_std_exec(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    char *argv[256] = {0};
-    js_assert(nargs > 0);
-    js_assert(nargs < sizeof(argv));
-    for (size_t i = 0; i < nargs; i++) {
-        argv[i] = js_get_string_base(argbase + i);
+struct js_result js_std_exec(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    char *exec_argv[256] = {0};
+    js_assert(argc > 0);
+    js_assert(argc < sizeof(exec_argv));
+    for (size_t i = 0; i < argc; i++) {
+        exec_argv[i] = js_get_string_base(argv + i);
     }
-    intptr_t ret = (intptr_t)execvp(js_get_string_base(argbase), argv);
+    intptr_t ret = (intptr_t)execvp(js_get_string_base(argv), exec_argv);
     if (ret == -1) {
         _throw_posix_error(vm);
     }
@@ -201,37 +242,31 @@ struct js_result js_std_exec(struct js_vm *vm) {
     _return_null();
 }
 
-struct js_result js_std_exists(struct js_vm *vm) {
+struct js_result js_std_exists(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(js_is_string(argv));
 #ifdef _WIN32
-    _one_string_argument(vm, path, {
-        js_return(js_boolean(GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES ? true : false));
-    });
+    js_return(js_boolean(GetFileAttributesA(js_get_string_base(argv)) != INVALID_FILE_ATTRIBUTES ? true : false));
 #else
-    _one_string_argument(vm, path, {
-        js_return(js_boolean(access(path, F_OK) == 0 ? true : false));
-    });
+    js_return(js_boolean(access(js_get_string_base(argv), F_OK) == 0 ? true : false));
 #endif
 }
 
-struct js_result js_std_exit(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    js_assert(nargs == 1);
-    js_assert(argbase->type == vt_number);
-    exit((int)argbase->number);
+struct js_result js_std_exit(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(argv->type == vt_number);
+    exit((int)argv->number);
 }
 
-struct js_result js_std_format(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    js_assert(nargs > 0);
-    js_assert(js_is_string(argbase));
+struct js_result js_std_format(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc > 0);
+    js_assert(js_is_string(argv));
     struct js_value ret = js_string(&(vm->heap), NULL, 0);
     enum { _searching,
         _expect_left_brace,
         _matching } state = _searching;
     char *vbase = NULL;
-    for (char *p = js_get_string_base(argbase); p < js_get_string_base(argbase) + js_get_string_length(argbase); p++) {
+    for (char *p = js_get_string_base(argv); p < js_get_string_base(argv) + js_get_string_length(argv); p++) {
         // log_debug("%d %c", state, *p);
         switch (state) {
         case _searching:
@@ -257,7 +292,7 @@ struct js_result js_std_format(struct js_vm *vm) {
                         js_assert(isdigit(*p));
                         idx = idx * 10 + (*p - '0');
                     }
-                    val = js_get_argument(vm, idx + 1);
+                    val = (idx + 1) < argc ? argv[idx + 1] : js_null();
                 } else {
                     struct js_result ret = js_get_variable(vm, vbase, vlen);
                     if (!ret.success) {
@@ -265,10 +300,12 @@ struct js_result js_std_format(struct js_vm *vm) {
                     }
                     val = ret.value;
                 }
-                js_assert(js_is_string(&val));
+                struct print_stream out = {.type = string_stream};
+                js_serialize_value(&out, tostring_style, &val);
                 string_buffer_append(
                     ret.managed->string.base, ret.managed->string.length, ret.managed->string.capacity,
-                    js_get_string_base(&val), js_get_string_length(&val));
+                    out.base, out.length);
+                free_stream(&out);
                 state = _searching;
             }
             break;
@@ -280,18 +317,21 @@ struct js_result js_std_format(struct js_vm *vm) {
     js_return(ret);
 }
 
-struct js_result js_std_input(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    if (nargs > 1) {
+struct js_result js_std_gc(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_gc(vm);
+    _return_null();
+}
+
+struct js_result js_std_input(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    if (argc > 1) {
         js_throw(js_scripture_sz("Too many arguments"));
     }
     char *prompt = "";
-    if (nargs == 1) {
-        struct js_value *argbase = js_get_arguments_base(vm);
-        if (!js_is_string(argbase)) {
+    if (argc == 1) {
+        if (!js_is_string(argv)) {
             js_throw(js_scripture_sz("Prompt must be string"));
         }
-        prompt = argbase->managed->string.base;
+        prompt = argv->managed->string.base;
     }
     struct js_value line = js_string(&(vm->heap), NULL, 0);
 #ifdef _WIN32
@@ -310,21 +350,19 @@ struct js_result js_std_input(struct js_vm *vm) {
     js_return(line);
 }
 
-struct js_result js_std_join(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    js_assert(nargs == 2);
-    js_assert(argbase->type == vt_array);
-    js_assert(js_is_string(argbase + 1));
+struct js_result js_std_join(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 2);
+    js_assert(argv->type == vt_array);
+    js_assert(js_is_string(argv + 1));
     struct js_value ret = js_string(&(vm->heap), NULL, 0);
-    for (size_t i = 0; i < argbase->managed->array.length; i++) {
+    for (size_t i = 0; i < argv->managed->array.length; i++) {
         // be careful of vt_undefined
-        struct js_value *elem = argbase->managed->array.base + i;
+        struct js_value *elem = argv->managed->array.base + i;
         js_assert(js_is_string(elem));
         if (i > 0) {
             string_buffer_append(
                 ret.managed->string.base, ret.managed->string.length, ret.managed->string.capacity,
-                js_get_string_base(argbase + 1), js_get_string_length(argbase + 1));
+                js_get_string_base(argv + 1), js_get_string_length(argv + 1));
         }
         string_buffer_append(
             ret.managed->string.base, ret.managed->string.length, ret.managed->string.capacity,
@@ -333,29 +371,26 @@ struct js_result js_std_join(struct js_vm *vm) {
     js_return(ret);
 }
 
-struct js_result js_std_length(struct js_vm *vm) {
-    if (js_get_arguments_length(vm) != 1) {
+struct js_result js_std_length(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    if (argc != 1) {
         js_throw(js_scripture_sz("Require exactly one argument"));
     }
-    struct js_value *argbase = js_get_arguments_base(vm);
-    if (argbase->type == vt_array) {
-        js_return(js_number((double)argbase->managed->array.length));
-    } else if (argbase->type == vt_object) {
-        js_return(js_number((double)argbase->managed->object.length));
-    } else if (js_is_string(argbase)) {
-        js_return(js_number((double)js_get_string_length(argbase)));
+    if (argv->type == vt_array) {
+        js_return(js_number((double)argv->managed->array.length));
+    } else if (argv->type == vt_object) {
+        js_return(js_number((double)argv->managed->object.length));
+    } else if (js_is_string(argv)) {
+        js_return(js_number((double)js_get_string_length(argv)));
     } else {
         js_throw(js_scripture_sz("Only string, array and object have length"));
     }
 }
 
-struct js_result js_std_ls(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    js_assert(nargs == 2);
-    js_assert(js_is_string(argbase));
-    js_assert(js_is_function(argbase + 1));
-    char *dir = js_get_string_base(argbase);
+struct js_result js_std_ls(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 2);
+    js_assert(js_is_string(argv));
+    js_assert(js_is_function(argv + 1));
+    char *dir = js_get_string_base(argv);
     // must be standardized for windows '*'
     char *standardized_dir =
         ends_with_sz(dir, js_std_pathsep) ? concat_sz(dir) : concat_sz(dir, js_std_pathsep);
@@ -381,47 +416,14 @@ struct js_result js_std_ls(struct js_vm *vm) {
             isdir = de->d_type == DT_DIR;
             filename = de->d_name;
 #endif
-            // BEGIN BLOCK
-            // log_debug("isdir=%d standardized_dir=%s filename=%s", isdir, standardized_dir, filename);
-            // if (isdir) {
-            //     if (!equals_sz(filename, ".") && !equals_sz(filename, "..")) {
-            //         char *subdir = concat_sz(standardized_dir, filename, js_std_pathsep);
-            //         result = js_call(vm, argbase[1],
-            //             (struct js_value[]){js_string_sz(&(vm->heap), subdir), js_null(), js_null()}, 3);
-            //         free(subdir);
-            //     } else {
-            //         result = ((struct js_result){.success = true, .value = js_null()});
-            //     }
-            // } else {
-            //     char *ext = strrchr(filename, '.');
-            //     if (ext) {
-            //         size_t baselen = ext - filename;
-            //         char *base = (char *)calloc(baselen + 1, 1);
-            //         strncpy(base, filename, baselen);
-            //         result = js_call(vm, argbase[1],
-            //             (struct js_value[]){
-            //                 js_string_sz(&(vm->heap), standardized_dir),
-            //                 js_string_sz(&(vm->heap), base),
-            //                 js_string_sz(&(vm->heap), ext)},
-            //             3);
-            //         free(base);
-            //     } else {
-            //         result = js_call(vm, argbase[1],
-            //             (struct js_value[]){
-            //                 js_string_sz(&(vm->heap), standardized_dir),
-            //                 js_string_sz(&(vm->heap), filename),
-            //                 js_scripture_sz("")},
-            //             3);
-            //     }
-            // }
             if (isdir && (equals_sz(filename, ".") || equals_sz(filename, ".."))) {
                 result = ((struct js_result){.success = true, .value = js_null()});
             } else {
-                result = js_call(vm, argbase[1],
+                result = js_call(vm, argv[1],
+                    2,
                     (struct js_value[]){
                         js_string_sz(&(vm->heap), filename),
-                        js_boolean(isdir)},
-                    2);
+                        js_boolean(isdir)});
             }
             if (!result.success) {
                 all_success = false;
@@ -457,32 +459,34 @@ static void _append_capture(struct js_vm *vm, struct js_value *arr, struct re_ca
         i, c, _append_capture(vm, arr, c));
 }
 
-struct js_result js_std_match(struct js_vm *vm) {
-    _two_string_arguments(vm, txt, pat, {
-        struct re_capture cap = {0};
-        struct js_value ret;
-        if (re_match(txt, pat, &cap)) {
-            ret = js_array(&(vm->heap));
-            _append_capture(vm, &ret, &cap);
-        } else {
-            ret = js_null();
-        }
-        re_free_capture(&cap);
-        js_return(ret);
-    });
+struct js_result js_std_match(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 2);
+    js_assert(js_is_string(argv));
+    js_assert(js_is_string(argv + 1));
+    struct re_capture cap = {0};
+    struct js_value ret;
+    if (re_match(js_get_string_base(argv), js_get_string_base(argv + 1), &cap)) {
+        ret = js_array(&(vm->heap));
+        _append_capture(vm, &ret, &cap);
+    } else {
+        ret = js_null();
+    }
+    re_free_capture(&cap);
+    js_return(ret);
 }
 
-struct js_result js_std_md(struct js_vm *vm) {
-    _one_string_argument(vm, path, {
-        _posix_zero_on_success(_mkdir(path));
-        _return_null();
-    });
+struct js_result js_std_md(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(js_is_string(argv));
+    _posix_zero_on_success(_mkdir(js_get_string_base(argv)));
+    _return_null();
 }
 
-struct js_result js_std_natural_compare(struct js_vm *vm) {
-    _two_string_arguments(vm, lhs, rhs, {
-        js_return(js_number(natural_compare_sz(lhs, rhs)));
-    });
+struct js_result js_std_natural_compare(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 2);
+    js_assert(js_is_string(argv));
+    js_assert(js_is_string(argv + 1));
+    js_return(js_number(natural_compare_sz(js_get_string_base(argv), js_get_string_base(argv + 1))));
 }
 
 /*
@@ -495,31 +499,29 @@ arguments can be following formats:
 default mode is 'r'
 if no cb, returns opened fp; if cb, call it using fp as parameter, and auto close fp after cb returns
 */
-struct js_result js_std_open(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
+struct js_result js_std_open(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
     char *fname = NULL;
     char *mode = "r";
     struct js_value *cb = NULL;
-    js_assert(nargs > 0);
-    js_assert(js_is_string(argbase));
-    fname = js_get_string_base(argbase);
-    if (nargs == 2) {
-        if (js_is_string(argbase + 1)) {
-            mode = js_get_string_base(argbase + 1);
-        } else if (js_is_function(argbase + 1)) {
-            cb = argbase + 1;
+    js_assert(argc > 0);
+    js_assert(js_is_string(argv));
+    fname = js_get_string_base(argv);
+    if (argc == 2) {
+        if (js_is_string(argv + 1)) {
+            mode = js_get_string_base(argv + 1);
+        } else if (js_is_function(argv + 1)) {
+            cb = argv + 1;
         } else {
             js_throw(js_scripture_sz("if 2 args, arg 1 must be string or function"));
         }
-    } else if (nargs == 3) {
-        if (js_is_string(argbase + 1) && js_is_function(argbase + 2)) {
-            mode = js_get_string_base(argbase + 1);
-            cb = argbase + 2;
+    } else if (argc == 3) {
+        if (js_is_string(argv + 1) && js_is_function(argv + 2)) {
+            mode = js_get_string_base(argv + 1);
+            cb = argv + 2;
         } else {
             js_throw(js_scripture_sz("if 3 args, arg 1 must be string and arg 2 must be function"));
         }
-    } else if (nargs > 3) {
+    } else if (argc > 3) {
         js_throw(js_scripture_sz("num of args can only be 1 - 3"));
     }
     FILE *fp = fopen(fname, mode);
@@ -528,7 +530,7 @@ struct js_result js_std_open(struct js_vm *vm) {
     }
     struct js_value jsfp = js_number((double)(intptr_t)fp);
     if (cb) {
-        struct js_result ret = js_call(vm, *cb, (struct js_value[]){jsfp}, 1);
+        struct js_result ret = js_call(vm, *cb, 1, (struct js_value[]){jsfp});
         // log_debug("fclose %p", fp);
         fclose(fp);
         return ret;
@@ -537,66 +539,61 @@ struct js_result js_std_open(struct js_vm *vm) {
     }
 }
 
-struct js_result js_std_pop(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    js_assert(nargs == 1);
-    js_assert(argbase->type == vt_array);
-    js_assert(argbase->managed->array.length > 0);
-    argbase->managed->array.length--;
-    js_return(argbase->managed->array.base[argbase->managed->array.length]);
+struct js_result js_std_pop(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(argv->type == vt_array);
+    js_assert(argv->managed->array.length > 0);
+    argv->managed->array.length--;
+    js_return(argv->managed->array.base[argv->managed->array.length]);
 }
 
-struct js_result js_std_print(struct js_vm *vm) {
-    for (uint16_t i = 0; i < js_get_arguments_length(vm); i++) {
-        js_print_value(js_get_arguments_base(vm) + i);
+struct js_result js_std_print(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    struct print_stream out = {.type = file_stream, .fp = stdout};
+    for (uint16_t i = 0; i < argc; i++) {
+        js_serialize_value(&out, tostring_style, argv + i);
         printf(" ");
     }
     printf("\n");
     _return_null();
 }
 
-struct js_result js_std_push(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    js_assert(nargs == 2);
-    js_assert(argbase->type == vt_array);
-    js_push_array_element(argbase, argbase[1]);
+struct js_result js_std_push(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 2);
+    js_assert(argv->type == vt_array);
+    js_push_array_element(argv, argv[1]);
     _return_null();
 }
 
-struct js_result js_std_read(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
+struct js_result js_std_read(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
     char *fname = NULL;
     FILE *fp = NULL;
     bool iscmd = false;
     struct js_value *cb = NULL;
 #define __cleanup() (fname && fp ? (iscmd ? pclose(fp) : fclose(fp)) : (void)0)
-    js_assert(nargs > 0);
-    if (argbase->type == vt_number) {
-        fp = (FILE *)(intptr_t)argbase->number;
-    } else if (js_is_string(argbase)) {
-        fname = js_get_string_base(argbase);
+    js_assert(argc > 0);
+    if (argv->type == vt_number) {
+        fp = (FILE *)(intptr_t)argv->number;
+    } else if (js_is_string(argv)) {
+        fname = js_get_string_base(argv);
     } else {
         js_throw(js_scripture_sz("arg 0 must be number or string"));
     }
-    if (nargs == 2) {
-        if ((argbase + 1)->type == vt_boolean) {
-            iscmd = (argbase + 1)->boolean;
-        } else if (js_is_function(argbase + 1)) {
-            cb = argbase + 1;
+    if (argc == 2) {
+        if ((argv + 1)->type == vt_boolean) {
+            iscmd = (argv + 1)->boolean;
+        } else if (js_is_function(argv + 1)) {
+            cb = argv + 1;
         } else {
             js_throw(js_scripture_sz("if 2 args, arg 1 must be boolean or function"));
         }
-    } else if (nargs == 3) {
-        if ((argbase + 1)->type == vt_boolean && js_is_function(argbase + 2)) {
-            iscmd = (argbase + 1)->boolean;
-            cb = argbase + 2;
+    } else if (argc == 3) {
+        if ((argv + 1)->type == vt_boolean && js_is_function(argv + 2)) {
+            iscmd = (argv + 1)->boolean;
+            cb = argv + 2;
         } else {
             js_throw(js_scripture_sz("if 3 args, arg 1 must be boolean and arg 2 must be function"));
         }
-    } else if (nargs > 3) {
+    } else if (argc > 3) {
         js_throw(js_scripture_sz("num of args can only be 1 - 3"));
     }
     fname ? (fp = iscmd ? popen(fname, "r") : fopen(fname, "r")) : (void)0;
@@ -631,7 +628,7 @@ struct js_result js_std_read(struct js_vm *vm) {
                     line.managed->string.base, line.managed->string.length, line.managed->string.capacity, c);
             }
             // buffer_dump(line.managed->string.base, line.managed->string.length, line.managed->string.capacity);
-            struct js_result ret = js_call(vm, *cb, (struct js_value[]){line}, 1);
+            struct js_result ret = js_call(vm, *cb, 1, (struct js_value[]){line});
             if (!ret.success) {
                 __cleanup();
                 return ret;
@@ -665,55 +662,46 @@ struct js_result js_std_read(struct js_vm *vm) {
         js_return(content);
     }
 #undef __cleanup
-    // _one_string_argument(vm, fname, {
-    //     FILE *fp = fopen(fname, "r");
-    //     if (fp == NULL) {
-    //         _throw_posix_error(vm);
-    //     }
-    //     if (fseek(fp, 0, SEEK_END) != 0) {
-    //         fclose(fp);
-    //         _throw_posix_error(vm);
-    //     }
-    //     long fsize = ftell(fp);
-    //     if (fsize == -1) {
-    //         fclose(fp);
-    //         _throw_posix_error(vm);
-    //     }
-    //     if (fseek(fp, 0, SEEK_SET) != 0) {
-    //         fclose(fp);
-    //         _throw_posix_error(vm);
-    //     }
-    //     struct js_value ret = js_string(&(vm->heap), NULL, 0);
-    //     buffer_alloc(
-    //         ret.managed->string.base, ret.managed->string.length, ret.managed->string.capacity,
-    //         fsize + 1); // always +1 to make sure null terminated
-    //     size_t num_read = fread(ret.managed->string.base, 1, fsize, fp);
-    //     // log_debug("fsize=%ld num_read=%zu", fsize, num_read);
-    //     // if (feof(fp)) {
-    //     //     log_debug("eof");
-    //     // }
-    //     if (ferror(fp)) {
-    //         fclose(fp);
-    //         _throw_posix_error(vm);
-    //     }
-    //     ret.managed->string.length = num_read;
-    //     fclose(fp);
-    //     js_return(ret);
-    // });
 }
 
-struct js_result js_std_rd(struct js_vm *vm) {
-    _one_string_argument(vm, path, {
-        _posix_zero_on_success(rmdir(path));
-        _return_null();
-    });
+struct js_result js_std_rd(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(js_is_string(argv));
+    _posix_zero_on_success(rmdir(js_get_string_base(argv)));
+    _return_null();
 }
 
-struct js_result js_std_rm(struct js_vm *vm) {
-    _one_string_argument(vm, path, {
-        _posix_zero_on_success(remove(path));
-        _return_null();
-    });
+struct js_result js_std_rm(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(js_is_string(argv));
+    _posix_zero_on_success(remove(js_get_string_base(argv)));
+    _return_null();
+}
+
+struct js_result js_std_sleep(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc > 0);
+    js_assert(argv->type == vt_number);
+    double timeout = argv->number;
+    if (argc == 1) {
+        __sleep(timeout);
+    } else {
+        js_assert(js_is_function(argv + 1));
+        double interval = 1;
+        if (argc > 2) {
+            js_assert((argv + 2)->type == vt_number);
+            interval = (argv + 2)->number;
+        }
+        double end = _time() + timeout;
+        for (;;) {
+            __sleep(interval);
+            double remains = end - _time();
+            if (remains < 0) {
+                break;
+            }
+            js_call(vm, argv[1], 1, (struct js_value[]){js_number(remains)});
+        }
+    }
+    _return_null();
 }
 
 struct _comparator_context {
@@ -729,8 +717,8 @@ static int _comparator(const void *lhs, const void *rhs, void *ctx) {
 #endif
     struct _comparator_context *comp_ctx = (struct _comparator_context *)ctx;
     struct js_result result = js_call(
-        comp_ctx->vm, *(comp_ctx->func),
-        (struct js_value[]){*((struct js_value *)lhs), *((struct js_value *)rhs)}, 2);
+        comp_ctx->vm, *(comp_ctx->func), 2,
+        (struct js_value[]){*((struct js_value *)lhs), *((struct js_value *)rhs)});
     if (!result.success || result.value.type != vt_number) {
         return 0;
     } else {
@@ -738,94 +726,182 @@ static int _comparator(const void *lhs, const void *rhs, void *ctx) {
     }
 }
 
-struct js_result js_std_sort(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    js_assert(nargs == 2);
-    js_assert(argbase->type == vt_array);
-    js_assert(js_is_function(argbase + 1));
-    struct _comparator_context ctx = {.vm = vm, .func = argbase + 1};
+struct js_result js_std_sort(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 2);
+    js_assert(argv->type == vt_array);
+    js_assert(js_is_function(argv + 1));
+    struct _comparator_context ctx = {.vm = vm, .func = argv + 1};
 #ifdef _WIN32
-    qsort_s(argbase->managed->array.base, argbase->managed->array.length,
+    qsort_s(argv->managed->array.base, argv->managed->array.length,
         sizeof(struct js_value), _comparator, &ctx);
 #else
-    qsort_r(argbase->managed->array.base, argbase->managed->array.length,
+    qsort_r(argv->managed->array.base, argv->managed->array.length,
         sizeof(struct js_value), _comparator, &ctx);
 #endif
-    js_return(*argbase);
+    js_return(*argv);
 }
 
-struct js_result js_std_split(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    js_assert(nargs == 2);
-    js_assert(js_is_string(argbase));
-    js_assert(js_is_string(argbase + 1));
-    // DON'T use strtok, will modify source
-    char *str = js_get_string_base(argbase);
-    size_t slen = js_get_string_length(argbase);
-    char *delim = js_get_string_base(argbase + 1);
-    size_t dlen = js_get_string_length(argbase + 1);
-    js_assert(dlen > 0);
-    struct js_value ret = js_array(&(vm->heap));
-    char *p, *q;
-    for (p = str; p < str + slen;) {
-        q = strstr(p, delim);
-        // log_debug("%s %s", p, q);
-        // see https://en.cppreference.com/w/c/string/byte/strstr.html for return value
-        // TODO: optimize for scripture?
-        // if delim is an empty string, acorrding to standard, cannot distinguish with match on first character, so empty string is forbidden here
-        if (q == NULL) {
-            js_push_array_element(&ret, js_string(&(vm->heap), p, str + slen - p));
-            break;
+struct js_result js_std_spawn(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc > 0);
+#ifdef _WIN32
+    char *cmd_base = NULL;
+    size_t cmd_length = 0;
+    size_t cmd_capacity = 0;
+    bool first_arg = true;
+    for (uint16_t i = 0; i < argc; i++) {
+        js_assert(js_is_string(argv + i));
+        if (first_arg) {
+            first_arg = false;
         } else {
-            js_push_array_element(&ret, js_string(&(vm->heap), p, q - p));
-            p = q + dlen;
+            string_buffer_append_ch(cmd_base, cmd_length, cmd_capacity, ' ');
+        }
+        // tested: quoted strings passed to argv will automatically remove quotes
+        bool require_quoted = false;
+        if (js_get_string_length(argv + i) == 0) {
+            require_quoted = true;
+        } else {
+            for (char *p = js_get_string_base(argv + i); *p != '\0'; p++) {
+                if (isspace(*p)) {
+                    require_quoted = true;
+                    break;
+                }
+            }
+        }
+        if (require_quoted) {
+            string_buffer_append_ch(cmd_base, cmd_length, cmd_capacity, '"');
+        }
+        string_buffer_append_sz(cmd_base, cmd_length, cmd_capacity, js_get_string_base(argv + i));
+        if (require_quoted) {
+            string_buffer_append_ch(cmd_base, cmd_length, cmd_capacity, '"');
         }
     }
-    if (q != NULL) {
-        js_push_array_element(&ret, js_scripture_sz(""));
+    STARTUPINFO si = {.cb = sizeof(STARTUPINFO)};
+    PROCESS_INFORMATION pi = {0};
+    BOOL result = CreateProcessA(NULL, cmd_base, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+    buffer_free(cmd_base, cmd_length, cmd_capacity);
+    if (!result) {
+        _throw_windows_error(vm);
     }
-    js_return(ret);
+    js_return(js_number((double)pi.dwProcessId));
+#else
+    char *exec_argv[256] = {0};
+    js_assert(argc < sizeof(exec_argv));
+    for (size_t i = 0; i < argc; i++) {
+        js_assert(js_is_string(argv + i));
+        exec_argv[i] = js_get_string_base(argv + i);
+    }
+    pid_t pid = fork();
+    switch (pid) {
+    case -1:
+        _throw_posix_error(vm);
+    case 0:
+        int ret = execvp(js_get_string_base(argv), exec_argv);
+        if (ret == -1) {
+            perror(NULL);
+            exit(EXIT_FAILURE);
+        }
+    default:
+        js_return(js_number((double)pid));
+    }
+#endif
 }
 
-struct js_result js_std_startswith(struct js_vm *vm) {
-    // _two_string_arguments(vm, lhs, rhs, js_return(js_boolean(starts_with_sz(lhs, rhs))));
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    js_assert(nargs > 1);
-    js_assert(js_is_string(argbase));
-    char *lhs = js_get_string_base(argbase);
-    for (uint16_t i = 1; i < nargs; i++) {
-        js_assert(js_is_string(argbase + i));
-        if (starts_with_sz(lhs, js_get_string_base(argbase + i))) {
+struct js_result js_std_split(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc > 0);
+    js_assert(js_is_string(argv));
+    if (argc == 1) {
+        struct js_value ret = js_array(&(vm->heap));
+        js_push_array_element(&ret, argv[0]);
+        js_return(ret);
+    } else {
+        js_assert(js_is_string(argv + 1));
+        // DON'T use strtok, will modify source
+        char *str = js_get_string_base(argv);
+        size_t slen = js_get_string_length(argv);
+        char *delim = js_get_string_base(argv + 1);
+        size_t dlen = js_get_string_length(argv + 1);
+        struct js_value ret = js_array(&(vm->heap));
+        if (dlen == 0) {
+            for (size_t i = 0; i < slen; i++) {
+                js_push_array_element(&ret, js_string(&(vm->heap), str + i, 1));
+            }
+        } else {
+            char *p, *q;
+            for (p = str; p < str + slen;) {
+                q = strstr(p, delim);
+                // log_debug("%s %s", p, q);
+                // see https://en.cppreference.com/w/c/string/byte/strstr.html for return value
+                // TODO: optimize for scripture?
+                // if delim is an empty string, acorrding to standard, cannot distinguish with match on first character, so empty string is forbidden here
+                if (q == NULL) {
+                    js_push_array_element(&ret, js_string(&(vm->heap), p, str + slen - p));
+                    break;
+                } else {
+                    js_push_array_element(&ret, js_string(&(vm->heap), p, q - p));
+                    p = q + dlen;
+                }
+            }
+            if (q != NULL) {
+                js_push_array_element(&ret, js_scripture_sz(""));
+            }
+        }
+        js_return(ret);
+    }
+}
+
+struct js_result js_std_startswith(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc > 1);
+    js_assert(js_is_string(argv));
+    char *lhs = js_get_string_base(argv);
+    for (uint16_t i = 1; i < argc; i++) {
+        js_assert(js_is_string(argv + i));
+        if (starts_with_sz(lhs, js_get_string_base(argv + i))) {
             js_return(js_boolean(true));
         }
     }
     js_return(js_boolean(false));
 }
 
-struct js_result js_std_system(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    js_assert(nargs == 1);
-    js_assert(js_is_string(argbase));
-    int ret = system(js_get_string_base(argbase));
+struct js_result js_std_stat(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(js_is_string(argv));
+    struct_stat sb;
+    if (stat(js_get_string_base(argv), &sb) != 0) {
+        _throw_posix_error(vm);
+    }
+    struct js_value result = js_object(&(vm->heap));
+    js_put_object_value_sz(&result, "size", js_number((double)sb.st_size));
+    js_put_object_value_sz(&result, "atime", js_number((double)sb.st_atime));
+    js_put_object_value_sz(&result, "ctime", js_number((double)sb.st_ctime));
+    js_put_object_value_sz(&result, "mtime", js_number((double)sb.st_mtime));
+    js_put_object_value_sz(&result, "uid", js_number((double)sb.st_uid));
+    js_put_object_value_sz(&result, "gid", js_number((double)sb.st_gid));
+    js_return(result);
+}
+
+struct js_result js_std_system(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(js_is_string(argv));
+    errno = 0; // fix windows bug: won't reset last error such as "File exists"
+    int ret = system(js_get_string_base(argv));
     if (errno) {
         _throw_posix_error(vm);
     }
-#ifndef _WIN32 // cannot be put inside _one_string_argument macro
+#ifndef _WIN32
     ret = WEXITSTATUS(ret);
 #endif
     js_return(js_number((double)ret));
 }
 
-struct js_result js_std_tostring(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    js_assert(nargs == 1);
+struct js_result js_std_time(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_return(js_number(_time()));
+}
+
+// _serialize already inuse in msvc, "'_serialize': intrinsic function, cannot be defined"
+static struct js_result __serialize(struct js_vm *vm, uint16_t argc, struct js_value *argv, enum serialized_style to) {
+    js_assert(argc == 1);
     struct print_stream out = {.type = string_stream};
-    js_serialize_value(&out, user_style, argbase);
+    js_serialize_value(&out, to, argv);
     struct js_value ret = js_alloc_managed(&(vm->heap), vt_string);
     ret.managed->string.base = out.base;
     ret.managed->string.length = out.length;
@@ -833,37 +909,36 @@ struct js_result js_std_tostring(struct js_vm *vm) {
     js_return(ret);
 }
 
-struct js_result js_std_tojson(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    js_assert(nargs == 1);
-    struct print_stream out = {.type = string_stream};
-    js_serialize_value(&out, json_style, argbase);
-    struct js_value ret = js_alloc_managed(&(vm->heap), vt_string);
-    ret.managed->string.base = out.base;
-    ret.managed->string.length = out.length;
-    ret.managed->string.capacity = out.capacity;
-    js_return(ret);
+struct js_result js_std_todump(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    return __serialize(vm, argc, argv, todump_style);
 }
 
-struct js_result js_std_tonumber(struct js_vm *vm) {
-    _one_string_argument(vm, str, {
-        char *end;
-        errno = 0; // fix windows bug: won't reset last error such as ERANGE, linux is ok
-        double num = strtod(str, &end);
-        if (errno) {
-            _throw_posix_error(vm);
-        }
-        if (end == str || *end != '\0') {
-            js_throw(js_scripture_sz("Not valid number"));
-        }
-        js_return(js_number(num));
-    });
+struct js_result js_std_tojson(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    return __serialize(vm, argc, argv, tojson_style);
 }
 
-struct js_result js_std_whoami(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    js_assert(nargs == 0);
+struct js_result js_std_tonumber(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(js_is_string(argv));
+    char *str = js_get_string_base(argv);
+    char *end;
+    errno = 0; // fix windows bug: won't reset last error such as ERANGE, linux is ok
+    double num = strtod(str, &end);
+    if (errno) {
+        _throw_posix_error(vm);
+    }
+    if (end == str || *end != '\0') {
+        js_throw(js_scripture_sz("Not valid number"));
+    }
+    js_return(js_number(num));
+}
+
+struct js_result js_std_tostring(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    return __serialize(vm, argc, argv, tostring_style);
+}
+
+struct js_result js_std_whoami(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 0);
 #ifdef _WIN32
     char buf[UNLEN + 1] = {0};
     DWORD len = sizeof(buf);
@@ -883,39 +958,37 @@ struct js_result js_std_whoami(struct js_vm *vm) {
 #endif
 }
 
-struct js_result js_std_write(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
+struct js_result js_std_write(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
     char *fname = NULL;
     FILE *fp = NULL;
     bool isappend = false;
-    char *str = NULL;
-    size_t slen = 0;
+    char *text = NULL;
+    size_t tlen = 0;
 #define __cleanup() (fname && fp ? fclose(fp) : (void)0)
-    js_assert(nargs > 1);
-    if (argbase->type == vt_number) {
-        fp = (FILE *)(intptr_t)argbase->number;
-    } else if (js_is_string(argbase)) {
-        fname = js_get_string_base(argbase);
+    js_assert(argc > 1);
+    if (argv->type == vt_number) {
+        fp = (FILE *)(intptr_t)argv->number;
+    } else if (js_is_string(argv)) {
+        fname = js_get_string_base(argv);
     } else {
         js_throw(js_scripture_sz("arg 0 must be number or string"));
     }
-    if (nargs == 2) {
-        if (js_is_string(argbase + 1)) {
-            str = js_get_string_base(argbase + 1);
-            slen = js_get_string_length(argbase + 1);
+    if (argc == 2) {
+        if (js_is_string(argv + 1)) {
+            text = js_get_string_base(argv + 1);
+            tlen = js_get_string_length(argv + 1);
         } else {
             js_throw(js_scripture_sz("if 2 args, arg 1 must be string"));
         }
-    } else if (nargs == 3) {
-        if ((argbase + 1)->type == vt_boolean && js_is_string(argbase + 2)) {
-            isappend = (argbase + 1)->boolean;
-            str = js_get_string_base(argbase + 2);
-            slen = js_get_string_length(argbase + 2);
+    } else if (argc == 3) {
+        if ((argv + 1)->type == vt_boolean && js_is_string(argv + 2)) {
+            isappend = (argv + 1)->boolean;
+            text = js_get_string_base(argv + 2);
+            tlen = js_get_string_length(argv + 2);
         } else {
             js_throw(js_scripture_sz("if 3 args, arg 1 must be boolean and arg 2 must be string"));
         }
-    } else if (nargs > 3) {
+    } else if (argc > 3) {
         js_throw(js_scripture_sz("num of args can only be 2 - 3"));
     }
     fname ? (fp = fopen(fname, isappend ? "a" : "w")) : (void)0;
@@ -925,43 +998,32 @@ struct js_result js_std_write(struct js_vm *vm) {
     if (fp == stdin) {
         js_throw(js_scripture_sz("Cannot write to stdin"));
     }
-    size_t num_written = fwrite(str, sizeof(char), slen, fp);
+    size_t num_written = fwrite(text, sizeof(char), tlen, fp);
+    fflush(fp); // in case of in linux xterm, write to stdout without \n, shall immediately display
     __cleanup();
-    if (num_written < slen) {
+    if (num_written < tlen) {
         _throw_posix_error(vm);
     } else {
         _return_null();
     }
 #undef __cleanup
-    // js_assert(js_is_string(argbase));
-    // js_assert(js_is_string(argbase + 1));
-    // char *fname = js_get_string_base(argbase);
-    // char *str = js_get_string_base(argbase + 1);
-    // size_t slen = js_get_string_length(argbase + 1);
-    // FILE *fp = fopen(fname, "w");
-    // fwrite(str, 1, slen, fp);
-    // // size_t num_written = fwrite(str, 1, slen, fp);
-    // // log_debug("slen=%zu num_written=%zu", slen, num_written);
-    // if (ferror(fp)) {
-    //     fclose(fp);
-    //     _throw_posix_error(vm);
-    // }
-    // fclose(fp);
-    // _return_null();
 }
 
 #define _function_list \
+    X(basename) \
     X(cd) \
     X(clock) \
     X(close) \
+    X(ctime) \
+    X(cwd) \
     X(dirname) \
-    X(dump) \
+    X(dump_vm) \
     X(endswith) \
     X(exec) \
     X(exists) \
     X(exit) \
     X(format) \
-    X(cwd) \
+    X(gc) \
     X(input) \
     X(join) \
     X(length) \
@@ -976,10 +1038,15 @@ struct js_result js_std_write(struct js_vm *vm) {
     X(read) \
     X(rm) \
     X(rd) \
+    X(sleep) \
     X(sort) \
+    X(spawn) \
     X(split) \
     X(startswith) \
+    X(stat) \
     X(system) \
+    X(time) \
+    X(todump) \
     X(tojson) \
     X(tonumber) \
     X(tostring) \
@@ -987,12 +1054,10 @@ struct js_result js_std_write(struct js_vm *vm) {
     X(write)
 
 #ifdef DEBUG
-struct js_result js_std_forward(struct js_vm *vm) {
-    uint16_t nargs = js_get_arguments_length(vm);
-    struct js_value *argbase = js_get_arguments_base(vm);
-    js_assert(nargs > 0);
-    js_assert(js_is_function(argbase));
-    return js_call(vm, *argbase, argbase + 1, nargs - 1);
+struct js_result js_std_forward(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc > 0);
+    js_assert(js_is_function(argv));
+    return js_call(vm, *argv, argc - 1, argv + 1);
 }
 #endif
 
@@ -1023,8 +1088,6 @@ void js_declare_std_functions(struct js_vm *vm) {
     js_declare_variable_sz(vm, "stdin", js_number((double)(intptr_t)stdin));
     js_declare_variable_sz(vm, "stdout", js_number((double)(intptr_t)stdout));
     js_declare_variable_sz(vm, "stderr", js_number((double)(intptr_t)stderr));
-    js_declare_variable_sz(vm, "dump_vm", js_c_function(js_dump_vm));
-    js_declare_variable_sz(vm, "gc", js_c_function(js_collect_garbage));
     // compatibility purpose
     struct js_value console = js_object(&(vm->heap));
     js_declare_variable_sz(vm, "console", console);

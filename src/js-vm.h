@@ -175,7 +175,7 @@ shared void js_put_instruction(struct js_bytecode *, uint32_t *, uint8_t, uint8_
 shared void js_add_instruction(struct js_bytecode *, uint8_t, uint8_t, ...);
 shared void js_add_cross_reference(struct js_cross_reference *, uint32_t, uint32_t);
 shared void js_bytecode_dump(struct js_bytecode *);
-shared struct js_result js_dump_vm(struct js_vm *);
+shared void js_dump_vm(struct js_vm *);
 shared struct js_result js_declare_variable(struct js_vm *, const char *, uint16_t, struct js_value);
 static inline struct js_result js_declare_variable_sz(struct js_vm *vm, const char *name, struct js_value value) {
     return js_declare_variable(vm, name, (uint16_t)strlen(name), value);
@@ -192,18 +192,15 @@ shared struct js_result js_get_variable(struct js_vm *, const char *, uint16_t);
 static inline struct js_result js_get_variable_sz(struct js_vm *vm, const char *name) {
     return js_get_variable(vm, name, (uint16_t)strlen(name));
 }
-shared struct js_value *js_get_arguments_base(struct js_vm *);
-shared uint16_t js_get_arguments_length(struct js_vm *);
-shared struct js_value js_get_argument(struct js_vm *, uint16_t);
 shared struct js_result js_run(struct js_vm *);
-shared struct js_result js_collect_garbage(struct js_vm *);
-shared struct js_result js_call(struct js_vm *, struct js_value, struct js_value *, uint16_t);
-shared struct js_result js_call_by_name(struct js_vm *, const char *, uint16_t, struct js_value *, uint16_t);
-static inline struct js_result js_call_by_name_sz(struct js_vm *vm, const char *name, struct js_value *arguments, uint16_t num_arguments) {
-    return js_call_by_name(vm, name, (uint16_t)strlen(name), arguments, num_arguments);
+shared void js_gc(struct js_vm *);
+shared struct js_result js_call(struct js_vm *, struct js_value, uint16_t, struct js_value *);
+shared struct js_result js_call_by_name(struct js_vm *, const char *, uint16_t, uint16_t, struct js_value *);
+static inline struct js_result js_call_by_name_sz(struct js_vm *vm, const char *name, uint16_t argc, struct js_value *argv) {
+    return js_call_by_name(vm, name, (uint16_t)strlen(name), argc, argv);
 }
-typedef struct js_result (*js_c_function_pointer_type)(struct js_vm *);
-shared struct js_value js_c_function(js_c_function_pointer_type); // move from js-data to clarify function type
+typedef struct js_result (*js_c_function_type)(struct js_vm *, uint16_t, struct js_value *);
+shared struct js_value js_c_function(js_c_function_type); // move from js-data to clarify function type
 shared void js_free_vm(struct js_vm *);
 
 #ifdef DEBUG

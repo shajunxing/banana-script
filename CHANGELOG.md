@@ -1,6 +1,29 @@
+# latest
+
+New std function `spawn`
+
+Bugfix: prefix expression cannot be at beginning of statement, for example: typeof(true)::print();
+
+Adjust c function definition
+
+New std function `stat`
+
+Fixed `return;` not working bug
+
+Standalized `tostring` `tojson` `todump` style, `print` `format` default is `tostring`
+
+Added `split` with no seperator and "" seperator situation
+
+Now `catch` is optional
+
+More loose array index rules, now all out of bounds indexes (including negative and non-integer) will return null
+
+Improved README for std functions
+
 # 2025-08-08
 
 Optimized js executable's parameter parsing
+
 Optimized several std functions
 
 # 2025-07-30

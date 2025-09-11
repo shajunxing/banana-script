@@ -9,12 +9,18 @@
 // throw greetings;
 
 // test js_string_f garbage collection
-for (;;) {
-    try {
-        print(foo);
-    } catch (ex) {
-        // print(tojson(ex));
-    }
-    // dump_vm();
-    gc();
+// for (;;) {
+//     try {
+//         print(foo);
+//     } catch (ex) {
+//         // print(tojson(ex));
+//     }
+//     // dump_vm();
+//     gc();
+// }
+
+try {
+    throw("foo");
 }
+gc();
+dump_vm();
