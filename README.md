@@ -78,7 +78,7 @@ Values and function definition conventions:
 
 Language:
 
-|<div style="min-width:20em;">Definition</div>|Description|
+|<div style="min-width:16em;">Definition</div>|Description|
 |-|-|
 |dump_vm()|Print vm status.|
 |b endswith(s str, s sub, s ...)|Determine whether a string ends with any of sub strings.|
@@ -96,7 +96,7 @@ Language:
 
 Operating system:
 
-|<div style="min-width:220em;">Definition</div>|Description|
+|<div style="min-width:16em;">Definition</div>|Description|
 |-|-|
 |n argc|Same as C `main(argc, argv)`.|
 |[s] argv|Same as C `main(argc, argv)`.|
