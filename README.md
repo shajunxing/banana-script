@@ -133,7 +133,11 @@ Operating system:
 |s whoami()|Get current user name.|
 |write(n fp, s text)</br>write(s fname, s text)</br>write(s fname, b isappend, s text)</br>|Generic writing function for text file, which takes file handle `fp`, or file name `fname`. `isappend` means append mode instead of overwrite mode.|
 
-## Technical internals
+## Projects Using This
+
+<https://github.com/shajunxing/view-comic-here>
+
+## Technical Internals
 
 This project is C99 compatable, no other dependences, even make systems are not necessary, only need C compiler, compilation environment is msgc/gcc/mingw. First, from <https://github.com/shajunxing/banana-nomake> download single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`, or with gcc type `gcc -o make make.c && ./make release`. Executables are in `bin` folder.
 
