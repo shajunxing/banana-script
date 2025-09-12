@@ -78,7 +78,7 @@ Values and function definition conventions:
 
 Language:
 
-|Definition|Description|
+|Definition________________________|Description|
 |-|-|
 |dump_vm()|Print vm status.|
 |b endswith(s str, s sub, s ...)|Determine whether string ends with any of sub strings.|
@@ -90,7 +90,7 @@ Language:
 |n natural_compare(s lhs, s rhs)|Natural-compare algorithm, used by `sort()`.|
 |* pop([] arr)|Removes array's last element and returns.|
 |push([] arr, * elem)|Add element to end of array.|
-|<nobr>[] sort([] arr, n comp(* lhs, * rhs))</nobr>|Same as C `qsort()`, array will be sorted and also be returned.|
+|[] sort([] arr, n comp(* lhs, * rhs))|Same as C `qsort()`, array will be sorted and also be returned.|
 |[s] split(s str, [s sep])|Split string into array. If `sep` is omitted, returns array containing original string as single element. If `sep` is empty, string will be divided into bytes.|
 |b startswith(s str, s sub, s ...)|Determine whether string starts with any of sub strings.|
 |s todump(* val)|Returns dump representation of any value.|
@@ -100,7 +100,7 @@ Language:
 
 Operating system:
 
-|Definition|Description|
+|Definition________________________|Description|
 |-|-|
 |n argc|Same as C `main(argc, argv)`.|
 |[s] argv|Same as C `main(argc, argv)`.|
@@ -122,7 +122,7 @@ Operating system:
 |s read(n fp)<br>s read(s fname)<br>s read(s fname, b iscmd)<br>read(n fp, cb(s line))<br>read(s fname, cb(s line))<br>read(s fname, b iscmd, cb(s line))|Generic reading function for text file or console process, which takes file handle `fp`, or file name (or command line if `iscmd` is true) `fname`. If no `cb` exist, will returns whole content, or will call it repeatly with each line as argument.|
 |rd(s path)|Same as POSIX `rmdir()`|
 |rm(s path)|Same as POSIX `rm()`|
-|sleep(n timeout)<br>sleep(n timeout, cb(n remains))<br><nobr>sleep(n timeout, cb(n remains), n interval)</nobr>|Sleep certain seconds. If `cb` exists, call it each `interval` seconds, and pass `remains` seconds as argument. Default `interval` is 1 second.|
+|sleep(n timeout)<br>sleep(n timeout, cb(n remains))<br>sleep(n timeout, cb(n remains), n interval)|Sleep certain seconds. If `cb` exists, call it each `interval` seconds, and pass `remains` seconds as argument. Default `interval` is 1 second.|
 |spawn(s arg, s ...)|Create new process, parameters are same as `exec()`.|
 |{} stat(s path)|Same as POSIX `stat()`. Return value currently contains `size` `atime` `ctime` `mtime` `uid` `gid`.|
 |n system(s cmd)|Same as C `system()`.|
