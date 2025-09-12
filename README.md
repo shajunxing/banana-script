@@ -78,25 +78,29 @@ Values and function definition conventions:
 
 Language:
 
-|<div style="min-width:16em;">Definition</div>|Description|
+|Definition|Description|
 |-|-|
 |dump_vm()|Print vm status.|
-|b endswith(s str, s sub, s ...)|Determine whether a string ends with any of sub strings.|
+|b endswith(s str, s sub, s ...)|Determine whether string ends with any of sub strings.|
 |s format(s fmt, * ...)|Format with `fmt`, there are two types of replacement field, first is `${foo}` where `foo` is variable name, second is `${0}` `${1}` `${2}` ... where numbers indicates which argument followed by, starts from 0, and will be represented as `tostring()` style.|
-|gc()|Perform garbage collection.|
+|gc()|Garbage collection.|
 |s join([s] arr, s sep)|Join string array with seperator.|
-|n length([]/{}/s val)|Returns array/object length or number of bytes of string.|
+|n length([]/{}/s val)|Returns array/object length or string length in bytes.|
 |[s]/- match(s text, s pattern)|Regular expression matching. If matched returns all captures, otherwise returns `null`. Currently supports `^` `$` `()` `\d` `\s` `\w` `.` `[]` `*` `+` `?`.|
 |n natural_compare(s lhs, s rhs)|Natural-compare algorithm, used by `sort()`.|
 |* pop([] arr)|Removes array's last element and returns.|
 |push([] arr, * elem)|Add element to end of array.|
-|[] sort([] arr, n comp(* lhs, * rhs))|Same as C `qsort()`, sort array and returns it.|
+|<nobr>[] sort([] arr, n comp(* lhs, * rhs))</nobr>|Same as C `qsort()`, array will be sorted and also be returned.|
 |[s] split(s str, [s sep])|Split string into array. If `sep` is omitted, returns array containing original string as single element. If `sep` is empty, string will be divided into bytes.|
-|b startswith(s str, s sub, s ...)|Determine whether a string starts with any of sub strings.|
+|b startswith(s str, s sub, s ...)|Determine whether string starts with any of sub strings.|
+|s todump(* val)|Returns dump representation of any value.|
+|s tojson(* val)|Returns json representation of any value.|
+|s tonumber(s str)|Convert string represented number to number.|
+|s tostring(* val)|Returns string representation of any value.|
 
 Operating system:
 
-|<div style="min-width:16em;">Definition</div>|Description|
+|Definition|Description|
 |-|-|
 |n argc|Same as C `main(argc, argv)`.|
 |[s] argv|Same as C `main(argc, argv)`.|
@@ -118,18 +122,14 @@ Operating system:
 |s read(n fp)<br>s read(s fname)<br>s read(s fname, b iscmd)<br>read(n fp, cb(s line))<br>read(s fname, cb(s line))<br>read(s fname, b iscmd, cb(s line))|Generic reading function for text file or console process, which takes file handle `fp`, or file name (or command line if `iscmd` is true) `fname`. If no `cb` exist, will returns whole content, or will call it repeatly with each line as argument.|
 |rd(s path)|Same as POSIX `rmdir()`|
 |rm(s path)|Same as POSIX `rm()`|
-|sleep(n timeout)<br>sleep(n timeout, cb(n remains))<br>sleep(n timeout, cb(n remains), n interval)|Sleep certain seconds. If `cb` exists, call it each `interval` seconds, and pass `remains` seconds as argument. Default `interval` is 1 second.|
+|sleep(n timeout)<br>sleep(n timeout, cb(n remains))<br><nobr>sleep(n timeout, cb(n remains), n interval)</nobr>|Sleep certain seconds. If `cb` exists, call it each `interval` seconds, and pass `remains` seconds as argument. Default `interval` is 1 second.|
 |spawn(s arg, s ...)|Create new process, parameters are same as `exec()`.|
 |{} stat(s path)|Same as POSIX `stat()`. Return value currently contains `size` `atime` `ctime` `mtime` `uid` `gid`.|
 |n system(s cmd)|Same as C `system()`.|
 |n stdin|Same as C `stdin`|
 |n stdout|Same as C `stdout`|
 |n stderr|Same as C `stderr`|
-|n time()|Same as C `time()` but high precision, returns seconds elapsed since utc 1970-01-01 00:00:00 +0000|
-|s todump(* val)|Returns dump representation of any value.|
-|s tojson(* val)|Returns json representation of any value.|
-|s tonumber(s str)|Convert string represented number to number.|
-|s tostring(* val)|Returns string representation of any value.|
+|n time()|Same as C `time()` but high precision, returns unix epoch.|
 |s whoami()|Get current user name.|
 |write(n fp, s text)</br>write(s fname, s text)</br>write(s fname, b isappend, s text)</br>|Generic writing function for text file, which takes file handle `fp`, or file name `fname`. `isappend` means append mode instead of overwrite mode.|
 
