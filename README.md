@@ -6,7 +6,7 @@ This article is openly licensed via [CC BY-NC-ND 4.0](https://creativecommons.or
 
 Project Address: <https://github.com/shajunxing/banana-script>
 
-![REPL](screenshot3.png "REPL")
+![REPL](screenshot.png "REPL")
 
 ## Features
 

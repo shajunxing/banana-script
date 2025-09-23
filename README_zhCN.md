@@ -6,7 +6,7 @@
 
 项目地址：<https://github.com/shajunxing/banana-script>
 
-![REPL](screenshot3.png "REPL")
+![REPL](screenshot.png "REPL")
 
 ## 特色
 
