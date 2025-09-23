@@ -32,8 +32,6 @@ Operators follow strict rule, no implicit conversion. Only boolean can do logica
 - Prefix operator `+` `-` `!` `typeof`
 - Array/object member access and function call operator `[]` `.` `?.` `()` `::`
 
-Double colon binding operator `::` proposed in JavaScript <https://github.com/tc39/proposal-bind-operator> <https://babeljs.io/docs/babel-plugin-proposal-function-bind> has had its semantics greatly simplified: `value::function(...args)` is equivalent to `function(value, ...args)`. Class lovers will be happy because they can easily write in object-oriented style, even using nice chaining syntax!
-
 Assignment expression `=` `+=` `-=` `*=` `/=` `%=` `++` `--` does not return value, Comma expression `,` is not supported.
 
 Conditional statement is `if`, loops are `while` `do while` `for`, conditions must be boolean. `for` loop only support following syntax, `[]` means optional. `for in` and `for of` only handle non-null members:
@@ -102,7 +100,7 @@ Values and function definition conventions:
 
 Language:
 
-|Definition________________________|Description|
+|____________Definition____________|Description|
 |-|-|
 |n ceil(n val)|Same as C `ceil`.|
 |dump_vm()|Print vm status.|
@@ -131,7 +129,7 @@ Language:
 
 Operating system:
 
-|Definition________________________|Description|
+|____________Definition____________|Description|
 |-|-|
 |n argc|Same as C `main(argc, argv)`.|
 |[s ...] argv|Same as C `main(argc, argv)`.|
