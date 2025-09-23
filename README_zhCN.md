@@ -49,7 +49,7 @@
 - `gc();let f=function(a,b){let c=a+b;return function(d){return c+d;};}(1,2);dump_vm();print(f(3));delete f;`
 - `gc();let f=function(a,b){let c=a+b;delete a;delete b;return function(d){return c+d;};}(1,2);dump_vm();print(f(3));delete f;`
 
-`throw` 可以抛出任意值，由 `catch` （可选的）接收。不支持`finally`，因为我认为根本不需要，反而会使代码执行顺序显得怪异。
+`throw` 可以抛出任意值，由可选的 `catch` 接收。不支持`finally`，因为我认为根本不需要，反而会使代码执行顺序显得怪异。
 
 ## 项目结构及与C语言的交互性
 

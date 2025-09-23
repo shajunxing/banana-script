@@ -46,10 +46,10 @@ Garbage collection is manual, you can do it at any time.
 
 `delete` means delete local variable within current scope (object members can be deleted by setting `null`). For example, variables added to the function closure are all local variables before function variable declaration, so unused variables can be deleted before return to reduce closure size, run following two statements in REPL environment to see differences.
 
-- `let f = function(a, b){let c = a + b; return function(d){return c + d;};}(1, 2); dump_vm(); print(f(3)); delete f;`
-- `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump_vm(); print(f(3)); delete f;`
+- `gc();let f=function(a,b){let c=a+b;return function(d){return c+d;};}(1,2);dump_vm();print(f(3));delete f;`
+- `gc();let f=function(a,b){let c=a+b;delete a;delete b;return function(d){return c+d;};}(1,2);dump_vm();print(f(3));delete f;`
 
-`throw` can throw any value, which are received by `catch` (optional). `finally` is not supported, because I think it's totally unecessary, and will make code execution order weird.
+`throw` can throw any value, which are received by optional `catch`. `finally` is not supported, because I think it's totally unecessary, and will make code execution order weird.
 
 ## Project Structure And Interoperability With C Language
 
