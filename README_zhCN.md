@@ -10,7 +10,7 @@
 
 ## 特色
 
-我的目标是剔除和修改我在实践中总结的JavaScript语言的没用的和模棱两可的部分，只保留我喜欢和需要的，创建一个最小语法的解释器。函数是第一类值，函数支持闭包。我不喜欢面向对象编程，所以所有与类相关的内容都不支持，但是，我重新定义了提案里的**双冒号绑定运算符**（<https://github.com/tc39/proposal-bind-operator> <https://babeljs.io/docs/babel-plugin-proposal-function-bind>），现在 `value::function(...args)` 等价于 `function(value, ...args)`，如此Class爱好者会很开心，因为能轻松写出面向对象范儿，甚至漂亮的链式语法风格。没有任何内置不可删除的全局变量、全局函数或对象成员，哪怕解释器初始化的时候加入的内容都可以在任何时候轻松删除，恢复到空空如也的状态。
+我的目标是剔除和修改我在实践中总结的JavaScript语言的没用的和模棱两可的部分，只保留我喜欢和需要的，创建一个最小语法的解释器。函数是第一类值，函数支持闭包。我不喜欢面向对象编程，所以所有与类相关的内容都不支持，但是，我重新定义了提案里的**双冒号绑定运算符**（<https://github.com/tc39/proposal-bind-operator> <https://babeljs.io/docs/babel-plugin-proposal-function-bind>），现在 `value::function(...args)` 等价于 `function(value, ...args)`，如此Class爱好者会很开心，因为能轻松写出面向对象范儿，甚至漂亮的链式语法风格。
 
 ## 两分钟简要语法指南
 

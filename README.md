@@ -10,7 +10,7 @@ Project Address: <https://github.com/shajunxing/banana-script>
 
 ## Features
 
-My goal is to remove and modify useless and ambiguous parts of JavaScript language that I've summarized in practice, and to create a minimal syntax interpreter by keeping only what I like and need. Function is first-class value, and function supports closure. I don't like object-oriented programming, so everything class-related is not supported, but I've redefined proposal's **double colon binding operator** (<https://github.com/tc39/proposal-bind-operator> <https://babeljs.io/docs/babel-plugin-proposal-function-bind>) , now `value::function(... args)` is equivalent to `function(value, ... args)`, which will make it easy to write object-oriented styles and even beautiful chain syntax styles. There are no built-in immunable global variables, global functions, or object members, even contents added during interpreter initialization can be easily deleted at any time and reverted to clean empty state.
+My goal is to remove and modify useless and ambiguous parts of JavaScript language that I've summarized in practice, and to create a minimal syntax interpreter by keeping only what I like and need. Function is first-class value, and function supports closure. I don't like object-oriented programming, so everything class-related is not supported, but I've redefined proposal's **double colon binding operator** (<https://github.com/tc39/proposal-bind-operator> <https://babeljs.io/docs/babel-plugin-proposal-function-bind>) , now `value::function(... args)` is equivalent to `function(value, ... args)`, which will make it easy to write object-oriented styles and even beautiful chain syntax styles.
 
 ## Two-Minutes Brief Syntax Guide
 
