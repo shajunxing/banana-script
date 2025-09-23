@@ -100,7 +100,7 @@ C 函数必须是 `typedef struct js_result (*js_c_function_type)(struct js_vm *
 
 语言：
 
-|____________Definition____________|Description|
+|Definition________________________|Description|
 |-|-|
 |n ceil(n val)|Same as C `ceil`.|
 |dump_vm()|Print vm status.|
@@ -129,7 +129,7 @@ C 函数必须是 `typedef struct js_result (*js_c_function_type)(struct js_vm *
 
 操作系统：
 
-|____________Definition____________|Description|
+|Definition________________________|Description|
 |-|-|
 |n argc|Same as C `main(argc, argv)`.|
 |[s ...] argv|Same as C `main(argc, argv)`.|

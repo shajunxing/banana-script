@@ -100,7 +100,7 @@ Values and function definition conventions:
 
 Language:
 
-|____________Definition____________|Description|
+|Definition________________________|Description|
 |-|-|
 |n ceil(n val)|Same as C `ceil`.|
 |dump_vm()|Print vm status.|
@@ -129,7 +129,7 @@ Language:
 
 Operating system:
 
-|____________Definition____________|Description|
+|Definition________________________|Description|
 |-|-|
 |n argc|Same as C `main(argc, argv)`.|
 |[s ...] argv|Same as C `main(argc, argv)`.|
