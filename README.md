@@ -1,4 +1,4 @@
-# Banana Script, An inperpreter for a strict subset of JavaScript
+# Banana Script, a script engine with minimalist syntax similar to JavaScript, implemented in C99.
 
 This article is openly licensed via [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/).
 
@@ -10,15 +10,15 @@ Project Address: <https://github.com/shajunxing/banana-script>
 
 ## Features
 
-My goal is to remove and modify useless and ambiguous parts of JavaScript language that I've summarized in practice, and to create a minimal syntax interpreter by keeping only what I like and need. Only JSON-compatible data types and function are supported, function is first-class value, and function supports closure. I don't like object-oriented programming, so everything class-related is not supported, but I've redefined proposal's **double colon binding operator** (<https://github.com/tc39/proposal-bind-operator> <https://babeljs.io/docs/babel-plugin-proposal-function-bind>) , now `value::function(... args)` is equivalent to `function(value, ... args)`, which will make it easy to write object-oriented styles and even beautiful chain syntax styles. There are no built-in immunable global variables, global functions, or object members, even contents added during interpreter initialization can be easily deleted at any time and reverted to clean empty state.
+My goal is to remove and modify useless and ambiguous parts of JavaScript language that I've summarized in practice, and to create a minimal syntax interpreter by keeping only what I like and need. Function is first-class value, and function supports closure. I don't like object-oriented programming, so everything class-related is not supported, but I've redefined proposal's **double colon binding operator** (<https://github.com/tc39/proposal-bind-operator> <https://babeljs.io/docs/babel-plugin-proposal-function-bind>) , now `value::function(... args)` is equivalent to `function(value, ... args)`, which will make it easy to write object-oriented styles and even beautiful chain syntax styles. There are no built-in immunable global variables, global functions, or object members, even contents added during interpreter initialization can be easily deleted at any time and reverted to clean empty state.
 
-## Two-Minute Brief Syntax Guide for Proficient JavaScript Users
+## Two-Minutes Brief Syntax Guide
 
 Data types are `null` `boolean` `number` `string` `array` `object` `function`, results of `typeof` correspond strictly to these names. No `undefined` because `null` is enough. Array and object are clean, no predefined members such as `__proto__`.
 
 Variable declaraction use `let`, all variables are local, `const` is not supported because all must be deletable. Access undeclared variables will cause error, access array/object's unexisting members will get `null` (including array index are negative and non-integer, but these are forbidden for put operation), and put `null` will delete corresponding member.
 
-Function definition supports `function` keyword, does not support `=>` expression, support default argument `param = value` and rest argument `...args`. Array literal and function call support spread syntax `...`, which will not skip `null` members. No predefined members such as `this` `arguments` in function. If `return` is outside function, means exit vm.
+Function definition supports `function` keyword, does not support `=>` expression, support default argument `param = value` and rest argument `...args`. Array literal and function call support spread syntax `...`. No predefined members such as `this` `arguments` in function. If `return` is in global scope, means exit vm.
 
 Operators follow strict rule, no implicit conversion. Only boolean can do logical operations. `== !=` are strict meaning, and can be done by all types. Numbers can do all relational and numerical operations, strings can do all relational operations and `+`. Operator precedence from low to high is:
 
@@ -44,22 +44,46 @@ Conditional statement is `if`, loops are `while` `do while` `for`, conditions mu
 
 No modules. In inperpreter's view, source code is only one large flat text.
 
-Garbage collection is manual, you can do it at any time you need.
+Garbage collection is manual, you can do it at any time.
 
-`delete` means delete local variable within current scope (object members can be deleted by setting `null`). For example, variables added to the function closure are all local variables before function variable declaration, so unused variables can be `delete`d before return to reduce closure size, run following two statements in REPL environment to see differences.
+`delete` means delete local variable within current scope (object members can be deleted by setting `null`). For example, variables added to the function closure are all local variables before function variable declaration, so unused variables can be deleted before return to reduce closure size, run following two statements in REPL environment to see differences.
 
 - `let f = function(a, b){let c = a + b; return function(d){return c + d;};}(1, 2); dump_vm(); print(f(3)); delete f;`
 - `let f = function(a, b){let c = a + b; delete a; delete b; return function(d){return c + d;};}(1, 2); dump_vm(); print(f(3)); delete f;`
 
 `throw` can throw any value, which are received by `catch` (optional). `finally` is not supported, because I think it's totally unecessary, and will make code execution order weird.
 
+## Project Structure And Interoperability With C Language
+
+This project is compatible with C99, and compilation environments are msvc/gcc/mingw, relying only on C compiler and <https://github.com/shajunxing/banana-nomake>, without need for make system. For msvc, execute `cl make.c && make.exe release`, or for mingw/gcc, execute `gcc -o make.exe make.c && ./make.exe release`. Generated executable will be located in `bin` directory.
+
+Project follows "minimal dependency" rule, only including necessary headers. Also, there's only one-way referencing between modules, with no circular referencing. Here’s modules' dependencies and how they work:
+
+```
+js-common   js-data     js-vm       js-syntax   js-std
+    <-----------
+                <-----------
+                            <-----------
+                            <-----------------------
+```
+
+- `js-common`: Constants, macro definitions, and functions common to project, such as log printing, memory operations.
+- `js-data`: Data types and garbage collection, you can even use this module separately in C projects to manipulate high-level data structures with GC functionality, see <https://github.com/shajunxing/banana-cvar>.
+- `js-vm`: Bytecode virtual machine, compiled separately to get an interpreter with minimal footprint without source code parsing.
+- `js-syntax`: Lexical parsing and syntax parsing, which converts source code into bytecode.
+- `js-std`: Reference implementation of commonly used standard functions, which can be used as reference for writing C functions.
+
+All values are `struct js_value` type, you can create by `js_...()` functions, `...` is value type, and you can read c values direct from this struct, see definition in `js_data.h`. DON'T directly modify their content, if you want to get different values, create new one. Compound types `array` `object` can be operated by `js_..._array_...()` `js_..._object_...()` functions.
+
+C functions must be `typedef struct js_result (*js_c_function_type)(struct js_vm *vm, uint16_t argc, struct js_value *argv)` format, read passed arguments from `argc` `argv`, and `struct js_result` has two members, if `.success` is `true`, `.value` is return value, if `false`, `.value` is thrown error. Use `js_c_function()` to create c function value, yes of course they are all values and can be put anywhere, for example, if put on stack root using `js_declare_variable()`, they will be global. C function can also call script function using `js_call()`, `js_call_by_name()` and `js_call_by_name_sz()`.
+
 ## Standard Library
 
-Includes most commonly used input/output and numeric processing functions. You can understand them as 'reference implementations', with no guarantee that they will remain unchanged in future. For more info, check out <https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js> and <https://github.com/shajunxing/banana-script/blob/main/src/js-std.c>.
+Includes most commonly used functions of language and os level. You can understand them as 'reference implementations', with no guarantee that they will remain unchanged in future. For more info, check out <https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js> and <https://github.com/shajunxing/banana-script/blob/main/src/js-std.c>.
 
 Naming rules:
 
-1. Most commonly used ones, take most commonly used names, like console input and output, which are `input` and `print`. They're easiest to remember. I even asked ChatGPT helping me check their usage percentage.
+1. Most commonly used ones, take most commonly used names, like console input and output, which are `input` and `print`. They're easiest to remember. I even asked ChatGPT helping me querying their usage percentage.
 2. Single featured ones, match per dos/unix command, or c std/unistd function, such as `cd` `md` `rd`, use shortest one, which can also improve speed.
 3. Non-single featured ones, customize names.
 
@@ -80,30 +104,37 @@ Language:
 
 |Definition________________________|Description|
 |-|-|
+|n ceil(n val)|Same as C `ceil`.|
 |dump_vm()|Print vm status.|
 |b endswith(s str, s sub, s ...)|Determine whether string ends with any of sub strings.|
+|n floor(n val)|Same as C `floor`.|
 |s format(s fmt, * ...)|Format with `fmt`, there are two types of replacement field, first is `${foo}` where `foo` is variable name, second is `${0}` `${1}` `${2}` ... where numbers indicates which argument followed by, starts from 0, and will be represented as `tostring()` style.|
 |gc()|Garbage collection.|
-|s join([s] arr, s sep)|Join string array with seperator.|
-|n length([]/{}/s val)|Returns array/object length or string length in bytes.|
-|[s]/- match(s text, s pattern)|Regular expression matching. If matched returns all captures, otherwise returns `null`. Currently supports `^` `$` `()` `\d` `\s` `\w` `.` `[]` `*` `+` `?`.|
+|s join([s ...] arr, s sep)|Join string array with seperator.|
+|n length([* ...]/{* ...}/s val)|Returns array/object length or string length in bytes.|
+|[s ...]/- match(s text, s pattern)|Regular expression matching. If matched returns all captures, otherwise returns `null`. Currently supports `^` `$` `()` `\d` `\s` `\w` `.` `[]` `*` `+` `?`.|
+|[n, n] modf(n val)|Same as C `modf`, returns array of integral and fractional parts.|
 |n natural_compare(s lhs, s rhs)|Natural-compare algorithm, used by `sort()`.|
-|* pop([] arr)|Removes array's last element and returns.|
-|push([] arr, * elem)|Add element to end of array.|
-|[] sort([] arr, n comp(* lhs, * rhs))|Same as C `qsort()`, array will be sorted and also be returned.|
-|[s] split(s str, [s sep])|Split string into array. If `sep` is omitted, returns array containing original string as single element. If `sep` is empty, string will be divided into bytes.|
+|* pop([* ...] arr)|Removes array's last element and returns.|
+|push([* ...] arr, * elem)|Add element to end of array.|
+|n round(n val)|Same as C `round`.|
+|[* ...] sort([* ...] arr, n comp(* lhs, * rhs))|Same as C `qsort()`, array will be sorted and also be returned.|
+|[s ...] split(s str, [s sep])|Split string into array. If `sep` is omitted, returns array containing original string as single element. If `sep` is empty, string will be divided into bytes.|
 |b startswith(s str, s sub, s ...)|Determine whether string starts with any of sub strings.|
 |s todump(* val)|Returns dump representation of any value.|
 |s tojson(* val)|Returns json representation of any value.|
-|s tonumber(s str)|Convert string represented number to number.|
+|s tolower(s str)|Convert `str` to lower case, use C `tolower()`.|
+|n tonumber(s str)|Convert string represented number to number.|
 |s tostring(* val)|Returns string representation of any value.|
+|s toupper(s str)|Convert `str` to upper case, use C `toupper()`.|
+|n trunc(n val)|Same as C `trunc`.|
 
 Operating system:
 
 |Definition________________________|Description|
 |-|-|
 |n argc|Same as C `main(argc, argv)`.|
-|[s] argv|Same as C `main(argc, argv)`.|
+|[s ...] argv|Same as C `main(argc, argv)`.|
 |s basename(s path)|Same as POSIX `basename()`, returns final component of `path`.|
 |cd(s path)|Same as POSIX `chdir()`.|
 |n clock()|Same as C `clock()`, returns process time as second.|
@@ -137,31 +168,7 @@ Operating system:
 
 <https://github.com/shajunxing/view-comic-here>
 
-## Technical Internals
-
-This project is C99 compatable, no other dependences, even make systems are not necessary, only need C compiler, compilation environment is msgc/gcc/mingw. First, from <https://github.com/shajunxing/banana-nomake> download single file `make.h`, then open `make.c`, modify `#include` to correct path, then with msvc type `cl make.c && make.exe release`, or with mingw type `gcc -o make.exe make.c && ./make.exe release`, or with gcc type `gcc -o make make.c && ./make release`. Executables are in `bin` folder.
-
-Project follows "minimal dependency" rule, only including necessary headers. Also, there's only one-way referencing between modules, with no circular referencing. Here’s how modules work and their dependencies:
-
-```
-js-common   js-data     js-vm       js-syntax   js-std
-    <-----------
-                <-----------
-                            <-----------
-                            <-----------------------
-```
-
-- `js-common`: Constants, macro definitions, and functions common to project, such as log printing, memory operations.
-- `js-data`: Data types and garbage collection, you can even use this module separately in C projects to manipulate high-level data structures with GC functionality, see <https://github.com/shajunxing/banana-cvar>.
-- `js-vm`: Bytecode Virtual Machine, compiled separately to get an interpreter with minimal footprint without source code parsing.
-- `js-syntax`: Lexical parsing and syntax parsing, which converts source code into bytecode.
-- `js-std`: Reference implementation of commonly used standard functions, which can be used as reference for writing C functions.
-
-All values are `struct js_value` type, you can create by `js_...()` functions, `...` is value type, and you can read c values direct from this struct, see definition in `js_data.h`. Created values follow garbage collecting rules. DON'T directly modify their content, if you want to get different values, create new one. Compound types `array` `object` can be operated by `js_..._array_...()` `js_..._object_...()` functions.
-
-C functions must be `js_c_function_type` format, use `js_c_function()` to create c function value, yes of course they are all values and can be put anywhere, for example, if put on stack root using `js_declare_variable()`, they will be global. `struct js_result` has two members, if `.success` is true, `.value` is return value, if false, `.value` is received by `catch` if there are `try catch`. c function can also call script function using `js_call()`, `js_call_by_name()` and `js_call_by_name_sz()`.
-
-For interacting with C language, you can check out <https://github.com/shajunxing/banana-script/blob/main/src/js-std.c>.
+## Unorganized
 
 There are 2 types of string: `vt_scripture` means immutable c string literal in engine c source code, eg. `typeof` result, and `vt_string` are mutable. They are all null terminated. They can be used for futher optimization.
 
