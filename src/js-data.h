@@ -26,7 +26,7 @@ You should have received a copy of the GNU General Public License along with thi
     X(vt_object) /* managed */ \
     X(vt_function) /* managed */ \
     X(vt_c_function) \
-    X(vt_c_value) /* managed */
+    X(vt_c_data) /* managed */
 
 #define X(name) name,
 enum js_value_type { js_value_type_list };
@@ -97,7 +97,7 @@ struct js_managed_value {
             void *data;
             void (*mark)(void *); // this function pointer can also be used to verify data type
             void (*sweep)(void *); // this function pointer can also be used to verify data type
-        } c_value;
+        } c_data;
     };
 };
 #pragma pack(pop)
@@ -201,12 +201,11 @@ static inline struct js_value js_get_object_value_sz(struct js_value *container,
 }
 shared struct js_value js_function(struct js_heap *, uint32_t);
 shared bool js_is_function(struct js_value *);
-shared struct js_value js_c_value(struct js_heap *, void *, void (*)(void *), void (*)(void *));
+shared struct js_value js_c_data(struct js_heap *, void *, void (*)(void *), void (*)(void *));
 shared void js_mark(struct js_value *);
 shared void js_sweep(struct js_heap *);
-shared void js_serialize_managed_value(struct print_stream *, enum serialized_style, struct js_managed_value *);
-shared void js_serialize_value(struct print_stream *, enum serialized_style, struct js_value *);
-shared void js_dump_managed_value(struct js_managed_value *);
+shared void js_serialize_managed_value(struct print_stream *, enum serialized_style, struct js_managed_value *, size_t depth);
+shared void js_serialize_value(struct print_stream *, enum serialized_style, struct js_value *, size_t depth);
 shared void js_dump_value(struct js_value *);
 shared bool js_is_string(struct js_value *);
 shared char *js_get_string_base(struct js_value *); // Caution: No guarantee it ends with 0

@@ -68,14 +68,14 @@
 //         print(tojson(split(read(fname), "\n")));
 //     }
 // } catch (err) {
-//     print(tojson(err));
+//     print(err);
 // }
 // try {
 //     for (let fname of ["make.bat", "foo.txt"]) {
 //         read(fname)::split("\n")::tojson()::print();
 //     }
 // } catch (err) {
-//     err::tojson()::print();
+//     err::print();
 // }
 
 // test optimized && ||

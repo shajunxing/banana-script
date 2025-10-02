@@ -297,7 +297,9 @@ static bool _match_char(char c, char *ph, char *pt) {
     bool inv = false;
 #define __check_return(__arg_expr) \
     do { \
-        if (inv ^ (__arg_expr)) { \
+        /* Cautions: must cast to bool or will cause error, for example: 1 ^ 8 = 9 */ \
+        if (inv ^ (bool)(__arg_expr)) { \
+            /* log_debug("inv=%d, expr=%d, return true", inv, (__arg_expr)); */ \
             return true; \
         } \
     } while (0)
@@ -401,6 +403,7 @@ static bool _match_here(char *txt, char *pat, struct re_capture *cap) {
                 if (*pat == '*' || *pat == '+') {
                     // 'zero or more': '*' and '+'
                     while (*txt != '\0' && _match_char(*txt, ph, pt)) {
+                        // log_debug("'zero or more': '*' and '+'");
                         txt++;
                     }
                     pat++;
@@ -701,11 +704,11 @@ void test_print_stream() {
     //     struct js_heap heap = {0};
     //     struct js_value val = _random_js_value(&heap, vt_object, 2);
     //     struct print_stream out = {.type = string_stream};
-    //     js_serialize_value(&out, todump_style, &val);
+    //     js_serialize_value(&out, todump_style, &val, 0);
     //     putsz_to_stream(&out, "\n\n");
-    //     js_serialize_value(&out, tojson_style, &val);
+    //     js_serialize_value(&out, tojson_style, &val, 0);
     //     putsz_to_stream(&out, "\n\n");
-    //     js_serialize_value(&out, tostring_style, &val);
+    //     js_serialize_value(&out, tostring_style, &val, 0);
     //     putsz_to_stream(&out, "\n\n\n\n");
     //     // puts(out.base);
     //     free_stream(&out);
@@ -754,8 +757,8 @@ void test_regex() {
         {"abc123def456ghi789", "[^\\d\\o\\p\\q"},
         {"abc123def456ghi789", "[3-5]"},
         {"aaabbbccc", "b"},
-        {"aaabbbccc", "a*"},
-        {"aaabbbccc", "b*"},
+        {"aaabbbccc", "a*"}, // matched at beginning following greeding rule, result is "aaa"
+        {"aaabbbccc", "b*"}, // also matched at beginning, result is ""
         {"aaabbbccc", "a+"},
         {"aaabbbccc", "b+"},
         {"bbbccc", "a?b"},
@@ -765,16 +768,15 @@ void test_regex() {
         {"asdf", "a(sd)z"},
         {"filename.ext", "[^\\.]+$"},
         {"filename.ext", "[^.]+$"},
+        {"lK98hBgmK*tNNkYt5E3fv", "[0-9a-zA-Z]+"},
+        {"lK98hBgmK*tNNkYt5E3fv", "^[0-9a-zA-Z]+"},
+        {"lK98hBgmK*tNNkYt5E3fv", "[0-9a-zA-Z]+$"},
     };
     // for (;;) { // test memory leak
     for (size_t i = 0; i < countof(samples); i++) {
-        int spaces[2] = {
-            30 - (int)strlen(samples[i][0]),
-            30 - (int)strlen(samples[i][1]),
-        };
         struct re_capture capture = {0};
-        printf("\"%s\"%*s\"%s\"%*s%s\n", samples[i][0], spaces[0], "", samples[i][1], spaces[1], "",
-            re_match(samples[i][0], samples[i][1], &capture) ? "\x1b[32mtrue\x1b[0m" : "\x1b[31mfalse\x1b[0m");
+        printf("\"%s\", \"%s\": %s\n", samples[i][0], samples[i][1],
+            re_match(samples[i][0], samples[i][1], &capture) ? "true" : "false");
         _print_capture(&capture);
         re_free_capture(&capture);
     }

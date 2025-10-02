@@ -1,3 +1,13 @@
+# 2025-10-02
+
+New std function `map` `reduce` `filter`
+
+New std functions `tolower` `toupper` `ceil` `floor` `trunc` `round` `modf`
+
+Fixed logical xor error in regular expression `_match_char()`
+
+`exec` only in posix, and added `fork` in posix
+
 # 2025-09-11
 
 New std function `spawn`
@@ -48,7 +58,7 @@ Simplified bind operator
 
 # 2025-07-16
 
-Reconstructed `make.c`, now support static build, and you can combine `debug` `release` with `static` `shared` as you wish. Added a new value type `vt_c_value`, which is managed, and can be notified on garbage collection, in your C code you can handle your custom data with it, see <https://github.com/shajunxing/banana-ui> for example.
+Reconstructed `make.c`, now support static build, and you can combine `debug` `release` with `static` `shared` as you wish. Added a new value type `vt_c_data`, which is managed, and can be notified on garbage collection, in your C code you can handle your custom data with it, see <https://github.com/shajunxing/banana-ui> for example.
 
 More std functions.
 

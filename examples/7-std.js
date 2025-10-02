@@ -1,20 +1,19 @@
-// test std functions
 // print(length("foo"));
 // print(length([ 1, 2, 3 ]));
 // try {
 //     print(length());
 // } catch (err) {
-//     print(tojson(err));
+//     print(err);
 // }
 // try {
 //     print(length(null, true, false));
 // } catch (err) {
-//     print(tojson(err));
+//     print(err);
 // }
 // try {
 //     print(length(1.2));
 // } catch (err) {
-//     print(tojson(err));
+//     print(err);
 // }
 
 // let obj = {"foo": true, "bar": false};
@@ -31,17 +30,17 @@
 // try {
 //     print(input("a", "b", "c", "d"));
 // } catch(err) {
-//     print(tojson(err));
+//     print(err);
 // }
 // try {
 //     print(input(123));
 // } catch(err) {
-//     print(tojson(err));
+//     print(err);
 // }
 // try {
 //     print(input("prompt: "));
 // } catch(err) {
-//     print(tojson(err));
+//     print(err);
 // }
 
 // print(argc, length(argv), tojson(argv));
@@ -53,7 +52,7 @@
 //         cd(dir);
 //         print(cwd());
 //     } catch (err) {
-//         print(tojson(err));
+//         print(err);
 //     }
 // }
 // cd(wd);
@@ -71,7 +70,7 @@
 //         rd(dir);
 //         print(dir, exists(dir) ? "is exist" : "not exist");
 //     } catch (err) {
-//         print(tojson(err));
+//         print(err);
 //     }
 // }
 
@@ -134,7 +133,7 @@
 //     print(read(fp));
 //     close(fp);
 // } catch (err) {
-//     print(tojson(err));
+//     print(err);
 // }
 // try {
 //     open(fname, "a", function(fp) {
@@ -143,7 +142,7 @@
 //         throw "Boom!";
 //     });
 // } catch (err) {
-//     print(tojson(err));
+//     print(err);
 // }
 // open(fname, function(fp) { read(fp, print); });
 // rm(fname);
@@ -160,7 +159,7 @@
 //         throw "Boom!";
 //     });
 // } catch (err) {
-//     print(tojson(err));
+//     print(err);
 // }
 // let cmd = os == "windows" ? "dir /b" : "ls -l";
 // print(read(cmd, true));
@@ -187,7 +186,7 @@
 //         print(pop(arr));
 //         print(tojson(arr));
 //     } catch (err) {
-//         print(tojson(err));
+//         print(err);
 //     }
 //     gc();
 // }
@@ -279,20 +278,28 @@
 // print(null, true, false, 3.14, "hello", os, [], {}, function() {}, print);
 // print(tostring(null), tostring(true), tostring(false), tostring(3.14), tostring("hello"), tostring(os), tostring([]), tostring({}), tostring(function() {}), tostring(print));
 // print(todump(null), todump(true), todump(false), todump(3.14), todump("hello"), todump(os), todump([]), todump({}), todump(function() {}), todump(print));
-// print(tojson({"list" : [ null, true, false, 3.14, "hello", os, [], {}, function() {}, print ]}));
+// print(tojson({"list" : [ null, true, false, 3.14, "hello", os, [], {}, function() {}, print ], "map" : {"a" : function() {}, "b" : print}}));
+// print("hello\n\tworld", [ "hello\n\tworld", [ "hello\n\tworld" ] ], {"foo" : "hello\n\tworld", "bar" : {"qux" : "hello\n\tworld"}});
+// (function(a, b) {
+//     let c = 3;
+//     dump_vm();
+// })(1, 2);
+// gc();
+// dump_vm();
+
 // for (;;) {
 //     try {
 //         print(tonumber(input("Enter a number: ")));
 //         break;
 //     } catch (err) {
-//         print(tojson(err));
+//         print(err);
 //     }
 // }
 
 // try {
 //     exit("foo");
 // } catch (err) {
-//     print(tojson(err));
+//     print(err);
 // }
 // exit(12.3); // to show exit code, in posix "echo $?" and in windows "echo %errorlevel%"
 
@@ -301,13 +308,21 @@
 // "filename.ext"::match("[^\\.]+$")::tojson()::print();
 // "filename.ext"::match("[^\.]+$")::tojson()::print();
 // "filename.ext"::match("[^.]+$")::tojson()::print();
+// "lK98hBgmK*tNNkYt5E3fv"::match("[0-9a-zA-Z]+")::tojson()::print();
+// "lK98hBgmK*tNNkYt5E3fv"::match("^[0-9a-zA-Z]+")::tojson()::print();
+// "lK98hBgmK*tNNkYt5E3fv"::match("[0-9a-zA-Z]+$")::tojson()::print();
+
+// let pairs = [
+//     [ "aaabbbccc", "a*" ],
+//     [ "aaabbbccc", "b*" ]
+// ];
+// for (let pair of pairs) {
+//     print(match(pair[0], pair[1])::tojson());
+// }
 
 // system("exit 123")::print();
 
 // whoami()::print();
-
-// exec("cl.exe");
-// exec("ping.exe", "www.baidu.com", "-t");
 
 // (whoami() == "root" || exec("su", "-c", argv::join(" ")));
 // whoami()::print();
@@ -345,8 +360,84 @@
 // let end = time();
 // print(end - begin);
 
-// sleep(3.6, function(remained){
-//     write(stdout, format("\rTime remained: ${0}", tostring(remained)));
-// }, 0.3);
+// sleep(6.6, function(remained){
+//     write(stdout, format("\rTime remained: ${0}", remained::trunc()::tostring()));
+// }, 1);
 // print();
 
+// let s = "`abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`1234567890-=~!@#$%^&*()_+[]\\{}|;':\",./<>?你好，世界。";
+// let sl = tolower(s);
+// let su = toupper(s);
+// print(s);
+// print(sl);
+// print(su);
+
+// function replace(str, pat, rep) {
+//     let m = str::match(pat);
+//     print(m::tojson());
+//     return format(rep, ...m);
+// }
+// print(replace("Hello World", "([^\\s]+)\\s([^\\s]+)", "~~${1}~~${2}~~"));
+
+// print("ceil");
+// print(ceil(+2.4)); // = +3.0
+// print(ceil(-2.4)); // = -2.0
+// print(ceil(-0.0)); // = -0.0
+// print("floor");
+// print(floor(+2.7)); // = +2.0
+// print(floor(-2.7)); // = -3.0
+// print(floor(-0.0)); // = -0.0
+// print("trunc");
+// print(trunc(+2.7)); // = +2.0
+// print(trunc(-2.7)); // = -2.0
+// print(trunc(-0.0)); // = -0.0
+// print("round");
+// print(round(+2.3)); // = +2.0
+// print(round(+2.5)); // = +3.0
+// print(round(+2.7)); // = +3.0
+// print(round(-2.3)); // = -2.0
+// print(round(-2.5)); // = -3.0
+// print(round(-2.7)); // = -3.0
+// print(round(-0.0)); // = -0.0
+// print("modf");
+// modf(123.45)::tojson()::print();
+
+// let pid = fork();
+// print(pid);
+// if (pid == 0) {
+//     exec("xclock");
+// } else {
+//     print("parent process exit");
+// }
+
+let arr = [ null, 1.2, null, true, null, "Hello", null, {"Name" : "John"}, null ];
+try {
+    arr::filter(function(elem) { throw "Boom!"; });
+} catch (err) {
+    err::todump()::print();
+}
+try {
+    arr::filter(function(elem) { return null; });
+} catch (err) {
+    err::todump()::print();
+}
+try {
+    arr::map(function(elem) { throw "Boom!"; });
+} catch (err) {
+    err::todump()::print();
+}
+try {
+    arr::reduce(function(elem) { throw "Boom!"; });
+} catch (err) {
+    err::todump()::print();
+}
+[] ::filter(function(elem) { return elem != null; })::print();
+[] ::map(tostring)::print();
+function add(a, b) {
+    return a + b;
+}
+[] ::reduce(add)::print();
+[1] ::reduce(add)::print();
+[1, 2] ::reduce(add)::print();
+[1, 2, 3] ::reduce(add)::print();
+arr::filter(function(elem) { return elem != null; })::map(tostring)::reduce(add)::print();

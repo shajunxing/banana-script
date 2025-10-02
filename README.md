@@ -58,7 +58,7 @@ This project is compatible with C99, and compilation environments are msvc/gcc/m
 Project follows "minimal dependency" rule, only including necessary headers. Also, there's only one-way referencing between modules, with no circular referencing. Here’s modules' dependencies and how they work:
 
 ```
-js-common   js-data     js-vm       js-syntax   js-std
+js-common   js-data     js-vm       js-syntax   js-std-xx
     <-----------
                 <-----------
                             <-----------
@@ -69,7 +69,7 @@ js-common   js-data     js-vm       js-syntax   js-std
 - `js-data`: Data types and garbage collection, you can even use this module separately in C projects to manipulate high-level data structures with GC functionality, see <https://github.com/shajunxing/banana-cvar>.
 - `js-vm`: Bytecode virtual machine, compiled separately to get an interpreter with minimal footprint without source code parsing.
 - `js-syntax`: Lexical parsing and syntax parsing, which converts source code into bytecode.
-- `js-std`: Reference implementation of commonly used standard functions, which can be used as reference for writing C functions.
+- `js-std-xx`: Reference implementation of commonly used standard functions, which can be used as reference for writing C functions.
 
 All values are `struct js_value` type, you can create by `js_...()` functions, `...` is value type, and you can read c values direct from this struct, see definition in `js_data.h`. DON'T directly modify their content, if you want to get different values, create new one. Compound types `array` `object` can be operated by `js_..._array_...()` `js_..._object_...()` functions.
 
@@ -77,7 +77,7 @@ C functions must be `typedef struct js_result (*js_c_function_type)(struct js_vm
 
 ## Standard Library
 
-Includes most commonly used functions of language and os level. You can understand them as 'reference implementations', with no guarantee that they will remain unchanged in future. For more info, check out <https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js> and <https://github.com/shajunxing/banana-script/blob/main/src/js-std.c>.
+Includes most commonly used functions of language and os level. You can understand them as 'reference implementations', with no guarantee that they will remain unchanged in future. For more info, check out <https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js>.
 
 Naming rules:
 
@@ -105,16 +105,19 @@ Language:
 |n ceil(n val)|Same as C `ceil`.|
 |dump_vm()|Print vm status.|
 |b endswith(s str, s sub, s ...)|Determine whether string ends with any of sub strings.|
+|[* ...] filter([* ...] arr, b func(* elem))|For each element of `arr`, as argument, call `func`, if returns `true`, this element will be appended to result array.|
 |n floor(n val)|Same as C `floor`.|
 |s format(s fmt, * ...)|Format with `fmt`, there are two types of replacement field, first is `${foo}` where `foo` is variable name, second is `${0}` `${1}` `${2}` ... where numbers indicates which argument followed by, starts from 0, and will be represented as `tostring()` style.|
 |gc()|Garbage collection.|
 |s join([s ...] arr, s sep)|Join string array with seperator.|
 |n length([* ...]/{* ...}/s val)|Returns array/object length or string length in bytes.|
-|[s ...]/- match(s text, s pattern)|Regular expression matching. If matched returns all captures, otherwise returns `null`. Currently supports `^` `$` `()` `\d` `\s` `\w` `.` `[]` `*` `+` `?`.|
+|[* ...] map([* ...] arr, * func(* elem))|For each element of `arr`, as argument, call `func`, returned value will be appended to result array.|
+|[s ...]/- match(s text, s pattern)|Regular expression matching. If matched returns all captures, otherwise returns `null`. Currently supports `^` `$` `()` `\d` `\s` `\w` `.` `[]` `-` `*` `+` `?`.|
 |[n, n] modf(n val)|Same as C `modf`, returns array of integral and fractional parts.|
 |n natural_compare(s lhs, s rhs)|Natural-compare algorithm, used by `sort()`.|
 |* pop([* ...] arr)|Removes array's last element and returns.|
 |push([* ...] arr, * elem)|Add element to end of array.|
+|* reduce([* ...] arr, * func(* lhs, * rhs))|Initial return value is `null`. For each element of `arr`, if is first element, replace return value, or call `func` with return value as `lhs` and element as `rhs` and replace return value with it's return value.|
 |n round(n val)|Same as C `round`.|
 |[* ...] sort([* ...] arr, n comp(* lhs, * rhs))|Same as C `qsort()`, array will be sorted and also be returned.|
 |[s ...] split(s str, [s sep])|Split string into array. If `sep` is omitted, returns array containing original string as single element. If `sep` is empty, string will be divided into bytes.|
@@ -139,9 +142,10 @@ Operating system:
 |s ctime(n time)|Same as C `ctime()`, `time` is unix epoch, which means seconds elapsed since utc 1970-01-01 00:00:00 +0000|
 |s cwd()|Same as POSIX `getcwd()`.|
 |s dirname(s path)|Same as POSIX `dirname()`, returns parent directory of `path`.|
-|exec(s arg, s ...)|Same as POSIX `execvp()`, but first parameter `file` is automatically filled with `argv[0]`.|
+|exec(s arg, s ...)|Same as POSIX `execvp()`, but first parameter `file` is automatically filled with `argv[0]`. POSIX only.|
 |b exists(s path)|Checks if file `path` exists.|
 |exit(n status)|Same as C `exit()`, `status` will be cast to integer.|
+|n fork()|Same as POSIX `fork()`. POSIX only.|
 |s input([s prompt])|Prompt (optional) and accepts line of user input. If you need number, use `tonumber()` to convert.|
 |ls(s dir, cb(s fname, b isdir))|List directory and with each entry call `cb`.|
 |md(s path)|Same as POSIX `mkdir()`|

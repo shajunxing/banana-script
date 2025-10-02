@@ -203,6 +203,11 @@ typedef struct js_result (*js_c_function_type)(struct js_vm *, uint16_t, struct 
 shared struct js_value js_c_function(js_c_function_type); // move from js-data to clarify function type
 shared void js_free_vm(struct js_vm *);
 
+// macros for std functions
+
+#define js_declare_std_function(name) js_declare_variable_sz(vm, #name, js_c_function(js_std_##name))
+#define js_return_null() js_return(js_null())
+
 #ifdef DEBUG
 
 shared void test_vm_structure_size();

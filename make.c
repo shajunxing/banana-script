@@ -32,18 +32,21 @@ void build() {
     if (mtime(o("js-syntax")) < mtime(c("js-syntax"), h("js-syntax"), h("js-vm"), h("js-data"), h("js-common"))) {
         cc_lib(o("js-syntax"), c("js-syntax"));
     }
-    if (mtime(o("js-std")) < mtime(c("js-std"), h("js-std"), h("js-vm"), h("js-data"), h("js-common"))) {
-        cc_lib(o("js-std"), c("js-std"));
+    if (mtime(o("js-std-lang")) < mtime(c("js-std-lang"), h("js-std-lang"), h("js-vm"), h("js-data"), h("js-common"))) {
+        cc_lib(o("js-std-lang"), c("js-std-lang"));
     }
-    if (mtime(o("js")) < mtime(c("js"), h("js-std"), h("js-syntax"), h("js-vm"), h("js-data"), h("js-common"))) {
+    if (mtime(o("js-std-os")) < mtime(c("js-std-os"), h("js-std-os"), h("js-vm"), h("js-data"), h("js-common"))) {
+        cc_lib(o("js-std-os"), c("js-std-os"));
+    }
+    if (mtime(o("js")) < mtime(c("js"), h("js-std-lang"), h("js-std-os"), h("js-syntax"), h("js-vm"), h("js-data"), h("js-common"))) {
         cc_exe(o("js"), c("js"));
     }
     await();
-    if (mtime(l("js")) < mtime(o("js-common"), o("js-data"), o("js-vm"), o("js-syntax"), o("js-std"))) {
+    if (mtime(l("js")) < mtime(o("js-common"), o("js-data"), o("js-vm"), o("js-syntax"), o("js-std-lang"), o("js-std-os"))) {
         if (shared) {
-            ld_lib(d("js"), o("js-common") " " o("js-data") " " o("js-vm") " " o("js-syntax") " " o("js-std"));
+            ld_lib(d("js"), o("js-common") " " o("js-data") " " o("js-vm") " " o("js-syntax") " " o("js-std-lang") " " o("js-std-os"));
         } else {
-            ld_lib(l("js"), o("js-common") " " o("js-data") " " o("js-vm") " " o("js-syntax") " " o("js-std"));
+            ld_lib(l("js"), o("js-common") " " o("js-data") " " o("js-vm") " " o("js-syntax") " " o("js-std-lang") " " o("js-std-os"));
         }
     }
     await();

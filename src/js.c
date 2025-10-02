@@ -14,7 +14,8 @@ You should have received a copy of the GNU General Public License along with thi
     #include <readline/readline.h>
 #endif
 #include "js-syntax.h"
-#include "js-std.h"
+#include "js-std-lang.h"
+#include "js-std-os.h"
 
 static char *_make_filename(char *source_filename, const char *ext, char *binary_filename) {
     if (binary_filename) {
@@ -50,7 +51,6 @@ struct js_vm vm = {0};
 
 static int _repl() {
     struct js_source line = {0};
-    js_declare_std_functions(&vm);
     printf("Banana Script REPL environment. Copyright (C) 2024-2025 ShaJunXing\n");
     printf("Type '/?' for more information.\n\n");
     for (;;) {
@@ -252,6 +252,8 @@ int main(int argc, char *argv[]) {
     // #endif
     js_std_argc = argc;
     js_std_argv = argv;
+    js_declare_std_lang_functions(&vm);
+    js_declare_std_os_functions(&vm);
     if (argc == 1) { // no arguments, enter repl
         return _repl();
     }
@@ -309,7 +311,6 @@ int main(int argc, char *argv[]) {
         buffer_push(source_filenames.base, source_filenames.length, source_filenames.capacity, argv[i]);
     }
     // do actions
-    js_declare_std_functions(&vm);
     if (source_filenames.base != NULL) {
         for (size_t i = 0; i < source_filenames.length; i++) {
             if (!js_read_source_file(&source, source_filenames.base[i])) {

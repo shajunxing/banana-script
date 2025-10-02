@@ -317,7 +317,7 @@ struct js_value js_scripture_sz(const char *sz) {
 
 // create an empty skeleton value of managed type, and hook it to heap
 struct js_value js_alloc_managed(struct js_heap *heap, enum js_value_type type) {
-    enforce(type == vt_string || type == vt_array || type == vt_object || type == vt_function || type == vt_c_value);
+    enforce(type == vt_string || type == vt_array || type == vt_object || type == vt_function || type == vt_c_data);
     struct js_value ret = {.type = type};
     ret.managed = alloc(struct js_managed_value, 1);
     ret.managed->type = type;
@@ -344,15 +344,15 @@ struct js_value js_string_sz(struct js_heap *heap, const char *str) {
 
 // mostly for formatted error messages
 struct js_value js_string_f(struct js_heap *heap, const char *fmt, ...) {
-//     struct js_value ret = {.type = vt_string};
-//     ret.managed = alloc(struct js_managed_value, 1);
-//     ret.managed->type = vt_string;
-//     va_list args;
-//     va_start(args, fmt);
-//     string_buffer_append_fv(ret.managed->string.base, ret.managed->string.length, ret.managed->string.capacity, fmt, args);
-//     va_end(args);
-//     buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
-//     return ret;
+    //     struct js_value ret = {.type = vt_string};
+    //     ret.managed = alloc(struct js_managed_value, 1);
+    //     ret.managed->type = vt_string;
+    //     va_list args;
+    //     va_start(args, fmt);
+    //     string_buffer_append_fv(ret.managed->string.base, ret.managed->string.length, ret.managed->string.capacity, fmt, args);
+    //     va_end(args);
+    //     buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
+    //     return ret;
     struct print_stream out = {.type = string_stream};
     va_list args;
     va_start(args, fmt);
@@ -430,14 +430,14 @@ bool js_is_function(struct js_value *value) {
     return value->type == vt_function || value->type == vt_c_function;
 }
 
-struct js_value js_c_value(struct js_heap *heap, void *data, void (*mark)(void *), void (*sweep)(void *)) {
-    struct js_value ret = js_alloc_managed(heap, vt_c_value);
-    // struct js_value ret = {.type = vt_c_value};
+struct js_value js_c_data(struct js_heap *heap, void *data, void (*mark)(void *), void (*sweep)(void *)) {
+    struct js_value ret = js_alloc_managed(heap, vt_c_data);
+    // struct js_value ret = {.type = vt_c_data};
     // ret.managed = alloc(struct js_managed_value, 1);
-    // ret.managed->type = vt_c_value;
-    ret.managed->c_value.data = data;
-    ret.managed->c_value.mark = mark;
-    ret.managed->c_value.sweep = sweep;
+    // ret.managed->type = vt_c_data;
+    ret.managed->c_data.data = data;
+    ret.managed->c_data.mark = mark;
+    ret.managed->c_data.sweep = sweep;
     // buffer_push(heap->base, heap->length, heap->capacity, ret.managed);
     return ret;
 }
@@ -480,11 +480,11 @@ void js_mark(struct js_value *value) {
             });
         }
         break;
-    case vt_c_value:
+    case vt_c_data:
         if (!value->managed->in_use) {
             value->managed->in_use = 1;
-            if (value->managed->c_value.mark) {
-                value->managed->c_value.mark(value->managed->c_value.data);
+            if (value->managed->c_data.mark) {
+                value->managed->c_data.mark(value->managed->c_data.data);
             }
         }
         break;
@@ -514,9 +514,9 @@ void _free_managed(struct js_managed_value *managed) {
         free(managed);
         break;
     }
-    case vt_c_value: {
-        if (managed->c_value.sweep) {
-            managed->c_value.sweep(managed->c_value.data);
+    case vt_c_data: {
+        if (managed->c_data.sweep) {
+            managed->c_data.sweep(managed->c_data.data);
         }
         free(managed);
         break;
@@ -545,60 +545,69 @@ void js_sweep(struct js_heap *heap) {
     heap->capacity = new_capacity;
 }
 
-void js_serialize_managed_value(struct print_stream *out, enum serialized_style to, struct js_managed_value *managed) {
+static bool _json_unprintable(enum js_value_type type) {
+    return type == vt_undefined || type == vt_function || type == vt_c_function || type == vt_c_data;
+}
+
+static void _serialize_string(struct print_stream *out, enum serialized_style to, char *base, size_t length, size_t depth) {
+    bool zero_depth_tostring = (to == tostring_style && depth == 0);
+    putsz_to_stream(out, zero_depth_tostring ? "" : (to == tojson_style ? "\"" : "'"));
+    if (zero_depth_tostring) {
+        puts_to_stream(out, base, length);
+    } else {
+        escape_to_stream(out, base, length);
+    }
+    putsz_to_stream(out, zero_depth_tostring ? "" : (to == tojson_style ? "\"" : "'"));
+}
+
+void js_serialize_managed_value(struct print_stream *out, enum serialized_style to, struct js_managed_value *managed, size_t depth) {
     bool first;
     switch (managed->type) {
     case vt_string:
-        putsz_to_stream(out, to == tostring_style ? "" : "\"");
-        if (to == tostring_style) {
-            puts_to_stream(out, managed->string.base, managed->string.length);
-        } else {
-            escape_to_stream(out, managed->string.base, managed->string.length);
-        }
-        putsz_to_stream(out, to == tostring_style ? "" : "\"");
+        _serialize_string(out, to, managed->string.base, managed->string.length, depth);
         break;
     case vt_array:
-        if (to == todump_style) {
-            putsz_to_stream(out, "[");
-            first = true;
-            js_list_for_each(managed->array.base, managed->array.length, _, i, v, {
-                first ? (first = false) : putsz_to_stream(out, ",");
-                printf_to_stream(out, "%zu:", i);
-                js_serialize_value(out, to, v);
-            });
-            putsz_to_stream(out, "]");
-        } else if (to == tojson_style) {
+        if (to == tojson_style) {
             putsz_to_stream(out, "[");
             first = true;
             for (size_t i = 0; i < managed->array.length; i++) {
                 first ? (first = false) : putsz_to_stream(out, ",");
                 struct js_value elem = js_get_managed_array_element(managed, i);
-                if (elem.type == vt_undefined || elem.type == vt_function || elem.type == vt_c_function || elem.type == vt_c_value) {
+                if (_json_unprintable(elem.type)) {
                     // in array, un-jsonizables presented as null
                     putsz_to_stream(out, "null");
                 } else {
-                    js_serialize_value(out, to, &elem);
+                    js_serialize_value(out, to, &elem, depth + 1);
                 }
             }
+            putsz_to_stream(out, "]");
+        } else if (to == todump_style || (to == tostring_style && depth == 0)) {
+            putsz_to_stream(out, "[");
+            first = true;
+            js_list_for_each(managed->array.base, managed->array.length, _, i, v, {
+                first ? (first = false) : putsz_to_stream(out, ",");
+                printf_to_stream(out, "%zu:", i);
+                js_serialize_value(out, to, v, depth + 1);
+            });
             putsz_to_stream(out, "]");
         } else {
             putsz_to_stream(out, "<array>");
         }
         break;
     case vt_object:
-        if (to == todump_style || to == tojson_style) {
+        if (to == todump_style || to == tojson_style || (to == tostring_style && depth == 0)) {
             putsz_to_stream(out, "{");
             first = true;
             js_map_for_each(managed->object.base, _, managed->object.capacity, k, kl, v, {
-                if (to == tojson_style && (v->type == vt_undefined || v->type == vt_function || v->type == vt_c_function || v->type == vt_c_value)) {
+                if (to == tojson_style && _json_unprintable(v->type)) {
                     continue;
                 }
                 first ? (first = false) : putsz_to_stream(out, ",");
-                putsz_to_stream(out, todump_style ? "'" : "\"");
+                putsz_to_stream(out, to == tojson_style ? "\"" : "'");
                 escape_to_stream(out, k, kl);
-                putsz_to_stream(out, todump_style ? "'" : "\"");
+                putsz_to_stream(out, to == tojson_style ? "\"" : "'");
                 putsz_to_stream(out, ":");
-                js_serialize_value(out, to, v);
+                js_serialize_value(out, to, v, depth + 1);
             });
             putsz_to_stream(out, "}");
         } else {
@@ -612,18 +621,18 @@ void js_serialize_managed_value(struct print_stream *out, enum serialized_style 
             js_map_for_each(managed->function.closure.base, _, managed->function.closure.capacity, k, kl, v, {
                 first ? (first = false) : putsz_to_stream(out, ",");
                 printf_to_stream(out, "%.*s:", (int)kl, k);
-                js_serialize_value(out, to, v);
+                js_serialize_value(out, to, v, depth + 1);
             });
             putsz_to_stream(out, "}>");
         } else if (to == tostring_style) {
             putsz_to_stream(out, "<function>");
         }
         break;
-    case vt_c_value:
+    case vt_c_data:
         if (to == todump_style) {
-            printf_to_stream(out, "<c_value %p %p %p>", managed->c_value.data, managed->c_value.mark, managed->c_value.sweep);
+            printf_to_stream(out, "<c_data %p %p %p>", managed->c_data.data, managed->c_data.mark, managed->c_data.sweep);
         } else if (to == tostring_style) {
-            putsz_to_stream(out, "<c_value>");
+            putsz_to_stream(out, "<c_data>");
         }
         break;
     default:
@@ -632,7 +641,7 @@ void js_serialize_managed_value(struct print_stream *out, enum serialized_style 
 }
 
 // DON'T use '_serialize()', possible confilct with internal functions
-void js_serialize_value(struct print_stream *out, enum serialized_style to, struct js_value *value) {
+void js_serialize_value(struct print_stream *out, enum serialized_style to, struct js_value *value, size_t depth) {
     switch (value->type) {
     case vt_undefined:
         if (to == todump_style || to == tojson_style) {
@@ -649,13 +658,7 @@ void js_serialize_value(struct print_stream *out, enum serialized_style to, stru
         printf_to_stream(out, "%lg", value->number);
         break;
     case vt_scripture:
-        putsz_to_stream(out, to == todump_style ? "'" : (to == tojson_style ? "\"" : ""));
-        if (to == tostring_style) {
-            puts_to_stream(out, value->scripture.base, value->scripture.length);
-        } else {
-            escape_to_stream(out, value->scripture.base, value->scripture.length);
-        }
-        putsz_to_stream(out, to == todump_style ? "'" : (to == tojson_style ? "\"" : ""));
+        _serialize_string(out, to, value->scripture.base, value->scripture.length, depth);
         break;
     case vt_c_function:
         if (to == todump_style) {
@@ -668,22 +671,17 @@ void js_serialize_value(struct print_stream *out, enum serialized_style to, stru
     case vt_array:
     case vt_object:
     case vt_function:
-    case vt_c_value:
-        js_serialize_managed_value(out, to, value->managed);
+    case vt_c_data:
+        js_serialize_managed_value(out, to, value->managed, depth);
         break;
     default:
         fatal("Unknown value type %d", value->type);
     }
 }
 
-void js_dump_managed_value(struct js_managed_value *managed) { // also used by heap dump
-    struct print_stream out = {.type = file_stream, .fp = stdout};
-    js_serialize_managed_value(&out, todump_style, managed);
-}
-
 void js_dump_value(struct js_value *value) {
     struct print_stream out = {.type = file_stream, .fp = stdout};
-    js_serialize_value(&out, todump_style, value);
+    js_serialize_value(&out, todump_style, value, 0);
 }
 
 bool js_is_string(struct js_value *value) {
@@ -857,8 +855,8 @@ static struct js_value _random_js_value(struct js_heap *heap, enum js_value_type
         return ret;
     case vt_c_function:
         return (struct js_value){.type = vt_c_function, .c_function = (void *)(intptr_t)rand()};
-    case vt_c_value:
-        return js_c_value(heap, random_sz_dynamic(), NULL, free);
+    case vt_c_data:
+        return js_c_data(heap, random_sz_dynamic(), NULL, free);
     default:
         fatal("Unknown value type %u", type);
     }

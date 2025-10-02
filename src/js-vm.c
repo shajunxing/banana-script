@@ -271,16 +271,17 @@ void js_bytecode_dump(struct js_bytecode *bytecode) {
 }
 
 void js_dump_vm(struct js_vm *vm) {
+    struct print_stream out = {.type = file_stream, .fp = stdout};
     printf("heap base=%p length=%zu capacity=%zu\n", vm->heap.base, vm->heap.length, vm->heap.capacity);
     buffer_for_each(vm->heap.base, vm->heap.length, vm->heap.capacity, i, v, {
         printf("    %zu. ", i);
-        js_dump_managed_value(*v);
+        js_serialize_managed_value(&out, todump_style, *v, 0);
         printf("\n");
     });
     // printf("globals base=%p length=%u capacity=%u\n", vm->globals.base, vm->globals.length, vm->globals.capacity);
     // js_map_for_each(vm->globals.base, _, vm->globals.capacity, k, kl, v, {
     //     printf("    %.*s = ", (int)kl, k);
-    //     js_dump_value(v);
+    //     js_serialize_value(&out, todump_style, v, 0);
     //     printf("\n");
     // });
     printf("stack base=%p length=%u capacity=%u\n", vm->stack.base, vm->stack.length, vm->stack.capacity);
@@ -290,7 +291,7 @@ void js_dump_vm(struct js_vm *vm) {
         switch (frame->type) {
         case sf_value:
             printf(": ");
-            js_dump_value(&(frame->value));
+            js_serialize_value(&out, todump_style, &(frame->value), 0);
             printf("\n");
             break;
         case sf_block:
@@ -301,20 +302,20 @@ void js_dump_vm(struct js_vm *vm) {
             printf("        locals: base=%p length=%u capacity=%u\n", frame->locals.base, frame->locals.length, frame->locals.capacity);
             js_map_for_each(frame->locals.base, _, frame->locals.capacity, k, kl, v, {
                 printf("            %.*s = ", (int)kl, k);
-                js_dump_value(v);
+                js_serialize_value(&out, todump_style, v, 0);
                 printf("\n");
             });
             printf("        egress: %u\n", frame->egress);
             if (frame->type == sf_function) {
                 printf("        function: %p ", frame->function);
                 if (frame->function != NULL) {
-                    js_dump_managed_value(frame->function);
+                    js_serialize_managed_value(&out, todump_style, frame->function, 0);
                 }
                 printf("\n");
                 printf("        arguments: base=%p length=%u capacity=%u index=%u\n", frame->arguments.base, frame->arguments.length, frame->arguments.capacity, frame->arguments.index);
                 buffer_for_each(frame->arguments.base, frame->arguments.length, frame->arguments.capacity, i, v, {
                     printf("            %u. ", i);
-                    js_dump_value(v);
+                    js_serialize_value(&out, todump_style, v, 0);
                     printf("\n");
                 });
             } else {
@@ -487,7 +488,7 @@ static void _stack_push_value(struct js_vm *vm, struct js_value value) {
     _stack_push(vm, (struct js_stack_frame){.type = sf_value, .value = value});
 }
 
-static const char *const _typeof_table[] = {"undefined", "null", "boolean", "number", "string", "string", "string", "array", "object", "function", "function"};
+static const char *const _typeof_table[] = {"undefined", "null", "boolean", "number", "string", "string", "string", "array", "object", "function", "function", "c_data"};
 
 static struct js_value *_get_arguments_base(struct js_vm *vm) {
     struct js_stack_frame *frame = _stack_peek(vm, 0);

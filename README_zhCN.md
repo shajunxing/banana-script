@@ -58,7 +58,7 @@
 项目遵循“最小依赖”原则，只包含必须的头文件，且模块之间只有单向引用，没有循环引用。模块的依赖关系和功能如下：
 
 ```
-js-common   js-data     js-vm       js-syntax   js-std
+js-common   js-data     js-vm       js-syntax   js-std-xx
     <-----------
                 <-----------
                             <-----------
@@ -69,7 +69,7 @@ js-common   js-data     js-vm       js-syntax   js-std
 - `js-data`：数值类型和垃圾回收，你甚至可以在C项目里单独使用该模块操作带GC功能的高级数据结构，参见 <https://github.com/shajunxing/banana-cvar>。
 - `js-vm`：字节码虚拟机，单独编译可得到不带源代码解析功能的最小足迹的解释器。
 - `js-syntax`：词法解析和语法解析，将源代码转化为字节码。
-- `js-std`：一些常用标准函数的参考实现，可用作编写C函数的参考。
+- `js-std-xx`：一些常用标准函数的参考实现，可用作编写C函数的参考。
 
 所有值都是 `struct js_value` 类型，你可以通过 `js_...()` 函数创建，`...` 是值类型，你可以直接从这个结构体中读取 C 值，参见 `js_data.h` 中的定义。不要直接修改它们，如果你想得到不同的值，就创建新值。复合类型 `array` `object` 可以通过 `js_..._array_...()` `js_..._object_...()` 函数进行操作。
 
@@ -77,7 +77,7 @@ C 函数必须是 `typedef struct js_result (*js_c_function_type)(struct js_vm *
 
 ## 标准库
 
-包括语言级和操作系统级别的最常用功能。可以理解为“参考实现”，不保证在未来保持不变。更多信息请查阅 <https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js> 和 <https://github.com/shajunxing/banana-script/blob/main/src/js-std.c>。
+包括语言级和操作系统级别的最常用功能。可以理解为“参考实现”，不保证在未来保持不变。更多信息请查阅 <https://github.com/shajunxing/banana-script/blob/main/examples/7-std.js>。
 
 命名规则：
 
@@ -105,16 +105,19 @@ C 函数必须是 `typedef struct js_result (*js_c_function_type)(struct js_vm *
 |n ceil(n val)|Same as C `ceil`.|
 |dump_vm()|Print vm status.|
 |b endswith(s str, s sub, s ...)|Determine whether string ends with any of sub strings.|
+|[* ...] filter([* ...] arr, b func(* elem))|For each element of `arr`, as argument, call `func`, if returns `true`, this element will be appended to result array.|
 |n floor(n val)|Same as C `floor`.|
 |s format(s fmt, * ...)|Format with `fmt`, there are two types of replacement field, first is `${foo}` where `foo` is variable name, second is `${0}` `${1}` `${2}` ... where numbers indicates which argument followed by, starts from 0, and will be represented as `tostring()` style.|
 |gc()|Garbage collection.|
 |s join([s ...] arr, s sep)|Join string array with seperator.|
 |n length([* ...]/{* ...}/s val)|Returns array/object length or string length in bytes.|
-|[s ...]/- match(s text, s pattern)|Regular expression matching. If matched returns all captures, otherwise returns `null`. Currently supports `^` `$` `()` `\d` `\s` `\w` `.` `[]` `*` `+` `?`.|
+|[* ...] map([* ...] arr, * func(* elem))|For each element of `arr`, as argument, call `func`, returned value will be appended to result array.|
+|[s ...]/- match(s text, s pattern)|Regular expression matching. If matched returns all captures, otherwise returns `null`. Currently supports `^` `$` `()` `\d` `\s` `\w` `.` `[]` `-` `*` `+` `?`.|
 |[n, n] modf(n val)|Same as C `modf`, returns array of integral and fractional parts.|
 |n natural_compare(s lhs, s rhs)|Natural-compare algorithm, used by `sort()`.|
 |* pop([* ...] arr)|Removes array's last element and returns.|
 |push([* ...] arr, * elem)|Add element to end of array.|
+|* reduce([* ...] arr, * func(* lhs, * rhs))|Initial return value is `null`. For each element of `arr`, if is first element, replace return value, or call `func` with return value as `lhs` and element as `rhs` and replace return value with it's return value.|
 |n round(n val)|Same as C `round`.|
 |[* ...] sort([* ...] arr, n comp(* lhs, * rhs))|Same as C `qsort()`, array will be sorted and also be returned.|
 |[s ...] split(s str, [s sep])|Split string into array. If `sep` is omitted, returns array containing original string as single element. If `sep` is empty, string will be divided into bytes.|
@@ -139,9 +142,10 @@ C 函数必须是 `typedef struct js_result (*js_c_function_type)(struct js_vm *
 |s ctime(n time)|Same as C `ctime()`, `time` is unix epoch, which means seconds elapsed since utc 1970-01-01 00:00:00 +0000|
 |s cwd()|Same as POSIX `getcwd()`.|
 |s dirname(s path)|Same as POSIX `dirname()`, returns parent directory of `path`.|
-|exec(s arg, s ...)|Same as POSIX `execvp()`, but first parameter `file` is automatically filled with `argv[0]`.|
+|exec(s arg, s ...)|Same as POSIX `execvp()`, but first parameter `file` is automatically filled with `argv[0]`. POSIX only.|
 |b exists(s path)|Checks if file `path` exists.|
 |exit(n status)|Same as C `exit()`, `status` will be cast to integer.|
+|n fork()|Same as POSIX `fork()`. POSIX only.|
 |s input([s prompt])|Prompt (optional) and accepts line of user input. If you need number, use `tonumber()` to convert.|
 |ls(s dir, cb(s fname, b isdir))|List directory and with each entry call `cb`.|
 |md(s path)|Same as POSIX `mkdir()`|
@@ -161,6 +165,7 @@ C 函数必须是 `typedef struct js_result (*js_c_function_type)(struct js_vm *
 |n time()|Same as C `time()` but high precision, returns unix epoch.|
 |s whoami()|Get current user name.|
 |write(n fp, s text)</br>write(s fname, s text)</br>write(s fname, b isappend, s text)</br>|Generic writing function for text file, which takes file handle `fp`, or file name `fname`. `isappend` means append mode instead of overwrite mode.|
+
 
 ## 使用该项目的项目
 
