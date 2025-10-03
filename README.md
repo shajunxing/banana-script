@@ -58,7 +58,7 @@ This project is compatible with C99, and compilation environments are msvc/gcc/m
 Project follows "minimal dependency" rule, only including necessary headers. Also, there's only one-way referencing between modules, with no circular referencing. Here’s modules' dependencies and how they work:
 
 ```
-js-common   js-data     js-vm       js-syntax   js-std-xx
+js-common   js-data     js-vm       js-syntax   js-std-...
     <-----------
                 <-----------
                             <-----------
@@ -69,7 +69,7 @@ js-common   js-data     js-vm       js-syntax   js-std-xx
 - `js-data`: Data types and garbage collection, you can even use this module separately in C projects to manipulate high-level data structures with GC functionality, see <https://github.com/shajunxing/banana-cvar>.
 - `js-vm`: Bytecode virtual machine, compiled separately to get an interpreter with minimal footprint without source code parsing.
 - `js-syntax`: Lexical parsing and syntax parsing, which converts source code into bytecode.
-- `js-std-xx`: Reference implementation of commonly used standard functions, which can be used as reference for writing C functions.
+- `js-std-...`: Reference implementation of commonly used standard functions, which can be used as reference for writing C functions.
 
 All values are `struct js_value` type, you can create by `js_...()` functions, `...` is value type, and you can read c values direct from this struct, see definition in `js_data.h`. DON'T directly modify their content, if you want to get different values, create new one. Compound types `array` `object` can be operated by `js_..._array_...()` `js_..._object_...()` functions.
 

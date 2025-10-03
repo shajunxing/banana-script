@@ -58,7 +58,7 @@
 项目遵循“最小依赖”原则，只包含必须的头文件，且模块之间只有单向引用，没有循环引用。模块的依赖关系和功能如下：
 
 ```
-js-common   js-data     js-vm       js-syntax   js-std-xx
+js-common   js-data     js-vm       js-syntax   js-std-...
     <-----------
                 <-----------
                             <-----------
@@ -69,7 +69,7 @@ js-common   js-data     js-vm       js-syntax   js-std-xx
 - `js-data`：数值类型和垃圾回收，你甚至可以在C项目里单独使用该模块操作带GC功能的高级数据结构，参见 <https://github.com/shajunxing/banana-cvar>。
 - `js-vm`：字节码虚拟机，单独编译可得到不带源代码解析功能的最小足迹的解释器。
 - `js-syntax`：词法解析和语法解析，将源代码转化为字节码。
-- `js-std-xx`：一些常用标准函数的参考实现，可用作编写C函数的参考。
+- `js-std-...`：一些常用标准函数的参考实现，可用作编写C函数的参考。
 
 所有值都是 `struct js_value` 类型，你可以通过 `js_...()` 函数创建，`...` 是值类型，你可以直接从这个结构体中读取 C 值，参见 `js_data.h` 中的定义。不要直接修改它们，如果你想得到不同的值，就创建新值。复合类型 `array` `object` 可以通过 `js_..._array_...()` `js_..._object_...()` 函数进行操作。
 
