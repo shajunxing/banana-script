@@ -6,7 +6,21 @@
 
 项目地址：<https://github.com/shajunxing/banana-script>
 
-![REPL](screenshot.png "REPL")
+```
+Banana Script REPL environment. Copyright (C) 2024-2025 ShaJunXing
+Type '/?' for more information.
+
+> print({"foo":true,"bar":[null,false,{"baz":function(a){return function(b){return function(c){return a+b+c;};};}}]}?.bar[2]["baz"]("How ")("are ")("you?"));
+How are you?
+
+> [1, 100, 3, 10, 2]::map(tostring)::sort(natural_compare)::join("-")::tojson()::print();
+"1-2-3-10-100"
+
+> print(format("${0}|${1}|${2}|${3}", ...match("Unknown-14886@noemail.invalid", "^([\\w\\.-]+)\\@([\\w-]+)\\.([a-zA-Z\\w]+)$")));
+Unknown-14886@noemail.invalid|Unknown-14886|noemail|invalid
+
+>
+```
 
 ## 特色
 
@@ -163,6 +177,7 @@ C 函数必须是 `typedef struct js_result (*js_c_function_type)(struct js_vm *
 |n stdout|Same as C `stdout`|
 |n stderr|Same as C `stderr`|
 |n time()|Same as C `time()` but high precision, returns unix epoch.|
+|title(s text)|Set console title. Windows only.|
 |s whoami()|Get current user name.|
 |write(n fp, s text)</br>write(s fname, s text)</br>write(s fname, b isappend, s text)</br>|Generic writing function for text file, which takes file handle `fp`, or file name `fname`. `isappend` means append mode instead of overwrite mode.|
 

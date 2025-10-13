@@ -6,7 +6,21 @@ This article is openly licensed via [CC BY-NC-ND 4.0](https://creativecommons.or
 
 Project Address: <https://github.com/shajunxing/banana-script>
 
-![REPL](screenshot.png "REPL")
+```
+Banana Script REPL environment. Copyright (C) 2024-2025 ShaJunXing
+Type '/?' for more information.
+
+> print({"foo":true,"bar":[null,false,{"baz":function(a){return function(b){return function(c){return a+b+c;};};}}]}?.bar[2]["baz"]("How ")("are ")("you?"));
+How are you?
+
+> [1, 100, 3, 10, 2]::map(tostring)::sort(natural_compare)::join("-")::tojson()::print();
+"1-2-3-10-100"
+
+> print(format("${0}|${1}|${2}|${3}", ...match("Unknown-14886@noemail.invalid", "^([\\w\\.-]+)\\@([\\w-]+)\\.([a-zA-Z\\w]+)$")));
+Unknown-14886@noemail.invalid|Unknown-14886|noemail|invalid
+
+>
+```
 
 ## Features
 
@@ -163,6 +177,7 @@ Operating system:
 |n stdout|Same as C `stdout`|
 |n stderr|Same as C `stderr`|
 |n time()|Same as C `time()` but high precision, returns unix epoch.|
+|title(s text)|Set console title. Windows only.|
 |s whoami()|Get current user name.|
 |write(n fp, s text)</br>write(s fname, s text)</br>write(s fname, b isappend, s text)</br>|Generic writing function for text file, which takes file handle `fp`, or file name `fname`. `isappend` means append mode instead of overwrite mode.|
 
@@ -476,3 +491,76 @@ Add '::' after using AST, have to use AST, top-down mechanism cannot pass lvalue
 Better remove `delete` operator, because it's variable modification action is at runtime, "if (...) { delete ...; }", but variable creating is at compile time? or runtime? "if (...) { let ...; }", if using AST to change variables visitation from hashmap to array? No, `delete` cannot be removed, because an unexistance variable's scope cannot be determined, for example, `let a = 10; {a = null; /* a is deleted */ a = 20; /* now where is a? in this scope or parent scope? */ }`
 
 C functions have no closure, because they are always static, not dynamically created, so they don't have creation scope, unlike lua, lua's purpose is only for saving data across function call.
+
+Known issue:
+
+```
+function doit(func) {
+    func();
+}
+let a = 1;
+doit(function() {
+    let b = 2;
+    doit(function() {
+        let c = 3;
+        doit(function() {
+            print(a, b, c);
+        });
+    });
+});
+function outer() {
+    print(a, b, c);
+}
+try {
+    doit(function() {
+        let b = 2;
+        doit(function() {
+            let c = 3;
+            doit(outer); // TODO: a b c are reachable?
+        });
+    });
+} catch (err) {
+    print(err);
+}
+try {
+    doit(function() {
+        let b = 2;
+        doit(function() {
+            let c = 3;
+            let inner = outer;
+            doit(inner); // TODO: a b c are reachable?
+        });
+    });
+} catch (err) {
+    print(err);
+}
+```
+
+TODO: add stack level in function value creation?
+but it is complex, for example:
+function foo() {
+    ... {
+        ...{
+            ...{
+                return function() { // stack level is very deep }
+            }
+        }
+    }
+}
+function bar() {
+    let a;
+    foo()(); // can visit a?
+}
+
+So one possible solution: every function must have it's closure after created, so each value type must be referenced (all managed)?
+
+So gc will be more than one times, for example:
+
+```
+let a = 1;
+let b = 2;
+function c() {}
+```
+
+a b will be referenced by c, and gc loop first round clean c, second round clean a b, third round found nothing to be cleaned and quit.
+
