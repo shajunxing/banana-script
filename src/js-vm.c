@@ -332,20 +332,20 @@ void js_dump_vm(struct js_vm *vm) {
 }
 
 // reverse order, from top to down
-#define _stack_for_each(__arg_vm, __arg_frame, __arg_block) \
+#define _stack_for_each(__arg_vm, __arg_frame, __arg_statement) \
     do { \
         /* DON'T use "for (uint16_t i = vm->stack.length - 1; i >= 0; i--)", \
         because turn unsigned i into negative will result a huge positive value */ \
         for (uint16_t i = 0; i < __arg_vm->stack.length; i++) { \
             struct js_stack_frame *__arg_frame = __arg_vm->stack.base + __arg_vm->stack.length - 1 - i; \
-            __arg_block; \
+            __arg_statement; \
         } \
     } while (0)
 
-#define _call_stack_for_each(__arg_vm, __arg_frame, __arg_block) \
+#define _call_stack_for_each(__arg_vm, __arg_frame, __arg_statement) \
     _stack_for_each(__arg_vm, __arg_frame, { \
         if (__arg_frame->type != sf_value) { \
-            __arg_block; \
+            __arg_statement; \
         } \
     })
 

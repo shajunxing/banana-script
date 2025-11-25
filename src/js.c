@@ -9,7 +9,9 @@ You should have received a copy of the GNU General Public License along with thi
 */
 
 #include <time.h>
-#ifndef _WIN32
+#ifdef _WIN32
+    #include <windows.h> // SetConsoleCP SetConsoleOutputCP 
+#else
     #include <readline/history.h>
     #include <readline/readline.h>
 #endif
@@ -17,32 +19,68 @@ You should have received a copy of the GNU General Public License along with thi
 #include "js-std-lang.h"
 #include "js-std-os.h"
 
-static char *_make_filename(char *source_filename, const char *ext, char *binary_filename) {
-    if (binary_filename) {
-        return dupe_sz(binary_filename);
-    } else {
-        char *dot = strrchr(source_filename, '.');
-        if (dot) {
-            *dot = 0;
-        }
-        char *ret = (char *)calloc(strlen(source_filename) + strlen(ext) + 1, 1);
-        strcat(ret, source_filename);
-        strcat(ret, ext);
-        return ret;
+static char *_make_filename_internal(char *filename, const char *suffix, const char *directory) {
+#ifdef _WIN32
+    #define pathsep "\\"
+#else
+    #define pathsep "/"
+#endif
+    char *no_ext = dupe_sz(filename);
+    char *dot = strrchr(no_ext, '.');
+    if (dot) {
+        *dot = '\0';
     }
+    char *ret = NULL;
+    if (directory) {
+        char *lasesep = strrchr(no_ext, pathsep[0]);
+        char *no_ext_no_dir = lasesep ? lasesep + 1 : no_ext;
+        char *dir_no_trailing = dupe_sz(directory);
+        if (ends_with_sz(dir_no_trailing, pathsep)) {
+            dir_no_trailing[strlen(dir_no_trailing) - 1] = '\0';
+        }
+        ret = concat_sz(dir_no_trailing, pathsep, no_ext_no_dir, suffix);
+        free(dir_no_trailing);
+    } else {
+        ret = concat_sz(no_ext, suffix);
+    }
+    free(no_ext);
+    return ret;
+#undef pathsep
 }
+#define _make_filename(__arg_filename, __arg_suffix, __arg_directory, __arg_result, _arg_statement) \
+    do { \
+        char *__arg_result = _make_filename_internal(__arg_filename, __arg_suffix, __arg_directory); \
+        _arg_statement; \
+        free(__arg_result); \
+    } while (0)
 
-static void _write_binary(struct js_vm *vm, char *source_filename, char *bytecode_filename, char *xref_filename) {
-    // if bytecode_filename or xref_filename is NULL, default is source filename base + extension
-    char *fname;
-    fname = _make_filename(source_filename, ".bin", bytecode_filename);
-    write_file(fname, "wb", vm->bytecode.base, vm->bytecode.length, vm->bytecode.capacity);
-    printf("Bytecode written to: %s\n", fname);
-    free(fname);
-    fname = _make_filename(source_filename, ".xref", xref_filename);
-    write_file(fname, "wb", vm->cross_reference.base, vm->cross_reference.length, vm->cross_reference.capacity);
-    printf("Cross reference written to: %s\n", fname);
-    free(fname);
+static void _write_compiled(struct js_vm *vm, char *source_filename, const char *directory) {
+    _make_filename(source_filename, "-bc.bin", directory, fname, {
+        write_file(fname, "wb", vm->bytecode.base, vm->bytecode.length, vm->bytecode.capacity);
+        printf("Bytecode written to:\n");
+        printf("    %s\n", fname);
+    });
+    _make_filename(source_filename, "-bc.txt", directory, fname, {
+        open_file(fname, "w", fp, {
+            for (uint32_t i = 0; i < vm->bytecode.length; i++) {
+                fprintf(fp, "0x%.2x, ", vm->bytecode.base[i]);
+            }
+        });
+        printf("    %s\n", fname);
+    });
+    _make_filename(source_filename, "-xref.bin", directory, fname, {
+        write_file(fname, "wb", vm->cross_reference.base, vm->cross_reference.length, vm->cross_reference.capacity);
+        printf("Cross reference written to:\n");
+        printf("    %s\n", fname);
+    });
+    _make_filename(source_filename, "-xref.txt", directory, fname, {
+        open_file(fname, "w", fp, {
+            for (uint32_t i = 0; i < vm->cross_reference.length; i++) {
+                fprintf(fp, "0x%.8lx, ", vm->cross_reference.base[i]);
+            }
+        });
+        printf("    %s\n", fname);
+    });
 }
 
 struct js_source source = {0};
@@ -93,8 +131,9 @@ static int _repl() {
                     char source_filename[64] = {0};
                     strftime(source_filename, sizeof(source_filename), "%Y-%m-%d-%H-%M-%S.js", localtime(&now));
                     write_file(source_filename, "w", source.base, source.length, source.capacity);
-                    printf("Source written to: %s\n", source_filename);
-                    _write_binary(&vm, source_filename, NULL, NULL);
+                    printf("Source written to:\n");
+                    printf("    %s\n", source_filename);
+                    _write_compiled(&vm, source_filename, NULL);
                 } else {
                     printf("Unknown command \"%s\"\n", line.base);
                 }
@@ -140,34 +179,26 @@ static int _repl() {
 }
 
 static int _help(char *arg_0) {
-    printf("Usage: %s [options] [filename] ...\n", arg_0);
+    printf("Usage: %s [options] <source filename> [source filename] ...\n", arg_0);
     printf("\n");
     printf("If no arguments, enter repl environment.\n");
+    printf("One or more source filenames can be specified, and will be loaded by order.\n");
     printf("\n");
-    printf("Action options:\n");
+    printf("  -b, --bytecode <filename>\n");
+    printf("                           binary bytecode filename, for input\n");
+    printf("                           required if no source file specified\n");
     printf("  -c, --compile            compile only\n");
+    printf("  -d, --output-directory <dir>\n");
+    printf("                           change compile output directory\n");
     printf("  -h, --help               show help\n");
-    printf("  -o, --optimize           optimize for code generation\n");
-    printf("  -r, --run                run source or bytecode\n");
 #ifdef DEBUG
     printf("  -t, --test               run test suit\n");
 #endif
     printf("  -u, --unassemble         show disassembly only\n");
+    printf("  -x, --cross-reference <filename>\n");
+    printf("                           binary cross reference filename, for input\n");
+    printf("                           optional required if no source file specified\n");
     printf("\n");
-    printf("File options:\n");
-    printf("  -b, --binary <filename>  bytecode binary filename\n");
-    printf("  -s, --source <filenames> one or more source filenames, loaded by order\n");
-    printf("  -x, --xref <filename>    cross reference filename\n");
-    printf("\n");
-    printf("Relationship between actions and files:\n");
-    printf("  action             file\n");
-    printf("  ---------------------------------------------------------\n");
-    printf("  compile            source    in   required\n");
-    printf("                     bytecode  out  required\n");
-    printf("                     xref      out  optional\n");
-    printf("  run, unassemble    source    in   required first priority\n");
-    printf("                     bytecode  in   required if no source\n");
-    printf("                     xref      in   optional if no source\n");
     return EXIT_SUCCESS;
 }
 
@@ -247,9 +278,12 @@ static int _test(char *arg_0, int argc, char *argv[]) {
 // #endif
 
 int main(int argc, char *argv[]) {
-    // #ifdef _WIN32
-    //     SetConsoleOutputCP(65001);
-    // #endif
+#ifdef _WIN32
+    // Set the output code page to UTF-8
+    SetConsoleOutputCP(CP_UTF8);
+    // Set the input code page to UTF-8
+    SetConsoleCP(CP_UTF8);
+#endif
     js_std_argc = argc;
     js_std_argv = argv;
     js_declare_std_lang_functions(&vm);
@@ -264,11 +298,11 @@ int main(int argc, char *argv[]) {
     } source_filenames = {0};
     char *bytecode_filename = NULL;
     char *xref_filename = NULL;
+    char *output_directory = NULL;
     enum { a_compile,
         a_run,
         a_unassemble
     } action = a_run;
-    bool optimize = false;
     int i;
     for (i = 1; i < argc; i++) {
 #define __next_i \
@@ -278,37 +312,29 @@ int main(int argc, char *argv[]) {
             if (equals_sz(argv[i], "-b") || equals_sz(argv[i], "--bytecode")) {
                 __next_i;
                 bytecode_filename = argv[i];
-            } else if (equals_sz(argv[i], "-s") || equals_sz(argv[i], "--source")) {
-                __next_i;
-                buffer_push(source_filenames.base, source_filenames.length, source_filenames.capacity, argv[i]);
-            } else if (equals_sz(argv[i], "-x") || equals_sz(argv[i], "--xref")) {
-                __next_i;
-                xref_filename = argv[i];
             } else if (equals_sz(argv[i], "-c") || equals_sz(argv[i], "--compile")) {
                 action = a_compile;
+            } else if (equals_sz(argv[i], "-d") || equals_sz(argv[i], "--output-directory")) {
+                __next_i;
+                output_directory = argv[i];
             } else if (equals_sz(argv[i], "-h") || equals_sz(argv[i], "--help")) {
                 return _help(argv[0]);
-            } else if (equals_sz(argv[i], "-o") || equals_sz(argv[i], "--optimize")) {
-                optimize = true;
-            } else if (equals_sz(argv[i], "-r") || equals_sz(argv[i], "--run")) {
-                action = a_run;
 #ifdef DEBUG
             } else if (equals_sz(argv[i], "-t") || equals_sz(argv[i], "--test")) {
                 return _test(argv[0], argc - i - 1, argv + i + 1);
 #endif
             } else if (equals_sz(argv[i], "-u") || equals_sz(argv[i], "--unassemble")) {
                 action = a_unassemble;
+            } else if (equals_sz(argv[i], "-x") || equals_sz(argv[i], "--cross-reference")) {
+                __next_i;
+                xref_filename = argv[i];
             } else {
                 fatal("Unknown option: %s", argv[i]);
             }
         } else {
-            break;
+            buffer_push(source_filenames.base, source_filenames.length, source_filenames.capacity, argv[i]);
         }
 #undef __next_i
-    }
-    // if no source file specified by -s, here specify only one, and rest arguments left un-handled
-    if (!source_filenames.base && i < argc) {
-        buffer_push(source_filenames.base, source_filenames.length, source_filenames.capacity, argv[i]);
     }
     // do actions
     if (source_filenames.base != NULL) {
@@ -317,8 +343,6 @@ int main(int argc, char *argv[]) {
                 return EXIT_FAILURE;
             }
         }
-        // TODO: add optimization
-        (void)optimize;
         if (!js_compile(&source, &token, &(vm.bytecode), &(vm.cross_reference))) {
             return EXIT_FAILURE;
         }
@@ -327,8 +351,8 @@ int main(int argc, char *argv[]) {
         if (source_filenames.base == NULL) {
             fatal("Require source files");
         }
-        _write_binary(&vm, source_filenames.base[source_filenames.length - 1], bytecode_filename, xref_filename);
-    } else {
+        _write_compiled(&vm, source_filenames.base[source_filenames.length - 1], output_directory);
+    } else { // run or unassemble
         // source.base may be NULL if source file size == 0, so use source_filenames.base to check
         if (source_filenames.base == NULL) {
             if (bytecode_filename == NULL) {
