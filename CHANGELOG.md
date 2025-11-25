@@ -1,3 +1,13 @@
+# 2025-11-25
+
+New std function `title` `play`
+
+Add ansi escape `\e`
+
+Now scripts can be "compiled" to standalone executables
+
+All windows ansi version apis changed to unicode version, to avoid several windows ansi api bugs
+
 # 2025-10-02
 
 New std function `map` `reduce` `filter`

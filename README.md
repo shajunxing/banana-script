@@ -165,6 +165,7 @@ Operating system:
 |md(s path)|Same as POSIX `mkdir()`|
 |s os|`windows` or `posix`|
 |s pathsep|`\` or `/`|
+|play(s filename)|Play .wav file. Windows only.|
 |print(...)| prints zero or more values, separated by spaces, with newline at end. There are three styles for how values are represented as string, from simple to complex: `tostring()`, `tojson()` and `todump()`. Default uses first one.|
 |s read(n fp)<br>s read(s fname)<br>s read(s fname, b iscmd)<br>read(n fp, cb(s line))<br>read(s fname, cb(s line))<br>read(s fname, b iscmd, cb(s line))|Generic reading function for text file or console process, which takes file handle `fp`, or file name (or command line if `iscmd` is true) `fname`. If no `cb` exist, will returns whole content, or will call it repeatly with each line as argument.|
 |rd(s path)|Same as POSIX `rmdir()`|
@@ -180,6 +181,153 @@ Operating system:
 |title(s text)|Set console title. Windows only.|
 |s whoami()|Get current user name.|
 |write(n fp, s text)</br>write(s fname, s text)</br>write(s fname, b isappend, s text)</br>|Generic writing function for text file, which takes file handle `fp`, or file name `fname`. `isappend` means append mode instead of overwrite mode.|
+
+## Execution Modes
+
+There are three execution modes:
+
+### Run In Source Code
+
+For example, there are two source code files, examples\20-source-0.js：
+
+```
+function foo() {
+    print("Greetings.");
+    throw "Boom!";
+}
+```
+
+examples\20-source-1.js：
+
+```
+foo();
+```
+
+Can run these two files by following command:
+
+```
+bin\js.exe examples\20-source-0.js examples\20-source-1.js
+```
+
+Output:
+
+```
+Greetings.
+Runtime Error: {'line':3,'message':'Boom!'}
+```
+
+### Compile To Bytecode
+
+If add `-c` parameter, means compile:
+
+```
+bin\js.exe examples\20-source-0.js examples\20-source-1.js -c
+```
+
+Will generate following files:
+
+```
+Bytecode written to:
+    examples\20-source-1-bc.bin
+    examples\20-source-1-bc.txt
+Cross reference written to:
+    examples\20-source-1-xref.bin
+    examples\20-source-1-xref.txt
+```
+
+Suffix with `-bc` are bytecode files, suffix with `-xref` are cross reference files. Can be run by following command:
+
+```
+bin\js.exe -b examples\20-source-1-bc.bin -x examples\20-source-1-xref.bin
+```
+
+Same output:
+
+```
+Greetings.
+Runtime Error: {'line':3,'message':'Boom!'}
+```
+
+Cross reference files are optional, if not specified, will not know runtime errors corresponding lines, for example:
+
+```
+bin\js.exe -b examples\20-source-1-bc.bin
+```
+
+Output:
+
+```
+Greetings.
+Runtime Error: 'Boom!'
+```
+
+### Compile To Standalone Executables
+
+`.txt` files can be included into custom c codes, for example 20-source.c：
+
+```c
+#include "../src/js-vm.h"
+#include "../src/js-std-lang.h"
+#include "../src/js-std-os.h"
+#pragma comment(lib, "../bin/js.lib")
+#pragma comment(lib, "advapi32.lib")
+int main(int argc, char *argv[]) {
+    uint8_t bc[] = {
+#include "20-source-1-bc.txt"
+    };
+    uint32_t xref[] = {
+#include "20-source-1-xref.txt"
+    };
+    struct js_vm vm = {
+        .bytecode = {
+            .base = bc,
+            .length = sizeof(bc),
+            .capacity = sizeof(bc),
+        },
+        .cross_reference = {
+            .base = xref,
+            .length = sizeof(xref),
+            .capacity = sizeof(xref),
+        },
+    };
+    js_std_argc = argc;
+    js_std_argv = argv;
+    js_declare_std_lang_functions(&vm);
+    js_declare_std_os_functions(&vm);
+    struct js_result result = js_run(&vm);
+    if (result.success) {
+        switch (result.value.type) {
+        case vt_number:
+            return (int)result.value.number;
+            break;
+        case vt_boolean:
+            return result.value.boolean ? EXIT_SUCCESS : EXIT_FAILURE;
+            break;
+        default:
+            return EXIT_SUCCESS;
+            break;
+        }
+    } else {
+        printf("Runtime Error: ");
+        js_dump_value(&(result.value));
+        printf("\n");
+        return EXIT_FAILURE;
+    }
+}
+```
+
+Can use msvc generate 20-source.exe and execute it：
+
+```
+cl 20-source.c && 20-source.exe
+```
+
+Same output:
+
+```
+Greetings.
+Runtime Error: {'line':3,'message':'Boom!'}
+```
 
 ## Projects Using This
 

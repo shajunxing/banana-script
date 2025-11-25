@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License along with thi
     #define ex_opts "-lm -lreadline -lncurses -ltinfo -Wl,--no-warnings"
 #else
 // GetUserNameA requires advapi32.lib
-    #define ex_opts "advapi32.lib"
+    #define ex_opts "advapi32.lib winmm.lib"
 #endif
 
 void build() {
@@ -56,17 +56,17 @@ void build() {
         } else {
             ld_exe(e("js"), o("js") " " l("js") " " ex_opts);
         }
-        // add utf8 support for windows
-        // see https://stackoverflow.com/questions/8831143/windows-api-ansi-functions-and-utf-8
-        // and https://learn.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page
-        // since mt.exe always failed prompt such as "file in use", maybe antivirus issues, https://stackoverflow.com/questions/3775406/mt-exe-general-error-c101008d-failed-to-write-the-updated-manifest-to-the-res, use file copy instead
-        if (compiler == msvc) {
-            // await();
-            // async("mt.exe -nologo -manifest src\\utf-8.manifest -outputresource:bin\\js.exe;#1");
-            cp("bin\\js.exe.manifest", "src\\js.exe.manifest");
-        }
     }
     await();
+    // add utf8 support for windows
+    // see https://stackoverflow.com/questions/8831143/windows-api-ansi-functions-and-utf-8
+    // and https://learn.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page
+    // since mt.exe always failed prompt such as "file in use", maybe antivirus issues, https://stackoverflow.com/questions/3775406/mt-exe-general-error-c101008d-failed-to-write-the-updated-manifest-to-the-res, use file copy instead
+    if (compiler == msvc) {
+        // await();
+        // async("mt.exe -nologo -manifest src\\utf-8.manifest -outputresource:bin\\js.exe;#1");
+        cp("bin\\js.exe.manifest", "src\\js.exe.manifest"); // all windows api changed to unicode version, but crt api still need it to correctly recognize utf-8 chars
+    }
 }
 
 int main(int argc, char *argv[]) {
