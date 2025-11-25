@@ -125,7 +125,7 @@ enum serialized_style {
 };
 
 // DON'T use conflict name such as 'k' 'v'
-#define js_map_for_each(__arg_base, __arg_length, __arg_capacity, __arg_k, __arg_kl, __arg_v, __arg_block) \
+#define js_map_for_each(__arg_base, __arg_length, __arg_capacity, __arg_k, __arg_kl, __arg_v, __arg_statement) \
     do { \
         struct js_kv_pair *__base = (__arg_base); \
         typeof(__arg_capacity) __cap = (__arg_capacity); \
@@ -135,16 +135,16 @@ enum serialized_style {
             typeof(__kv->key.length) __arg_kl = __kv->key.length; \
             struct js_value *__arg_v = &(__kv->value); \
             if (__arg_k != NULL && __arg_v->type != 0) { \
-                __arg_block; \
+                __arg_statement; \
             } \
         } \
     } while (0)
 
 // DON'T use conflict name such as 'list'
-#define js_list_for_each(__arg_base, __arg_length, __arg_capacity, __arg_i, __arg_v, __arg_block) \
+#define js_list_for_each(__arg_base, __arg_length, __arg_capacity, __arg_i, __arg_v, __arg_statement) \
     buffer_for_each(__arg_base, __arg_length, __arg_capacity, __arg_i, __arg_v, { \
         if (__arg_v->type != 0) { \
-            __arg_block; \
+            __arg_statement; \
         } \
     })
 

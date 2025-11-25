@@ -34,20 +34,22 @@ void qsort_r(void *, size_t, size_t, int (*)(const void *, const void *, void *)
 // https://www.linux.org/docs/man1/ld.html
 // windows must add -Wl,--exclude-all-symbols, linux use -fvisibility=hidden -fvisibility-inlines-hidden
 // Function declarations are implicitly extern, but global variables need to use extern
-#ifdef DLL
-    #if defined(_WIN32) || defined(__CYGWIN__)
-        #ifdef EXPORT
-            #define shared __declspec(dllexport)
+#ifndef shared
+    #ifdef DLL
+        #if defined(_WIN32) || defined(__CYGWIN__)
+            #ifdef EXPORT
+                #define shared __declspec(dllexport)
+            #else
+                #define shared __declspec(dllimport)
+            #endif
+        #elif __GNUC__ >= 4
+            #define shared extern __attribute__((visibility("default")))
         #else
-            #define shared __declspec(dllimport)
+            #define shared extern
         #endif
-    #elif __GNUC__ >= 4
-        #define shared extern __attribute__((visibility("default")))
     #else
         #define shared extern
     #endif
-#else
-    #define shared extern
 #endif
 
 // c23 typeof
@@ -175,13 +177,13 @@ void qsort_r(void *, size_t, size_t, int (*)(const void *, const void *, void *)
         print_hex(__base, __length * sizeof(typeof(*(__arg_base)))); \
     } while (0)
 
-#define buffer_for_each(__arg_base, __arg_length, __arg_capacity, __arg_i, __arg_v, __arg_block) \
+#define buffer_for_each(__arg_base, __arg_length, __arg_capacity, __arg_i, __arg_v, __arg_statement) \
     do { \
         typeof(__arg_base) __base = (__arg_base); \
         typeof(__arg_length) __length = (__arg_length); \
         for (typeof(__length) __arg_i = 0; __arg_i < __length; __arg_i++) { \
             typeof(__arg_base) __arg_v = __base + __arg_i; \
-            __arg_block; \
+            __arg_statement; \
         } \
     } while (0)
 
@@ -260,6 +262,16 @@ void qsort_r(void *, size_t, size_t, int (*)(const void *, const void *, void *)
         (__arg_length) = __new_length; \
     } while (0)
 */
+
+#define open_file(__arg_filename, __arg_mode, __arg_fp, __arg_statement) \
+    do { \
+        FILE *__arg_fp = fopen(__arg_filename, __arg_mode); \
+        if (__arg_fp == NULL) { \
+            fatal("Cannot open \"%s\": %s", __arg_filename, strerror(errno)); \
+        } \
+        __arg_statement; \
+        fclose(__arg_fp); \
+    } while (0)
 
 #define read_binary_file(__arg_fname, __arg_base, __arg_length, __arg_capacity) \
     do { \

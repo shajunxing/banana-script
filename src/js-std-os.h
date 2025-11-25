@@ -42,6 +42,8 @@ shared struct js_result js_std_time(struct js_vm *, uint16_t, struct js_value *)
 shared struct js_result js_std_whoami(struct js_vm *, uint16_t, struct js_value *);
 shared struct js_result js_std_write(struct js_vm *, uint16_t, struct js_value *);
 #ifdef _WIN32
+shared struct js_result js_std_play(struct js_vm *, uint16_t, struct js_value *);
+shared struct js_result js_std_title(struct js_vm *, uint16_t, struct js_value *);
 #else
 shared struct js_result js_std_exec(struct js_vm *, uint16_t, struct js_value *);
 shared struct js_result js_std_fork(struct js_vm *, uint16_t, struct js_value *);

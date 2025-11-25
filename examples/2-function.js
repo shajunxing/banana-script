@@ -1,12 +1,13 @@
 // test op_argument_get_next ...
-// let params;
-// function foo(a, b = 2, c, d = "?", e = 5, f, ...g) {
-//     params = {"a" : a, "b" : b, "c" : c, "d" : d, "e" : e, "f" : f, "g" : g};
-//     return "Nice to meet you.";
-// }
-// let arr = [ 3, 4, null, 6, null, 7 ];
-// let bar = foo(null, null, ...arr);
-// return 3;
+let params;
+function foo(a, b = 2, c, d = "?", e = 5, f, ...g) {
+    params = {"a" : a, "b" : b, "c" : c, "d" : d, "e" : e, "f" : f, "g" : g};
+    return "Nice to meet you.";
+}
+let arr = [ 3, 4, null, 6, null, 7 ];
+let bar = foo(null, null, ...arr);
+print(params);
+return 3;
 
 // test null argument and spread caused undefined
 // print(null, 1, ...[null, 2, null, 3, null], 4, null, 5, null);
@@ -165,11 +166,15 @@ in banana script, for better performence, only strings, arrays, objects, functio
 // gc();
 // dump_vm();
 
-forward(function(...args) {
-    forward(function(...args) {
-        forward(function(...args) {
-            gc();
-            print(...args);
-        }, ...args);
-    }, ...args);
-}, null, true, 3.14, "hello");
+// forward(function(...args) {
+//     forward(function(...args) {
+//         forward(function(...args) {
+//             gc();
+//             print(...args);
+//         }, ...args);
+//     }, ...args);
+// }, null, true, 3.14, "hello");
+
+
+/*
+*/

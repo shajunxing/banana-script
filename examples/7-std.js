@@ -58,7 +58,7 @@
 // cd(wd);
 // print(cwd());
 
-// for (let dir of ["abcdefg1234567", "~!@#$%^&*()", "z:\\asdasd"]) {
+// for (let dir of ["abcdefg1234567", "~!@#$%^&*()", "z:\\asdasd", "你好世界"]) {
 //     try {
 //         let wd = cwd();
 //         md(dir);
@@ -72,6 +72,12 @@
 //     } catch (err) {
 //         print(err);
 //     }
+// }
+
+// for (;;) {
+//     print(exists("examples/当我们将文明之梦、科技之梦、生态之梦赠予青年，便是赋予他们力量与使命，激励他们在时代的浪潮中奋勇前行/わたしの趣味はたくさんあります。でも、一番好きな事は写真をとることです。15歳のときに始めてから、もう二年になります/마음이괴로울때가있다.그럴때면나는다른누군가에게의지하기보다혼자극복하려고노력하는편이었다.연인이나친구혹은술에의지하지않고오로지나스스로굳게서려고애"));
+//     print(exists("examples/当我们将文明之梦、科技之梦、生态之梦赠予青年，便是赋予他们力量与使命，激励他们在时代的浪潮中奋勇前行/わたしの趣味はたくさんあります。でも、一番好きな事は写真をとることです。15歳のときに始めてから、もう二年になります/마음이괴로울때가있다.그럴때면나는다른누군가에게의지하기보다혼자극복하려고노력하는편이었다.연인이나친구혹은술에의지하지않고오로지나스스로굳게서려고애/"));
+//     gc();
 // }
 
 // print(pathsep);
@@ -99,6 +105,12 @@
 // });
 // gc();
 // dump_vm();
+
+// test SetConsoleCP SetConsoleOutputCP utf-8 works good
+// for (;;) {
+//     ls("C:\\Users\\shajunxing\\Documents", print);
+//     gc();
+// }
 
 // for (;;) {
 //     try {
@@ -322,10 +334,12 @@
 
 // system("exit 123")::print();
 
-// whoami()::print();
-
 // (whoami() == "root" || exec("su", "-c", argv::join(" ")));
-// whoami()::print();
+
+// for (;;) {
+//     whoami()::print();
+//     gc();
+// }
 
 // if (os == "windows") {
 //     spawn("cmd", "/c", "start", "js", "examples/8-print-args.js", "foo bar", "baz qux")::print();
@@ -334,6 +348,14 @@
 //     spawn("xterm", "-e", "bin/js", "examples/8-print-args.js", "foo bar", "baz qux")::print();
 //     spawn("xmessage", "-font", "variable", "-title", "Greetings", "Hello, World!")::print();
 //     spawn("xclock", "-update", "1")::print();
+// }
+
+// if (os == "windows") {
+//     for (;;) {
+//         spawn("cmd", "/c", "type", "examples\\当我们将文明之梦、科技之梦、生态之梦赠予青年，便是赋予他们力量与使命，激励他们在时代的浪潮中奋勇前行\\わたしの趣味はたくさんあります。でも、一番好きな事は写真をとることです。15歳のときに始めてから、もう二年になります\\마음이괴로울때가있다.그럴때면나는다른누군가에게의지하기보다혼자극복하려고노력하는편이었다.연인이나친구혹은술에의지하지않고오로지나스스로굳게서려고애");
+//         sleep(0.1);
+//         gc();
+//     }
 // }
 
 // print(time());
@@ -360,10 +382,19 @@
 // let end = time();
 // print(end - begin);
 
-// sleep(6.6, function(remained){
-//     write(stdout, format("\rTime remained: ${0}", remained::trunc()::tostring()));
-// }, 1);
+// let period = 10;
+// let interval = 0.2;
+// let period_str = period::trunc()::tostring();
+// sleep(period, function(remained){
+//     let msg = format("${0} / ${1}", remained::trunc()::tostring(), period_str);
+//     title(msg);
+// }, interval);
 // print();
+
+// for (;;) {
+//     title("你好世界");
+//     gc();
+// }
 
 // let s = "`abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`1234567890-=~!@#$%^&*()_+[]\\{}|;':\",./<>?你好，世界。";
 // let sl = tolower(s);
@@ -410,34 +441,39 @@
 //     print("parent process exit");
 // }
 
-let arr = [ null, 1.2, null, true, null, "Hello", null, {"Name" : "John"}, null ];
-try {
-    arr::filter(function(elem) { throw "Boom!"; });
-} catch (err) {
-    err::todump()::print();
+// let arr = [ null, 1.2, null, true, null, "Hello", null, {"Name" : "John"}, null ];
+// try {
+//     arr::filter(function(elem) { throw "Boom!"; });
+// } catch (err) {
+//     err::todump()::print();
+// }
+// try {
+//     arr::filter(function(elem) { return null; });
+// } catch (err) {
+//     err::todump()::print();
+// }
+// try {
+//     arr::map(function(elem) { throw "Boom!"; });
+// } catch (err) {
+//     err::todump()::print();
+// }
+// try {
+//     arr::reduce(function(elem) { throw "Boom!"; });
+// } catch (err) {
+//     err::todump()::print();
+// }
+// [] ::filter(function(elem) { return elem != null; })::print();
+// [] ::map(tostring)::print();
+// function add(a, b) {
+//     return a + b;
+// }
+// [] ::reduce(add)::print();
+// [1] ::reduce(add)::print();
+// [1, 2] ::reduce(add)::print();
+// [1, 2, 3] ::reduce(add)::print();
+// arr::filter(function(elem) { return elem != null; })::map(tostring)::reduce(add)::print();
+
+for (;;) {
+    play("C:\\Windows\\Media\\Alarm01.wav");
+    gc();
 }
-try {
-    arr::filter(function(elem) { return null; });
-} catch (err) {
-    err::todump()::print();
-}
-try {
-    arr::map(function(elem) { throw "Boom!"; });
-} catch (err) {
-    err::todump()::print();
-}
-try {
-    arr::reduce(function(elem) { throw "Boom!"; });
-} catch (err) {
-    err::todump()::print();
-}
-[] ::filter(function(elem) { return elem != null; })::print();
-[] ::map(tostring)::print();
-function add(a, b) {
-    return a + b;
-}
-[] ::reduce(add)::print();
-[1] ::reduce(add)::print();
-[1, 2] ::reduce(add)::print();
-[1, 2, 3] ::reduce(add)::print();
-arr::filter(function(elem) { return elem != null; })::map(tostring)::reduce(add)::print();

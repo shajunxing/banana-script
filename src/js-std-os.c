@@ -11,7 +11,7 @@ You should have received a copy of the GNU General Public License along with thi
 #include <errno.h>
 #include <time.h>
 #ifdef _WIN32
-    #define WIN32_LEAN_AND_MEAN
+    // #define WIN32_LEAN_AND_MEAN // DON'T because SND_FILENAME SND_NODEFAULT will be unidentified
     #include <windows.h> // put before lmcons.h to prevent "'PASCAL': macro redefinition"
     #include <direct.h> // getcwd, chdir, mkdir, rmdir
     #include <lmcons.h> // GetUserNameA's UNLEN
@@ -86,15 +86,43 @@ int js_std_argc = 0;
 char **js_std_argv = NULL;
 
 #ifdef _WIN32
+
 const char *js_std_os = "windows";
 const char *js_std_pathsep = "\\";
 static const char _pathsep_ch = '\\';
     #define _throw_windows_error(__arg_vm) \
         js_throw(js_string_sz(&(__arg_vm->heap), _windows_error_string()))
+wchar_t *_windows_utf8_to_unicode(const char *str) {
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0);
+    if (wlen == 0) {
+        return NULL;
+    }
+    wchar_t *wstr = (wchar_t *)calloc(wlen, sizeof(wchar_t));
+    if (MultiByteToWideChar(CP_UTF8, 0, str, -1, wstr, wlen) == 0) {
+        free(wstr);
+        return NULL;
+    }
+    return wstr;
+}
+char *_windows_unicode_to_utf8(const wchar_t *wstr) {
+    int len = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, NULL, 0, NULL, NULL);
+    if (len == 0) {
+        return NULL;
+    }
+    char *str = (char *)calloc(len, sizeof(char));
+    if (WideCharToMultiByte(CP_UTF8, 0, wstr, -1, str, len, NULL, NULL) == 0) {
+        free(str);
+        return NULL;
+    }
+    return str;
+}
+
 #else
+
 const char *js_std_os = "posix";
 const char *js_std_pathsep = "/";
 static const char _pathsep_ch = '/';
+
 #endif
 
 #define _throw_posix_error(__arg_vm) \
@@ -210,7 +238,13 @@ struct js_result js_std_exists(struct js_vm *vm, uint16_t argc, struct js_value 
     js_assert(argc == 1);
     js_assert(js_is_string(argv));
 #ifdef _WIN32
-    js_return(js_boolean(GetFileAttributesA(js_get_string_base(argv)) != INVALID_FILE_ATTRIBUTES ? true : false));
+    wchar_t *wname = _windows_utf8_to_unicode(js_get_string_base(argv));
+    if (wname == NULL) {
+        _throw_windows_error(vm);
+    }
+    struct js_value result = js_boolean(GetFileAttributesW(wname) != INVALID_FILE_ATTRIBUTES ? true : false);
+    free(wname);
+    js_return(result);
 #else
     js_return(js_boolean(access(js_get_string_base(argv), F_OK) == 0 ? true : false));
 #endif
@@ -264,13 +298,26 @@ struct js_result js_std_ls(struct js_vm *vm, uint16_t argc, struct js_value *arg
     bool all_success = true;
 #ifdef _WIN32
     char *pattern = concat_sz(standardized_dir, "*");
+    wchar_t *wpattern = _windows_utf8_to_unicode(pattern);
+    if (wpattern == NULL) {
+        free(pattern);
+        free(standardized_dir);
+        _throw_windows_error(vm);
+    }
     HANDLE sh;
-    WIN32_FIND_DATAA fd;
-    sh = FindFirstFileA(pattern, &fd);
+    WIN32_FIND_DATAW fd;
+    sh = FindFirstFileW(wpattern, &fd);
     if (sh != INVALID_HANDLE_VALUE) {
         do {
             isdir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-            filename = fd.cFileName;
+            filename = _windows_unicode_to_utf8(fd.cFileName);
+            if (filename == NULL) {
+                FindClose(sh);
+                free(wpattern);
+                free(pattern);
+                free(standardized_dir);
+                _throw_windows_error(vm);
+            }
 #else
     // https://www.geeksforgeeks.org/c-program-list-files-sub-directories-directory/
     struct dirent *de;
@@ -295,9 +342,11 @@ struct js_result js_std_ls(struct js_vm *vm, uint16_t argc, struct js_value *arg
             }
             // END BLOCK
 #ifdef _WIN32
-        } while (FindNextFileA(sh, &fd) != 0);
+            free(filename);
+        } while (FindNextFileW(sh, &fd) != 0);
         FindClose(sh);
     }
+    free(wpattern);
     free(pattern);
 #else
         }
@@ -553,9 +602,15 @@ struct js_result js_std_spawn(struct js_vm *vm, uint16_t argc, struct js_value *
             string_buffer_append_ch(cmd_base, cmd_length, cmd_capacity, '"');
         }
     }
-    STARTUPINFO si = {.cb = sizeof(STARTUPINFO)};
+    STARTUPINFOW si = {.cb = sizeof(STARTUPINFO)};
     PROCESS_INFORMATION pi = {0};
-    BOOL result = CreateProcessA(NULL, cmd_base, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+    wchar_t *wcmd_base = _windows_utf8_to_unicode(cmd_base);
+    if (wcmd_base == NULL) {
+        buffer_free(cmd_base, cmd_length, cmd_capacity);
+        _throw_windows_error(vm);
+    }
+    BOOL result = CreateProcessW(NULL, wcmd_base, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+    free(wcmd_base);
     buffer_free(cmd_base, cmd_length, cmd_capacity);
     if (!result) {
         _throw_windows_error(vm);
@@ -622,13 +677,18 @@ struct js_result js_std_time(struct js_vm *vm, uint16_t argc, struct js_value *a
 struct js_result js_std_whoami(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
     js_assert(argc == 0);
 #ifdef _WIN32
-    char buf[UNLEN + 1] = {0};
-    DWORD len = sizeof(buf);
-    if (GetUserNameA(buf, &len)) {
-        js_return(js_string(&(vm->heap), buf, len));
-    } else {
+    wchar_t wbuf[UNLEN + 1] = {0};
+    DWORD wlen = sizeof(wbuf);
+    if (GetUserNameW(wbuf, &wlen) == 0) {
         _throw_windows_error(vm);
     }
+    char *buf = _windows_unicode_to_utf8(wbuf);
+    if (buf == NULL) {
+        _throw_windows_error(vm);
+    }
+    struct js_value result = js_string_sz(&(vm->heap), buf);
+    free(buf);
+    js_return(result);
 #else
     // DON'T use getlogin, it will keep origin user name after su
     struct passwd *pw = getpwuid(geteuid());
@@ -692,6 +752,37 @@ struct js_result js_std_write(struct js_vm *vm, uint16_t argc, struct js_value *
 }
 
 #ifdef _WIN32
+
+struct js_result js_std_play(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(js_is_string(argv));
+    wchar_t *wsndfname = _windows_utf8_to_unicode(js_get_string_base(argv));
+    if (wsndfname == NULL) {
+        _throw_windows_error(vm);
+    }
+    if (PlaySoundW(wsndfname, NULL, SND_FILENAME | SND_NODEFAULT) == FALSE) {
+        free(wsndfname);
+        _throw_windows_error(vm);
+    }
+    free(wsndfname);
+    js_return_null();
+}
+
+struct js_result js_std_title(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc == 1);
+    js_assert(js_is_string(argv));
+    wchar_t *wtitle = _windows_utf8_to_unicode(js_get_string_base(argv));
+    if (wtitle == NULL) {
+        _throw_windows_error(vm);
+    }
+    if (SetConsoleTitleW(wtitle) == 0) {
+        free(wtitle);
+        _throw_windows_error(vm);
+    }
+    free(wtitle);
+    js_return_null();
+}
+
 #else
 
 struct js_result js_std_exec(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
@@ -755,6 +846,8 @@ void js_declare_std_os_functions(struct js_vm *vm) {
     js_declare_std_function(whoami);
     js_declare_std_function(write);
 #ifdef _WIN32
+    js_declare_std_function(play);
+    js_declare_std_function(title);
 #else
     js_declare_std_function(exec);
     js_declare_std_function(fork);

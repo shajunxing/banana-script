@@ -622,6 +622,9 @@ static struct js_source _unescape(char *base, uint32_t length) {
                 case 'b':
                     c = '\b';
                     break;
+                case 'e':
+                    c = '\x1b';
+                    break;
                 case 'f':
                     c = '\f';
                     break;
