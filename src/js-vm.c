@@ -1258,6 +1258,49 @@ void js_free_vm(struct js_vm *vm) {
     _stack_pop(vm, vm->stack.length);
 }
 
+struct js_vm js_static_vm_internal(uint8_t *bc, uint32_t bc_len, uint32_t *xref, uint32_t xref_len) {
+    return (struct js_vm){
+        .bytecode = {
+            .base = bc,
+            .length = bc_len,
+            .capacity = bc_len,
+        },
+        .cross_reference = {
+            .base = xref,
+            .length = xref_len,
+            .capacity = xref_len,
+        },
+    };
+}
+
+void js_declare_argc_argv(struct js_vm *vm, int argc, char *argv[]) {
+    js_declare_variable_sz(vm, "argc", js_number(argc));
+    struct js_value arg_vector = js_array(&(vm->heap));
+    for (int i = 0; i < argc; i++) {
+        js_push_array_element(&arg_vector, js_scripture_sz(argv[i]));
+    }
+    js_declare_variable_sz(vm, "argv", arg_vector);
+}
+
+int js_default_routine(struct js_vm *vm) {
+    struct js_result result = js_run(vm);
+    if (result.success) {
+        switch (result.value.type) {
+        case vt_number:
+            return (int)result.value.number;
+        case vt_boolean:
+            return result.value.boolean ? EXIT_SUCCESS : EXIT_FAILURE;
+        default:
+            return EXIT_SUCCESS;
+        }
+    } else {
+        printf("Runtime Error: ");
+        js_dump_value(&(result.value));
+        printf("\n");
+        return EXIT_FAILURE;
+    }
+}
+
 #ifdef DEBUG
 
 void test_vm_structure_size() {

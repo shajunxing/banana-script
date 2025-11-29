@@ -166,14 +166,6 @@ in banana script, for better performence, only strings, arrays, objects, functio
 // gc();
 // dump_vm();
 
-// forward(function(...args) {
-//     forward(function(...args) {
-//         forward(function(...args) {
-//             gc();
-//             print(...args);
-//         }, ...args);
-//     }, ...args);
-// }, null, true, 3.14, "hello");
 
 
 /*

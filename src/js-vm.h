@@ -202,6 +202,10 @@ static inline struct js_result js_call_by_name_sz(struct js_vm *vm, const char *
 typedef struct js_result (*js_c_function_type)(struct js_vm *, uint16_t, struct js_value *);
 shared struct js_value js_c_function(js_c_function_type); // move from js-data to clarify function type
 shared void js_free_vm(struct js_vm *);
+shared struct js_vm js_static_vm_internal(uint8_t *, uint32_t, uint32_t *, uint32_t);
+#define js_static_vm(__arg_bc, __arg_xref) js_static_vm_internal(__arg_bc, (uint32_t)sizeof(__arg_bc), __arg_xref, (uint32_t)sizeof(__arg_xref))
+shared void js_declare_argc_argv(struct js_vm *, int, char *[]);
+shared int js_default_routine(struct js_vm *);
 
 // macros for std functions
 

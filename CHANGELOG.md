@@ -1,3 +1,7 @@
+Improved `sleep` function, now will invoke callback at beginning and at end.
+
+Simplified standalone executables construction process.
+
 # 2025-11-25
 
 New std function `title` `play`

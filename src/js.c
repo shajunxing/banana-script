@@ -10,7 +10,7 @@ You should have received a copy of the GNU General Public License along with thi
 
 #include <time.h>
 #ifdef _WIN32
-    #include <windows.h> // SetConsoleCP SetConsoleOutputCP 
+    #include <windows.h> // SetConsoleCP SetConsoleOutputCP
 #else
     #include <readline/history.h>
     #include <readline/readline.h>
@@ -76,7 +76,7 @@ static void _write_compiled(struct js_vm *vm, char *source_filename, const char 
     _make_filename(source_filename, "-xref.txt", directory, fname, {
         open_file(fname, "w", fp, {
             for (uint32_t i = 0; i < vm->cross_reference.length; i++) {
-                fprintf(fp, "0x%.8lx, ", vm->cross_reference.base[i]);
+                fprintf(fp, "0x%.8x, ", vm->cross_reference.base[i]);
             }
         });
         printf("    %s\n", fname);
@@ -179,10 +179,10 @@ static int _repl() {
 }
 
 static int _help(char *arg_0) {
-    printf("Usage: %s [options] <source filename> [source filename] ...\n", arg_0);
+    printf("Usage: %s [options] <file1.js> [file2.js] ... [script options]\n", arg_0);
     printf("\n");
     printf("If no arguments, enter repl environment.\n");
-    printf("One or more source filenames can be specified, and will be loaded by order.\n");
+    printf("One or more source files can be specified, and will be loaded by order.\n");
     printf("\n");
     printf("  -b, --bytecode <filename>\n");
     printf("                           binary bytecode filename, for input\n");
@@ -284,8 +284,7 @@ int main(int argc, char *argv[]) {
     // Set the input code page to UTF-8
     SetConsoleCP(CP_UTF8);
 #endif
-    js_std_argc = argc;
-    js_std_argv = argv;
+    js_declare_argc_argv(&vm, argc, argv);
     js_declare_std_lang_functions(&vm);
     js_declare_std_os_functions(&vm);
     if (argc == 1) { // no arguments, enter repl
@@ -329,12 +328,20 @@ int main(int argc, char *argv[]) {
                 __next_i;
                 xref_filename = argv[i];
             } else {
-                fatal("Unknown option: %s", argv[i]);
+                // other arguments will be passed to script
+                // fatal("Unknown option: %s", argv[i]);
             }
         } else {
-            buffer_push(source_filenames.base, source_filenames.length, source_filenames.capacity, argv[i]);
+            break;
         }
 #undef __next_i
+    }
+    for (; i < argc; i++) {
+        if (!starts_with_sz(argv[i], "-") && ends_with_sz(argv[i], ".js")) {
+            buffer_push(source_filenames.base, source_filenames.length, source_filenames.capacity, argv[i]);
+        } else {
+            break;
+        }
     }
     // do actions
     if (source_filenames.base != NULL) {
@@ -365,25 +372,7 @@ int main(int argc, char *argv[]) {
             }
         }
         if (action == a_run) {
-            struct js_result result = js_run(&vm);
-            if (result.success) {
-                switch (result.value.type) {
-                case vt_number:
-                    return (int)result.value.number;
-                    break;
-                case vt_boolean:
-                    return result.value.boolean ? EXIT_SUCCESS : EXIT_FAILURE;
-                    break;
-                default:
-                    return EXIT_SUCCESS;
-                    break;
-                }
-            } else {
-                printf("Runtime Error: ");
-                js_dump_value(&(result.value));
-                printf("\n");
-                return EXIT_FAILURE;
-            }
+            return js_default_routine(&vm);
         } else if (action == a_unassemble) {
             js_bytecode_dump(&(vm.bytecode));
         }

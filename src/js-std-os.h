@@ -13,8 +13,6 @@ You should have received a copy of the GNU General Public License along with thi
 
 #include "js-vm.h"
 
-shared int js_std_argc;
-shared char **js_std_argv;
 shared const char *js_std_os;
 shared const char *js_std_pathsep;
 shared struct js_result js_std_basename(struct js_vm *, uint16_t, struct js_value *);
@@ -49,11 +47,5 @@ shared struct js_result js_std_exec(struct js_vm *, uint16_t, struct js_value *)
 shared struct js_result js_std_fork(struct js_vm *, uint16_t, struct js_value *);
 #endif
 shared void js_declare_std_os_functions(struct js_vm *);
-
-#ifdef DEBUG
-
-shared struct js_result js_std_forward(struct js_vm *, uint16_t, struct js_value *);
-
-#endif
 
 #endif

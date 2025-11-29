@@ -82,8 +82,6 @@ static double _time() {
 #include "js-std-os.h"
 
 // must declare under '#include "js-std.h"', or in msvc will 'error C2370: 'js_std_pathsep': redefinition; different storage class'
-int js_std_argc = 0;
-char **js_std_argv = NULL;
 
 #ifdef _WIN32
 
@@ -557,12 +555,12 @@ struct js_result js_std_sleep(struct js_vm *vm, uint16_t argc, struct js_value *
         }
         double end = _time() + timeout;
         for (;;) {
-            __sleep(interval);
             double remains = end - _time();
-            if (remains < 0) {
+            js_call(vm, argv[1], 1, (struct js_value[]){js_number(remains)});
+            if (remains <= 0) {
                 break;
             }
-            js_call(vm, argv[1], 1, (struct js_value[]){js_number(remains)});
+            __sleep(interval);
         }
     }
     js_return_null();
@@ -812,14 +810,6 @@ struct js_result js_std_fork(struct js_vm *vm, uint16_t argc, struct js_value *a
 
 #endif
 
-#ifdef DEBUG
-struct js_result js_std_forward(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
-    js_assert(argc > 0);
-    js_assert(js_is_function(argv));
-    return js_call(vm, *argv, argc - 1, argv + 1);
-}
-#endif
-
 void js_declare_std_os_functions(struct js_vm *vm) {
     js_declare_std_function(basename);
     js_declare_std_function(cd);
@@ -853,14 +843,6 @@ void js_declare_std_os_functions(struct js_vm *vm) {
     js_declare_std_function(fork);
 #endif
     // other variables and functions not included in X macro definition
-    if (js_std_argc && js_std_argv) {
-        js_declare_variable_sz(vm, "argc", js_number(js_std_argc));
-        struct js_value arg_vector = js_array(&(vm->heap));
-        for (int i = 0; i < js_std_argc; i++) {
-            js_push_array_element(&arg_vector, js_scripture_sz(js_std_argv[i]));
-        }
-        js_declare_variable_sz(vm, "argv", arg_vector);
-    }
     js_declare_variable_sz(vm, "os", js_scripture_sz(js_std_os));
     js_declare_variable_sz(vm, "pathsep", js_scripture_sz(js_std_pathsep));
     // log_expression("%llu", stdin);
@@ -877,7 +859,4 @@ void js_declare_std_os_functions(struct js_vm *vm) {
     struct js_value console = js_object(&(vm->heap));
     js_declare_variable_sz(vm, "console", console);
     js_put_object_value_sz(&console, "log", js_c_function(js_std_print));
-#ifdef DEBUG
-    js_declare_variable_sz(vm, "forward", js_c_function(js_std_forward));
-#endif
 }

@@ -188,25 +188,25 @@ There are three execution modes:
 
 ### Run In Source Code
 
-For example, there are two source code files, examples\20-source-0.js：
+For example, there are two source code files, 20-source-0.js：
 
-```
+```js
 function foo() {
     print("Greetings.");
     throw "Boom!";
 }
 ```
 
-examples\20-source-1.js：
+20-source-1.js：
 
-```
+```js
 foo();
 ```
 
 Can run these two files by following command:
 
 ```
-bin\js.exe examples\20-source-0.js examples\20-source-1.js
+js 20-source-0.js 20-source-1.js
 ```
 
 Output:
@@ -221,7 +221,7 @@ Runtime Error: {'line':3,'message':'Boom!'}
 If add `-c` parameter, means compile:
 
 ```
-bin\js.exe examples\20-source-0.js examples\20-source-1.js -c
+js -c 20-source-0.js 20-source-1.js -c
 ```
 
 Will generate following files:
@@ -238,7 +238,7 @@ Cross reference written to:
 Suffix with `-bc` are bytecode files, suffix with `-xref` are cross reference files. Can be run by following command:
 
 ```
-bin\js.exe -b examples\20-source-1-bc.bin -x examples\20-source-1-xref.bin
+js -b 20-source-1-bc.bin -x 20-source-1-xref.bin
 ```
 
 Same output:
@@ -251,7 +251,7 @@ Runtime Error: {'line':3,'message':'Boom!'}
 Cross reference files are optional, if not specified, will not know runtime errors corresponding lines, for example:
 
 ```
-bin\js.exe -b examples\20-source-1-bc.bin
+js -b 20-source-1-bc.bin
 ```
 
 Output:
@@ -271,6 +271,8 @@ Runtime Error: 'Boom!'
 #include "../src/js-std-os.h"
 #pragma comment(lib, "../bin/js.lib")
 #pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "winmm.lib")
+
 int main(int argc, char *argv[]) {
     uint8_t bc[] = {
 #include "20-source-1-bc.txt"
@@ -278,41 +280,11 @@ int main(int argc, char *argv[]) {
     uint32_t xref[] = {
 #include "20-source-1-xref.txt"
     };
-    struct js_vm vm = {
-        .bytecode = {
-            .base = bc,
-            .length = sizeof(bc),
-            .capacity = sizeof(bc),
-        },
-        .cross_reference = {
-            .base = xref,
-            .length = sizeof(xref),
-            .capacity = sizeof(xref),
-        },
-    };
-    js_std_argc = argc;
-    js_std_argv = argv;
+    struct js_vm vm = js_static_vm(bc, xref);
+    js_declare_argc_argv(&vm, argc, argv);
     js_declare_std_lang_functions(&vm);
     js_declare_std_os_functions(&vm);
-    struct js_result result = js_run(&vm);
-    if (result.success) {
-        switch (result.value.type) {
-        case vt_number:
-            return (int)result.value.number;
-            break;
-        case vt_boolean:
-            return result.value.boolean ? EXIT_SUCCESS : EXIT_FAILURE;
-            break;
-        default:
-            return EXIT_SUCCESS;
-            break;
-        }
-    } else {
-        printf("Runtime Error: ");
-        js_dump_value(&(result.value));
-        printf("\n");
-        return EXIT_FAILURE;
-    }
+    return js_default_routine(&vm);
 }
 ```
 
@@ -327,6 +299,62 @@ Same output:
 ```
 Greetings.
 Runtime Error: {'line':3,'message':'Boom!'}
+```
+
+Another example demonstrate how to declare c function `forward()`, 16-hybrid.c:
+
+```c
+#include "../src/js-vm.h"
+#include "../src/js-std-lang.h"
+#include "../src/js-std-os.h"
+#pragma comment(lib, "../bin/js.lib")
+#pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "winmm.lib")
+
+struct js_result js_std_forward(struct js_vm *vm, uint16_t argc, struct js_value *argv) {
+    js_assert(argc > 0);
+    js_assert(js_is_function(argv));
+    return js_call(vm, *argv, argc - 1, argv + 1);
+}
+
+int main(int argc, char *argv[]) {
+    uint8_t bc[] = {
+#include "16-hybrid-bc.txt"
+    };
+    uint32_t xref[] = {
+#include "16-hybrid-xref.txt"
+    };
+    struct js_vm vm = js_static_vm(bc, xref);
+    js_declare_argc_argv(&vm, argc, argv);
+    js_declare_std_lang_functions(&vm);
+    js_declare_std_os_functions(&vm);
+    js_declare_variable_sz(&vm, "forward", js_c_function(js_std_forward));
+    return js_default_routine(&vm);
+}
+```
+
+This `forward()` function is same meaning as js code`function forward(func, ...args) { return func(...args); }`. It is inviked in 16-hybrid.js:
+
+```js
+forward(function(...args) {
+    forward(function(...args) {
+        forward(function(...args) {
+            print(...args);
+        }, ...args);
+    }, ...args);
+}, null, true, 3.14, "hello");
+```
+
+Run following command:
+
+```
+js -c 16-hybrid.js && cl 16-hybrid.c && 16-hybrid.exe
+```
+
+To see output:
+
+```
+null true 3.14 hello
 ```
 
 ## Projects Using This
